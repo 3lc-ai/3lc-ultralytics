@@ -1,3 +1,15 @@
+# Runs
+runs/
+
+# Weights
+*.pt
+
+# Test data
+tests/tmp/
+
+# IDE
+.vscode/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
