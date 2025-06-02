@@ -20,7 +20,6 @@ def check_tlc_dataset(  # noqa: C901
     table_creator: Callable[[str, dict[str, object], str, str, str, str, str], tlc.Table] | None = None,
     table_checker: Callable[[str, tlc.Table], bool] | None = None,
     project_name: str | None = None,
-    check_backwards_compatible_table_name: bool = False,
     splits: Iterable[str] | None = None,
 ) -> dict[str, tlc.Table | dict[float, str] | int]:
     """Get or create tables for YOLO datasets. data is ignored when tables is provided.
@@ -33,7 +32,6 @@ def check_tlc_dataset(  # noqa: C901
     :param table_creator: Function to create the tables for the YOLO dataset
     :param table_checker: Function to check that a table is compatible with the current task
     :param project_name: Name of the project
-    :param check_backwards_compatible_table_name: Whether to check for a backwards compatible table name
     :param splits: List of splits to parse.
     :return: Dictionary of tables and class names
     """
@@ -59,21 +57,7 @@ def check_tlc_dataset(  # noqa: C901
                 table_name = "initial"
 
                 if project_name is None:
-                    project_name = f"{name}-YOLOv8"
-
-                # Previously the table name was "original" and now it is "initial", so we need to check
-                # for backwards compatibility
-                if check_backwards_compatible_table_name:
-                    table_url_backcompatible = tlc.Table._resolve_table_url(
-                        table_url=None,
-                        root_url=None,
-                        project_name=project_name,
-                        dataset_name=dataset_name,
-                        table_name="original",
-                    )
-
-                    if table_url_backcompatible.exists():
-                        table_name = "original"
+                    project_name = f"{name}-YOLO"
 
                 try:
                     table = table_creator(

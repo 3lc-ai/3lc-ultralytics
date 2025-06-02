@@ -38,7 +38,6 @@ def tlc_check_cls_dataset(
         table_creator=get_or_create_cls_table,
         table_checker=check_cls_table,
         project_name=project_name,
-        check_backwards_compatible_table_name=False,
         splits=splits,
     )
 

@@ -32,7 +32,6 @@ def tlc_check_det_dataset(
         table_creator=get_or_create_det_table,
         table_checker=check_det_table,
         project_name=project_name,
-        check_backwards_compatible_table_name=True,
         splits=splits,
     )
 
