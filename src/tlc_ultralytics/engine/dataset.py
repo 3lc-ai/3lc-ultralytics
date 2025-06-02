@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import tlc
-import numpy as np
 
 from ultralytics.data.utils import verify_image
 from ultralytics.utils import LOGGER, TQDM, colorstr
@@ -18,16 +17,13 @@ class TLCDatasetMixin:
         assert hasattr(self, "table") and isinstance(self.table, tlc.Table), (
             "TLCDatasetMixin requires an attribute `table` which is a tlc.Table."
         )
-        if not hasattr(self, "example_ids"):
-            self.example_ids = np.arange(len(self.table))
 
     def __getitem__(self, index):
+        """Get the item at the given index, add the example id to the sample for use in metrics collection."""
+        example_id = self._index_to_example_id(index)
         sample = super().__getitem__(index)
-        sample[tlc.EXAMPLE_ID] = self.example_ids[index]  # Add example id to the sample dict
+        sample["example_id"] = example_id
         return sample
-
-    def __len__(self):
-        return len(self.example_ids)
 
     @staticmethod
     def _absolutize_image_url(image_str: str, table_url: tlc.Url) -> str:
@@ -52,6 +48,9 @@ class TLCDatasetMixin:
     def _get_label_from_row(self, im_file: str, row: Any, example_id: int) -> Any:
         raise NotImplementedError("Subclasses must implement this method")
 
+    def _index_to_example_id(self, index: int) -> int:
+        raise NotImplementedError("Subclasses must implement this method")
+
     def _get_rows_from_table(self) -> tuple[list[int], list[str], list[Any]]:
         """Get the rows from the table and return a list of rows, excluding zero weight samples and samples with
         problematic images.
@@ -59,7 +58,7 @@ class TLCDatasetMixin:
         :return: A list of example ids, image paths and labels.
         """
 
-        example_ids, im_files, labels = [], [], []
+        im_files, labels = [], []
 
         nf, nc, excluded, msgs = 0, 0, 0, []
         colored_prefix = colorstr(self.prefix + ":")
@@ -84,7 +83,6 @@ class TLCDatasetMixin:
                 msgs.append(msg)
                 continue
 
-            example_ids.append(example_id)
             im_files.append(im_file)
             labels.append(self._get_label_from_row(im_file, row, example_id))
 
@@ -117,4 +115,4 @@ class TLCDatasetMixin:
                 f"\n{msgs_str}"
             )
 
-        return example_ids, im_files, labels
+        return im_files, labels

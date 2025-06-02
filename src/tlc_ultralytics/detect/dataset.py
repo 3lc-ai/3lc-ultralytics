@@ -109,39 +109,14 @@ class BaseTLCYOLODataset(TLCDatasetMixin, YOLODataset):
 
     def get_labels(self):
         """Get the labels from the table."""
-        example_ids, im_files, labels = self._get_rows_from_table()
+        im_files, labels = self._get_rows_from_table()
         self.labels = labels
         self.im_files = im_files
-        self.example_ids = np.array(example_ids, dtype=np.int32)
         return self.labels
 
-    def set_rectangle(self):
-        """Save the batch shapes and indices for the dataset."""
-        bi = np.floor(np.arange(self.ni) / self.batch_size).astype(int)  # batch index
-        nb = bi[-1] + 1  # number of batches
-
-        s = np.array([x.pop("shape") for x in self.labels])  # hw
-        ar = s[:, 0] / s[:, 1]  # aspect ratio
-        irect = ar.argsort()
-        self.im_files = [self.im_files[i] for i in irect]
-        self.labels = [self.labels[i] for i in irect]
-        self.example_ids = self.example_ids[irect]
-
-        ar = ar[irect]
-        self.irect = irect.copy()
-
-        # Set training image shapes
-        shapes = [[1, 1]] * nb
-        for i in range(nb):
-            ari = ar[bi == i]
-            mini, maxi = ari.min(), ari.max()
-            if maxi < 1:
-                shapes[i] = [maxi, 1]
-            elif mini > 1:
-                shapes[i] = [1, 1 / mini]
-
-        self.batch_shapes = np.ceil(np.array(shapes) * self.imgsz / self.stride + self.pad).astype(int) * self.stride
-        self.batch = bi  # batch index of image
+    def _index_to_example_id(self, index: int) -> int:
+        """Get the example id for the given index."""
+        return self.labels[index]["example_id"]
 
     def _get_label_from_row(self, im_file: str, row: Any, example_id: int) -> dict[str, Any]:
         """Get the label for a row in the appropriate format.
@@ -214,6 +189,7 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
             self._class_map,
             im_file,
             label_column_name=self._label_column_name,
+            example_id=example_id,
         )
 
 
@@ -322,6 +298,7 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
             "keypoints": None,
             "normalized": True,
             "bbox_format": "xywh",
+            "example_id": example_id,
         }
 
 
@@ -376,6 +353,7 @@ def tlc_table_row_to_yolo_label(
     class_map: dict[int, int],
     im_file: str,
     label_column_name: str,
+    example_id: int,
 ) -> dict[str, Any]:
     """Convert a table row from a 3lc Table to a Ultralytics YOLO label dict.
 
@@ -409,4 +387,5 @@ def tlc_table_row_to_yolo_label(
         "keypoints": None,
         "normalized": True,
         "bbox_format": "xywh",
+        "example_id": example_id,
     }

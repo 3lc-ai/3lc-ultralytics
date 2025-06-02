@@ -45,12 +45,12 @@ class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
         self._label_column_name = label_column_name
         self._exclude_zero = exclude_zero
         self._class_map = class_map
+        self._example_ids = []
 
         self.verify_schema()
 
-        example_ids, im_files, labels = self._get_rows_from_table()
+        im_files, labels = self._get_rows_from_table()
 
-        self.example_ids = example_ids
         self.samples = list(zip(im_files, labels))
 
         # Initialize attributes (e.g. transforms)
@@ -82,7 +82,13 @@ class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
         if self._class_map:
             label = self._class_map[label]
 
+        self._example_ids.append(example_id)
+
         return label
+
+    def _index_to_example_id(self, index: int) -> int:
+        """Get the example id for the given index."""
+        return self._example_ids[index]
 
     def _init_attributes(self, args, augment, prefix):
         """Copied from ultralytics.data.dataset.ClassificationDataset.__init__."""
