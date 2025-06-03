@@ -3,9 +3,10 @@ from __future__ import annotations
 import tlc
 
 from ultralytics.models import yolo
-from ultralytics.models.yolo.model import YOLO
-
+from ultralytics.models.yolo.model import YOLO as YOLOBase
 from ultralytics.nn.tasks import ClassificationModel, DetectionModel, SegmentationModel
+from ultralytics.utils import LOGGER
+
 from tlc_ultralytics.classify import (
     TLCClassificationTrainer,
     TLCClassificationValidator,
@@ -22,7 +23,7 @@ from tlc_ultralytics.utils import check_tlc_version, reduce_embeddings
 from collections.abc import Iterable
 
 
-class TLCYOLO(YOLO):
+class YOLO(YOLOBase):
     """YOLO (You Only Look Once) object detection model with 3LC integration."""
 
     def __init__(self, *args, **kwargs):
@@ -108,3 +109,9 @@ class TLCYOLO(YOLO):
         tlc.active_run().set_status_completed()
 
         return results_dict
+
+class TLCYOLO(YOLO):
+    def __init__(self, *args, **kwargs):
+        LOGGER.warning("TLCYOLO is deprecated and will be removed in a future version. Use YOLO instead.")
+
+        super().__init__(*args, **kwargs)
