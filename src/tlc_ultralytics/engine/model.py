@@ -110,6 +110,7 @@ class YOLO(YOLOBase):
 
         return results_dict
 
+
 class TLCYOLO(YOLO):
     def __init__(self, *args, **kwargs):
         LOGGER.warning("TLCYOLO is deprecated and will be removed in a future version. Use YOLO instead.")

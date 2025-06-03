@@ -12,19 +12,20 @@ import cv2
 import os
 import torch
 
+from ultralytics.models.yolo import YOLO
+from ultralytics.models.yolo.detect import DetectionTrainer
+
 from tlc_ultralytics import (
     Settings,
     YOLO as TLCYOLO,
-    TLCClassificationTrainer,
-    TLCDetectionTrainer,
-    TLCSegmentationTrainer,
 )
+from tlc_ultralytics.classify.trainer import TLCClassificationTrainer
 from tlc_ultralytics.classify.utils import tlc_check_cls_dataset
+from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
 from tlc_ultralytics.detect.utils import tlc_check_det_dataset
+from tlc_ultralytics.segment.trainer import TLCSegmentationTrainer
 from tlc_ultralytics.segment.utils import tlc_check_seg_dataset, check_seg_table
 from tlc_ultralytics.utils import check_tlc_dataset
-from ultralytics.models.yolo import YOLO
-from ultralytics.models.yolo.detect import DetectionTrainer
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
 
