@@ -39,7 +39,7 @@ dev-pypi = ["3lc"]
 [tool.uv]
 default-groups = ["dev", "dev-local"]
 constraint-dependencies = [
-    "pacmap==0.7.3", # Fails to reduce for small 
+    "pacmap==0.7.3", # Otherwise fails to reduce for small datasets in tests
 ]
 conflicts = [
     [
