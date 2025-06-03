@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from ultralytics.models import yolo
+from functools import partial
 
-from ultralytics.utils.torch_utils import is_parallel, torch_distributed_zero_first
+import ultralytics
+from ultralytics.models import yolo
 
 from tlc_ultralytics.constants import (
     IMAGE_COLUMN_NAME,
@@ -71,28 +72,15 @@ class TLCClassificationTrainer(TLCTrainerMixin, yolo.classify.ClassificationTrai
         )
 
     def get_dataloader(self, dataset_path, batch_size=16, rank=0, mode="train"):
-        """Returns PyTorch DataLoader with transforms to preprocess images for inference."""
-        with torch_distributed_zero_first(rank):  # init dataset *.cache only once if DDP
-            dataset = self.build_dataset(dataset_path, mode)
 
-        sampler = create_sampler(
-            dataset.table,
-            mode=mode,
-            settings=self._settings,
-            distributed=is_parallel(self.model),
-        )
-        loader = build_dataloader(
-            dataset,
-            batch_size,
-            self.args.workers,
-            rank=rank,
-            shuffle=mode == "train",
-            sampler=sampler,
-        )
-        # Attach inference transforms
-        if mode != "train":
-            if is_parallel(self.model):
-                self.model.module.transforms = loader.dataset.torch_transforms
-            else:
-                self.model.transforms = loader.dataset.torch_transforms
-        return loader
+        sampler = create_sampler(dataset_path, mode, self._settings, distributed=rank != -1)
+
+        # Patch parent class module to use our build_dataloader
+        trainer_build_dataloader = ultralytics.models.yolo.classify.train.build_dataloader
+        ultralytics.models.yolo.classify.train.build_dataloader = partial(build_dataloader, sampler=sampler)
+
+        dataloader = super().get_dataloader(dataset_path, batch_size, rank, mode)
+
+        ultralytics.models.yolo.classify.train.build_dataloader = trainer_build_dataloader
+
+        return dataloader

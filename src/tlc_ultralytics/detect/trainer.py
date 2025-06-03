@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from functools import partial
+
+import ultralytics
 from ultralytics.models.yolo.detect import DetectionTrainer
 
 from tlc_ultralytics.overrides import build_dataloader
-from ultralytics.utils import LOGGER
 from tlc_ultralytics.constants import (
     IMAGE_COLUMN_NAME,
     DETECTION_LABEL_COLUMN_NAME,
@@ -15,7 +17,7 @@ from tlc_ultralytics.detect.utils import (
 from tlc_ultralytics.detect.validator import TLCDetectionValidator
 from tlc_ultralytics.engine.trainer import TLCTrainerMixin
 from tlc_ultralytics.utils import create_sampler
-from ultralytics.utils.torch_utils import de_parallel, torch_distributed_zero_first
+from ultralytics.utils.torch_utils import de_parallel
 
 
 class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
@@ -90,19 +92,16 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
 
     def get_dataloader(self, dataset_path, batch_size=16, rank=0, mode="train"):
         """Construct and return dataloader."""
-        assert mode in {"train", "val"}, f"Mode must be 'train' or 'val', not {mode}."
-        with torch_distributed_zero_first(rank):  # init dataset *.cache only once if DDP
-            dataset = self.build_dataset(dataset_path, mode, batch_size)
 
-        shuffle = mode == "train"
-        if getattr(dataset, "rect", False) and shuffle:
-            LOGGER.warning("WARNING ⚠️ 'rect=True' is incompatible with DataLoader shuffle, setting shuffle=False")
-            shuffle = False
-        workers = self.args.workers if mode == "train" else self.args.workers * 2
+        sampler = create_sampler(dataset_path, mode, self._settings, distributed=rank != -1)
 
-        sampler = create_sampler(dataset.table, mode, self._settings, distributed=rank != -1)
+        # Patch parent class module to use our build_dataloader
+        trainer_build_dataloader = ultralytics.models.yolo.detect.train.build_dataloader
+        ultralytics.models.yolo.detect.train.build_dataloader = partial(build_dataloader, sampler=sampler)
 
-        if sampler is not None:
-            shuffle = False
+        dataloader = super().get_dataloader(dataset_path, batch_size, rank, mode)
 
-        return build_dataloader(dataset, batch_size, workers, shuffle, rank, sampler=sampler)  # return dataloader
+        # Restore parent class module
+        ultralytics.models.yolo.detect.train.build_dataloader = trainer_build_dataloader
+
+        return dataloader
