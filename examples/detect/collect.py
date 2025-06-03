@@ -1,7 +1,7 @@
-from tlc_ultralytics import TLCYOLO
+from tlc_ultralytics import YOLO
 
 if __name__ == "__main__":
-    model = TLCYOLO("yolo11n.pt")
+    model = YOLO("yolo11n.pt")
 
     model.collect(
         data="coco128.yaml",
