@@ -102,4 +102,7 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
 
         sampler = create_sampler(dataset.table, mode, self._settings, distributed=rank != -1)
 
-        return build_dataloader(dataset, batch_size, workers, shuffle, rank, sampler)  # return dataloader
+        if sampler is not None:
+            shuffle = False
+
+        return build_dataloader(dataset, batch_size, workers, shuffle, rank, sampler=sampler)  # return dataloader

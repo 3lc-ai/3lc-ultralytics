@@ -4,7 +4,6 @@ import tlc
 import torch
 import weakref
 
-from tlc_ultralytics.overrides import build_dataloader
 from ultralytics.models.yolo.detect import DetectionValidator
 from ultralytics.utils import metrics, ops
 from tlc_ultralytics.constants import (
@@ -20,7 +19,6 @@ from tlc_ultralytics.detect.utils import (
     yolo_loss_schemas,
 )
 from tlc_ultralytics.engine.validator import TLCValidatorMixin
-from tlc_ultralytics.utils import create_sampler
 
 
 class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
@@ -29,20 +27,6 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
 
     def check_dataset(self, *args, **kwargs):
         return tlc_check_det_dataset(*args, **kwargs)
-
-    def get_dataloader(self, dataset_path, batch_size):
-        """Builds and returns a data loader with given parameters."""
-        dataset = self.build_dataset(dataset_path, batch=batch_size, mode="val")
-
-        sampler = create_sampler(dataset.table, mode="val", settings=self._settings)
-        return build_dataloader(
-            dataset,
-            batch_size,
-            self.args.workers,
-            shuffle=False,
-            rank=-1,
-            sampler=sampler,
-        )
 
     def build_dataset(self, table, mode="val", batch=None):
         return build_tlc_yolo_dataset(

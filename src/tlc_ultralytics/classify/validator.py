@@ -4,7 +4,6 @@ import tlc
 import torch
 import weakref
 
-from tlc_ultralytics.overrides import build_dataloader
 from ultralytics.models import yolo
 from tlc_ultralytics.constants import (
     IMAGE_COLUMN_NAME,
@@ -13,7 +12,6 @@ from tlc_ultralytics.constants import (
 from tlc_ultralytics.classify.dataset import TLCClassificationDataset
 from tlc_ultralytics.classify.utils import tlc_check_cls_dataset
 from tlc_ultralytics.engine.validator import TLCValidatorMixin
-from tlc_ultralytics.utils import create_sampler
 
 
 class TLCClassificationValidator(TLCValidatorMixin, yolo.classify.ClassificationValidator):
@@ -22,20 +20,6 @@ class TLCClassificationValidator(TLCValidatorMixin, yolo.classify.Classification
 
     def check_dataset(self, *args, **kwargs):
         return tlc_check_cls_dataset(*args, **kwargs)
-
-    def get_dataloader(self, dataset_path, batch_size):
-        """Builds and returns a data loader with given parameters."""
-        dataset = self.build_dataset(dataset_path)
-
-        sampler = create_sampler(dataset.table, mode="val", settings=self._settings)
-        return build_dataloader(
-            dataset,
-            batch_size,
-            self.args.workers,
-            shuffle=False,
-            rank=-1,
-            sampler=sampler,
-        )
 
     def build_dataset(self, table):
         return TLCClassificationDataset(

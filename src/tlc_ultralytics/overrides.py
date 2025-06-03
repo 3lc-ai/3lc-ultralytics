@@ -4,46 +4,46 @@ This file is therefore under AGPL-3.0 License by Ultralytics.
 
 """
 
-import os
-import torch
+import ultralytics
 
-from torch.utils.data import distributed
+from typing import Optional
+from torch.utils.data import Sampler
 
-from ultralytics.data.build import InfiniteDataLoader, seed_worker
-from ultralytics.data.utils import PIN_MEMORY
-from ultralytics.utils import RANK
+from ultralytics.data.build import InfiniteDataLoader
+from ultralytics.data.build import build_dataloader as build_dataloader_ultralytics
 
 
-def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1, sampler=None):
-    """
-    Create and return an InfiniteDataLoader or DataLoader for training or validation.
+def build_dataloader(*args, **kwargs):
+    sampler: Optional[Sampler] = kwargs.pop("sampler", None)
 
-    Args:
-        dataset (Dataset): Dataset to load data from.
-        batch (int): Batch size for the dataloader.
-        workers (int): Number of worker threads for loading data.
-        shuffle (bool): Whether to shuffle the dataset.
-        rank (int): Process rank in distributed training. -1 for single-GPU training.
-        sampler (Sampler, optional): Sampler for the dataset.
+    class _InfiniteDataLoaderWithSampler(InfiniteDataLoader):
+        """This class is a temporary patch to the InfiniteDataLoader that allows for a custom sampler to be set.
 
-    Returns:
-        (InfiniteDataLoader): A dataloader that can be used for training or validation.
-    """
-    batch = min(batch, len(dataset))
-    nd = torch.cuda.device_count()  # number of CUDA devices
-    nw = min(os.cpu_count() // max(nd, 1), workers)  # number of workers
-    if sampler is None:
-        sampler = None if rank == -1 else distributed.DistributedSampler(dataset, shuffle=shuffle)
-    generator = torch.Generator()
-    generator.manual_seed(6148914691236517205 + RANK)
-    return InfiniteDataLoader(
-        dataset=dataset,
-        batch_size=batch,
-        shuffle=shuffle and sampler is None,
-        num_workers=nw,
-        sampler=sampler,
-        pin_memory=PIN_MEMORY,
-        collate_fn=getattr(dataset, "collate_fn", None),
-        worker_init_fn=seed_worker,
-        generator=generator,
-    )
+        It is necessary because the `build_dataloader` function in Ultralytics does not allow for a custom sampler to be
+        set.
+        """
+
+        def __init__(self, *args, **kwargs):
+            nonlocal sampler
+
+            provided_sampler = kwargs.pop("sampler", None)
+            if provided_sampler and sampler:
+                msg = "Cannot patch InfiniteDataLoader when a sampler is already set by Ultralytics. "
+                msg += "The 3LC integration does not yet support distributed training with custom weights."
+                raise ValueError(msg)
+
+            sampler = provided_sampler or sampler
+
+            shuffle = kwargs.pop("shuffle", True) and sampler is None
+
+            super().__init__(*args, sampler=sampler, shuffle=shuffle, **kwargs)
+
+    # Temporarily patch the InfiniteDataLoader with one that sets the sampler
+    ultralytics.data.build.InfiniteDataLoader = _InfiniteDataLoaderWithSampler
+
+    dataloader = build_dataloader_ultralytics(*args, **kwargs)
+
+    # Restore the original InfiniteDataLoader
+    ultralytics.data.build.InfiniteDataLoader = InfiniteDataLoader
+
+    return dataloader
