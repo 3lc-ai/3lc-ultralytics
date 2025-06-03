@@ -32,16 +32,21 @@ class TLCDatasetMixin:
         :param image_str: The raw image string to absolutize.
         :param table_url: The table URL to use for absolutization, usually the table whose images are being used.
         :return: The absolutized image string.
-        :raises ValueError: If the alias cannot be expanded.
+        :raises ValueError: If the alias cannot be expanded or the image URL is not a local file path.
         """
         url = tlc.Url(image_str)
         try:
             url = url.expand_aliases(allow_unexpanded=False)
         except ValueError as e:
-            raise ValueError(
-                f"Failed to expand alias in image_str: {image_str}. "
-                "Make sure the alias is spelled correctly and is registered in your configuration."
-            ) from e
+            msg = f"Failed to expand alias in image_str: {image_str}. "
+            msg += "Make sure the alias is spelled correctly and is registered in your configuration."
+            raise ValueError(msg) from e
+
+        if url.scheme is not tlc.Scheme.FILE:
+            msg = f"Image URL {url.to_str()} is not a local file path, it has scheme {url.scheme.value}. "
+            msg += "Only local image file paths are supported. If your image URLs are not local, first copy "
+            msg += "the images to a local directory and use an alias."
+            raise ValueError(msg)
 
         return url.to_absolute(table_url).to_str()
 
