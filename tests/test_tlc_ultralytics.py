@@ -1114,31 +1114,22 @@ def _compare_dataset_rows(row_ultralytics, row_3lc) -> None:
         else:
             assert value_ultralytics == value_3lc, f"Value {key} not equal in 3LC and Ultralytics"
 
-
-def test_dataset_determinism() -> None:
+@pytest.mark.parametrize("mode", ["train", "val"])
+def test_dataset_determinism(mode) -> None:
     """Test that datasets are deterministic with the same seed."""
-    mode = "val"
     settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}")
-    trainer_3lc = TLCDetectionTrainer(
-        overrides={
-            "data": TASK2DATASET["detect"],
-            "model": TASK2MODEL["detect"],
-            "settings": settings,
-            "seed": 42,  # Fixed seed
-            "deterministic": True,
-        },
-    )
+    overrides = {
+        "data": TASK2DATASET["detect"],
+        "model": TASK2MODEL["detect"],
+        "settings": settings,
+        "seed": 42,  # Fixed seed
+        "deterministic": True,
+    }
+    trainer_3lc = TLCDetectionTrainer(overrides=overrides)
 
     trainer_3lc.model = None
 
-    trainer_ultralytics = DetectionTrainer(
-        overrides={
-            "data": TASK2DATASET["detect"],
-            "model": TASK2MODEL["detect"],
-            "seed": 42,  # Fixed seed
-            "deterministic": True,
-        },
-    )
+    trainer_ultralytics = DetectionTrainer(overrides=overrides)
 
     trainer_ultralytics.model = None
 
