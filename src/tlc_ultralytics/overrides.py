@@ -1,9 +1,3 @@
-"""This file contains overrides for classes and methods in ultralytics where patching is required.
-
-This file is therefore under AGPL-3.0 License by Ultralytics.
-
-"""
-
 import ultralytics
 
 from typing import Optional
