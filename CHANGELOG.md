@@ -6,6 +6,15 @@
 
 Initial version with training and collection for detection, segmentation and classification.
 
+### Migration Guide
+
+The initial version introduces several breaking changes from the previous fork of `ultralytics`. 
+
+- Uninstall the previous integration fork with `pip uninstall ultralytics` (or equivalent), and install the integration following the top level `README.md`.
+- Change imports to be from the top-level of the new package, e.g. `from tlc_ultralytics import Settings, YOLO`.
+- Change `TLCYOLO` to `YOLO`.
+- (optional) If tables are resolved to by passing the same dataset yaml file through `data` and the project name ends with `YOLOv8` and/or the table name is `original`, `tables` should be passed directly to `model.train(...)` and `model.collect(...)` instead of resolving to them by through a YOLO dataset yaml file passed to `data`.
+
 ### Added
 
 - Raise if the scheme of image URLs used in the integration is not `file://`, instead of failing to read the images.
@@ -22,18 +31,5 @@ This version introduces the following changes from the previous integration fork
 - Default `project_name`s are modified to end with `YOLO`, from `YOLOv8`.
 - The check for the table name `original` has been removed when creating or reusing tables through `data`. Now only the table name `initial` is checked for.
 - `Trainer`s and `Validator` have been removed from `tlc_integration`, and can be accessed from the task-specific modules instead.
-
-### Migration Guide
-
-- Uninstall the previous integration fork with `pip uninstall ultralytics` (or equivalent), and install the integration following the top level `README.md`.
-- Change imports to be from the top-level of the new package, e.g. `from tlc_ultralytics import Settings, YOLO`.
-- Change `TLCYOLO` to `YOLO`.
-
-If tables are resolved to by passing the same dataset yaml file through `data` and either
-
-1. The project name ends with `YOLOv8`
-2. The table name is `original`
-
-`tables` should be passed directly instead of resolving to them by through a dataset yaml file passed to `data`.
 
 ### Fixed
