@@ -134,10 +134,6 @@ class TLCValidatorMixin(BaseValidator):
         else:
             self._should_collect = not self._settings.collection_disable
 
-        # Store original functions
-        # original_check_det_dataset = ultralytics.data.utils.check_det_dataset
-        # original_check_cls_dataset = ultralytics.data.utils.check_cls_dataset
-
         # Define bypass functions that use our data object
         def bypass_check_det_dataset(*args, **kwargs):
             return self.data
@@ -145,12 +141,7 @@ class TLCValidatorMixin(BaseValidator):
         def bypass_check_cls_dataset(*args, **kwargs):
             return self.data
 
-        # Patch the functions in ultralytics.data.utils
-        # check_det_dataset = bypass_check_det_dataset
-        # check_cls_dataset = bypass_check_cls_dataset
-        # ultralytics.data.utils.check_det_dataset = check_det_dataset
-        # ultralytics.data.utils.check_cls_dataset = check_cls_dataset
-
+        # Patch the functions in ultralytics.data.utils on the validator module
         ultralytics.engine.validator.check_det_dataset = bypass_check_det_dataset
         ultralytics.engine.validator.check_cls_dataset = bypass_check_cls_dataset
 
@@ -158,12 +149,7 @@ class TLCValidatorMixin(BaseValidator):
             # Call parent to perform the validation
             out = super().__call__(trainer, model)
         finally:
-            # Always restore original functions, even if validation fails
-            # ultralytics.data.utils.check_det_dataset = original_check_det_dataset
-            # ultralytics.data.utils.check_cls_dataset = original_check_cls_dataset
-            # check_det_dataset = original_check_det_dataset
-            # check_cls_dataset = original_check_cls_dataset
-
+            # Restore original functions
             ultralytics.engine.validator.check_det_dataset = ultralytics.data.utils.check_det_dataset
             ultralytics.engine.validator.check_cls_dataset = ultralytics.data.utils.check_cls_dataset
 
