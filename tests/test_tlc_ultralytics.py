@@ -28,6 +28,7 @@ from tlc_ultralytics.segment.utils import tlc_check_seg_dataset, check_seg_table
 from tlc_ultralytics.utils import check_tlc_dataset
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
+from tlc_ultralytics.engine.utils import _complete_label_column_name
 
 from tlc_ultralytics.constants import (
     DEFAULT_COLLECT_RUN_DESCRIPTION,
@@ -966,6 +967,12 @@ def test_no_predictions() -> None:
     tables = {"train": table_train, "val": table_val}
     results_3lc = model_3lc.train(**overrides, settings=settings, tables=tables)
     assert results_3lc, "Detection training failed"
+
+def test_complete_label_column_name() -> None:
+    assert _complete_label_column_name("a", "a") == "a"
+    assert _complete_label_column_name("a", "a.b.c") == "a.b.c"
+    assert _complete_label_column_name("a.b.c", "d.e.f") == "a.b.c"
+    assert _complete_label_column_name("", "a.b.c") == "a.b.c"
 
 
 # HELPERS
