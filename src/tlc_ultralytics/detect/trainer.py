@@ -51,23 +51,23 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
 
         return self.data
 
-    def build_dataset(self, table, mode="train", batch=None):
-        # Dataset object for training / validation
-        gs = max(int(de_parallel(self.model).stride.max() if self.model else 0), 32)
-        exclude_zero = mode == "val" and self._settings.exclude_zero_weight_collection
-        return build_tlc_yolo_dataset(
-            self.args,
-            table,
-            batch,
-            self.data,
-            mode=mode,
-            rect=mode == "val",
-            stride=gs,
+    def build_dataset(self, *args, **kwargs):
+        from ultralytics.models.yolo.detect.train import build_yolo_dataset as original_build_yolo_dataset
+
+        exclude_zero = kwargs.get("mode", "train") == "val" and self._settings.exclude_zero_weight_collection
+        ultralytics.models.yolo.detect.train.build_yolo_dataset = partial(
+            build_tlc_yolo_dataset,
             exclude_zero=exclude_zero,
             class_map=self.data["3lc_class_to_range"],
             image_column_name=self._image_column_name,
-            label_column_name=self._label_column_name,
+            label_column_name=self._label_column_name
         )
+
+        result = DetectionTrainer.build_dataset(self, *args, **kwargs)
+
+        ultralytics.models.yolo.detect.train.build_yolo_dataset = original_build_yolo_dataset
+
+        return result
 
     def get_validator(self, dataloader=None):
         self.loss_names = "box_loss", "cls_loss", "dfl_loss"
