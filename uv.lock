@@ -29,7 +29,7 @@ constraints = [{ name = "pacmap", specifier = "==0.7.3" }]
 
 [[package]]
 name = "3lc"
-version = "2.14.1"
+version = "2.15"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.12' and sys_platform == 'win32'",
@@ -60,6 +60,7 @@ dependencies = [
     { name = "numpy" },
     { name = "opencv-python" },
     { name = "overrides" },
+    { name = "packaging" },
     { name = "pandas" },
     { name = "pillow" },
     { name = "platformdirs" },
@@ -85,23 +86,23 @@ dependencies = [
     { name = "uvicorn" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/43/e8/4689a7c12ee330e816ace16f4422d669f8e76e35a012c250ffe9b8bbd56b/3lc-2.14.1-cp310-cp310-macosx_13_0_arm64.whl", hash = "sha256:bcf9bdf1b0223464de2a83058d22e819aa16a4f25ab018abd4a63aae5d1fc930", size = 3685253, upload-time = "2025-05-26T21:42:28.638Z" },
-    { url = "https://files.pythonhosted.org/packages/2a/75/4587890499c0b7b5676861dd5c1e0deaba6dd12c9ec6efd5a7e5141913de/3lc-2.14.1-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:c22d17f376311b6108db4656541f05c7f2aff3f6af4cba3e9ca10eef10016800", size = 3723235, upload-time = "2025-05-26T21:42:30.716Z" },
-    { url = "https://files.pythonhosted.org/packages/c6/ca/61fa01bc69b9b5f40c3bcbb0cbaaf2804f73dada37133a5bd8f84a9709f1/3lc-2.14.1-cp310-cp310-win_amd64.whl", hash = "sha256:cd574535660f31d2bed0c8e681fbe70947676c851937cc1a5923c28bf42f5e99", size = 3698212, upload-time = "2025-05-26T21:42:32.146Z" },
-    { url = "https://files.pythonhosted.org/packages/d0/b2/cba691e3317da208a5b02f8b8293eb769caf212ea3417510a2fdb7a06a36/3lc-2.14.1-cp311-cp311-macosx_13_0_arm64.whl", hash = "sha256:7abd0b550dcef6c6e851b5e341b2171c088020f71cf78d1c9c0fa8745590e3d5", size = 5150482, upload-time = "2025-05-26T21:42:33.381Z" },
-    { url = "https://files.pythonhosted.org/packages/68/38/983ee4b39d06aeebd59ff5077662e17d87d95c182dbbf884247320f8cb5b/3lc-2.14.1-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:b5d2b5948b7c4976fd0fb91884fe7247477369cde782d5e367ffaede2b8faf94", size = 5187265, upload-time = "2025-05-26T21:42:34.669Z" },
-    { url = "https://files.pythonhosted.org/packages/f0/60/556fd9124f422de2a3b337cd3a50fb5289e318d1e7294df042f9e9f965a0/3lc-2.14.1-cp311-cp311-win_amd64.whl", hash = "sha256:6632c905ae784d10a76b1c5b94dfeba12eec5ed8812331dec42dcb66cd4b3e64", size = 5163725, upload-time = "2025-05-26T21:42:36.683Z" },
-    { url = "https://files.pythonhosted.org/packages/3f/ef/26c22b78593e393a52f8301bf2bd61ee944edeedd09fbdad6baa411eb218/3lc-2.14.1-cp312-cp312-macosx_13_0_arm64.whl", hash = "sha256:1b287c70f3d46add96a6f3a074d9b8e7158627a71fa54f091b1612ddd83b5a78", size = 4617045, upload-time = "2025-05-26T21:42:38.319Z" },
-    { url = "https://files.pythonhosted.org/packages/2b/f6/ebf7a872dfa95f437d2d6fab87e0dff6780304873eac55cbb4c0484916ed/3lc-2.14.1-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:caef820f0a3e85a95e4b49e2991ce4768c8fd52647cd754a1634f91173bebb38", size = 4651557, upload-time = "2025-05-26T21:42:39.671Z" },
-    { url = "https://files.pythonhosted.org/packages/09/c7/c5f8dd0a2286cb1fbd384b5ad8fd6e59be343f06611033a7e4ac90b55c3b/3lc-2.14.1-cp312-cp312-win_amd64.whl", hash = "sha256:1a7aa5d1d3081c303cc75e869fbd8bf070d5be468b5ecd98dd7dcd0d1bad1f79", size = 4630656, upload-time = "2025-05-26T21:42:40.898Z" },
-    { url = "https://files.pythonhosted.org/packages/a4/1a/119e22e8108c11a7b784c305b0b2ef4febc5df152435a131ef4fa9ee88cb/3lc-2.14.1-cp39-cp39-macosx_13_0_arm64.whl", hash = "sha256:ecc519557ac2f91dae71e922e64d593ae0139e3d2a29659bf7e252d4db044831", size = 3659364, upload-time = "2025-05-26T21:42:42.156Z" },
-    { url = "https://files.pythonhosted.org/packages/69/2f/a225a21631ba8ce993b446a288d071aa7a5db7ce3e38030328756d1d9e09/3lc-2.14.1-cp39-cp39-manylinux2014_x86_64.whl", hash = "sha256:415f3a307e74ef183a6a0ede730ef2b45ba6b4bc7c010ee6c017216fe645772f", size = 3700553, upload-time = "2025-05-26T21:42:43.383Z" },
-    { url = "https://files.pythonhosted.org/packages/a6/fc/cbc58e55b13bfa7ce68510ff8e84ff04f1f85d506231f2217676ed1ad904/3lc-2.14.1-cp39-cp39-win_amd64.whl", hash = "sha256:0c5a022405aeff958d9d80e51b25844f1b0c50d4ebc71709ba7466e463f5a02c", size = 3666162, upload-time = "2025-05-26T21:42:45.815Z" },
+    { url = "https://files.pythonhosted.org/packages/ab/0a/bc2f5f1dfb59caad3e95c048e0be06b790bf988abe013b59a3d799152933/3lc-2.15.0-cp310-cp310-macosx_13_0_arm64.whl", hash = "sha256:01ee81345e3189ba43d451238d1800a9d0d75c43fdfa82e065df507f74c1a8f1", size = 3782304, upload-time = "2025-06-17T19:20:10.33Z" },
+    { url = "https://files.pythonhosted.org/packages/9c/f4/9c989b807f5e71c48ea0767f66e18859ac777117636b33a3ef950a8f9122/3lc-2.15.0-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:b97f5c7fa1492b90e6ff9d6474adc3b2c805701147446e5da24c4c6400dac114", size = 3818677, upload-time = "2025-06-17T19:20:12.146Z" },
+    { url = "https://files.pythonhosted.org/packages/71/f5/6ae89ce77e1084dd737d5178bea26895ea5b5381cf775c4cbc6e36b29f1c/3lc-2.15.0-cp310-cp310-win_amd64.whl", hash = "sha256:59ad2a897aa20b0a02c8b124450584dda65a92c2fb6668ab0a23ed5150c1afe3", size = 3796317, upload-time = "2025-06-17T19:20:13.659Z" },
+    { url = "https://files.pythonhosted.org/packages/06/23/4450e9bca16d6e20a0aebc22e68814065699567538943b7b53c713916708/3lc-2.15.0-cp311-cp311-macosx_13_0_arm64.whl", hash = "sha256:e421d0a218615aa6bdc689419b7763641617c5d9cba33ff88a180e2a2d4659ac", size = 5286779, upload-time = "2025-06-17T19:20:15.183Z" },
+    { url = "https://files.pythonhosted.org/packages/26/61/64f2f2a763a7d4ee5fdaa322991333658c59c1a7ec349dcdde14810e88f0/3lc-2.15.0-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:728cbfb6572862623f1cc5c367bd33f99cc5dde0d46ca2bfed20dd9b15197f60", size = 5332285, upload-time = "2025-06-17T19:20:16.458Z" },
+    { url = "https://files.pythonhosted.org/packages/ef/62/a70a9dd95adf79e55470758ce85a8e9b191c7dc48cd477005ecefc302764/3lc-2.15.0-cp311-cp311-win_amd64.whl", hash = "sha256:966bf37907f095638fc36750bef578cecc51c224ace37023bdbd62e95ede7086", size = 5298992, upload-time = "2025-06-17T19:20:17.836Z" },
+    { url = "https://files.pythonhosted.org/packages/fa/ea/7faf55ac8b6da46b7b39ea5eac7e0f78a82a84738daab9e552f29e8accbe/3lc-2.15.0-cp312-cp312-macosx_13_0_arm64.whl", hash = "sha256:e45cc28d024db1d5e70607bc0dfb474758cf3bf8cb503be1022b324cc2f80645", size = 4750634, upload-time = "2025-06-17T19:20:19.741Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/dc/322dd4b35d6fc6a0603fda1fb0eac18be1adbbd7fade65405092db959103/3lc-2.15.0-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:49b2321ba393c70b2ad551924eec4afd59ed3cc10f1655b33ed51bc1d1528e08", size = 4783917, upload-time = "2025-06-17T19:20:20.953Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/c1/f3519c6c7f16780d078b51bb9c17232a5208251c24baabf24ce5c58e6a45/3lc-2.15.0-cp312-cp312-win_amd64.whl", hash = "sha256:a48abdf01db5b7cd57064d77b5ba4798849a0dd679bfacfd13f0ab0d9e7acae5", size = 4761973, upload-time = "2025-06-17T19:20:22.226Z" },
+    { url = "https://files.pythonhosted.org/packages/34/4b/ff33bfd676484e0c0c9d62e6eb0f9fdb19c7411e78b069227fa9adda410f/3lc-2.15.0-cp39-cp39-macosx_13_0_arm64.whl", hash = "sha256:7690cb5745a6582b076e162cac2711127fe1e5419d0e0522a4a0301ca416c437", size = 3756716, upload-time = "2025-06-17T19:20:23.375Z" },
+    { url = "https://files.pythonhosted.org/packages/0c/b5/132a092a09dec9cfc095f88cf3bd947041a1c34964488af9bcd8f42dee7e/3lc-2.15.0-cp39-cp39-manylinux2014_x86_64.whl", hash = "sha256:f2998bb9a0e33c48b065ae47c7abcd474fedc95bf28bda0c7741c4876c42f9d9", size = 3797947, upload-time = "2025-06-17T19:20:24.54Z" },
+    { url = "https://files.pythonhosted.org/packages/80/72/8506816eb6f7c86e3b85dbddd25ef220a87bc7da19ad5257f29d43713a0f/3lc-2.15.0-cp39-cp39-win_amd64.whl", hash = "sha256:c6c0a876e7c42af0c7bc24ff634343e508e945049ec5ae4285d60a32e909e278", size = 3768779, upload-time = "2025-06-17T19:20:25.742Z" },
 ]
 
 [[package]]
 name = "3lc"
-version = "2.15"
+version = "2.16"
 source = { editable = "../tlc-monorepo" }
 resolution-markers = [
     "python_full_version >= '3.12' and sys_platform == 'win32'",
@@ -132,6 +133,7 @@ dependencies = [
     { name = "numpy", marker = "extra == 'group-15-3lc-ultralytics-dev-local'" },
     { name = "opencv-python", marker = "extra == 'group-15-3lc-ultralytics-dev-local'" },
     { name = "overrides", marker = "extra == 'group-15-3lc-ultralytics-dev-local'" },
+    { name = "packaging", marker = "extra == 'group-15-3lc-ultralytics-dev-local'" },
     { name = "pandas", marker = "extra == 'group-15-3lc-ultralytics-dev-local'" },
     { name = "pillow", marker = "extra == 'group-15-3lc-ultralytics-dev-local'" },
     { name = "platformdirs", marker = "extra == 'group-15-3lc-ultralytics-dev-local'" },
@@ -169,12 +171,13 @@ requires-dist = [
     { name = "dill", specifier = ">=0.3.6,<1.0.0" },
     { name = "evaluate", marker = "extra == 'huggingface'", specifier = ">=0.4.1,<1.0.0" },
     { name = "filelock", specifier = ">=3.13.1,<4.0.0" },
-    { name = "gcsfs", marker = "extra == 'gcs'", specifier = "==2024.3.1" },
+    { name = "google-cloud-storage", marker = "extra == 'gcs'", specifier = ">=3.0.0" },
     { name = "joblib", marker = "extra == 'umap'", specifier = ">=1.4.0,<2.0.0" },
     { name = "litestar", specifier = ">=2.15.0,<3.0.0" },
     { name = "numpy", specifier = ">=1.17.0,<3.0.0" },
     { name = "opencv-python", specifier = ">=4.11.0.86" },
     { name = "overrides", specifier = ">=6.1.0" },
+    { name = "packaging", specifier = ">=23.1" },
     { name = "pacmap", marker = "extra == 'pacmap'", specifier = ">=0.7.1,<1.0.0" },
     { name = "pandas", specifier = ">=1.4.2" },
     { name = "pillow", specifier = ">=10.4.0,<11.0.0" },
@@ -266,8 +269,8 @@ name = "3lc-ultralytics"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "3lc", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-15-3lc-ultralytics-dev-pypi' or extra != 'group-15-3lc-ultralytics-dev-local'" },
-    { name = "3lc", version = "2.15", source = { editable = "../tlc-monorepo" }, marker = "extra == 'group-15-3lc-ultralytics-dev-local'" },
+    { name = "3lc", version = "2.15", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-15-3lc-ultralytics-dev-pypi' or extra != 'group-15-3lc-ultralytics-dev-local'" },
+    { name = "3lc", version = "2.16", source = { editable = "../tlc-monorepo" }, marker = "extra == 'group-15-3lc-ultralytics-dev-local'" },
     { name = "pacmap" },
     { name = "ultralytics" },
 ]
@@ -278,10 +281,10 @@ dev = [
     { name = "ruff" },
 ]
 dev-local = [
-    { name = "3lc", version = "2.15", source = { editable = "../tlc-monorepo" } },
+    { name = "3lc", version = "2.16", source = { editable = "../tlc-monorepo" } },
 ]
 dev-pypi = [
-    { name = "3lc", version = "2.14.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "3lc", version = "2.15", source = { registry = "https://pypi.org/simple" } },
 ]
 
 [package.metadata]
