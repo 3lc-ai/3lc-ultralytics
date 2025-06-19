@@ -1,16 +1,27 @@
 from __future__ import annotations
 
 import tlc
-from pathlib import Path
 
 from ultralytics.data.dataset import ClassificationDataset
-from ultralytics.utils import colorstr, LOGGER
-from ultralytics.data.dataset import classify_augmentations, classify_transforms
 
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
 
+from functools import partial
+
 from typing import Any
 
+class _DummyImageFolder:
+    def __init__(self, root: tlc.Table, allow_empty: bool = False, samples: list[tuple[str, int]] = None):
+        self._root = root
+        self._samples = samples
+
+    @property
+    def samples(self):
+        return self._samples
+
+    @property
+    def root(self):
+        return self._root.url
 
 class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
     """
@@ -50,11 +61,18 @@ class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
         self.verify_schema()
 
         im_files, labels = self._get_rows_from_table()
-
         self.samples = list(zip(im_files, labels))
 
-        # Initialize attributes (e.g. transforms)
-        self._init_attributes(args, augment, prefix)
+        # Override torchvision ImageFolder when called by parent __init__
+        import torchvision
+
+        OriginalImageFolder = torchvision.datasets.ImageFolder
+        torchvision.datasets.ImageFolder = partial(_DummyImageFolder, samples=self.samples)
+
+        ClassificationDataset.__init__(self, table, args, augment=augment, prefix=prefix)
+
+        # Restore torchvision ImageFolder
+        torchvision.datasets.ImageFolder = OriginalImageFolder
 
         # Call mixin
         self._post_init()
@@ -89,37 +107,3 @@ class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
     def _index_to_example_id(self, index: int) -> int:
         """Get the example id for the given index."""
         return self._example_ids[index]
-
-    def _init_attributes(self, args, augment, prefix):
-        """Copied from ultralytics.data.dataset.ClassificationDataset.__init__."""
-
-        # Initialize attributes
-        if augment and args.fraction < 1.0:  # reduce training fraction
-            self.samples = self.samples[: round(len(self.samples) * args.fraction)]
-        self.prefix = colorstr(f"{prefix}: ") if prefix else ""
-        self.cache_ram = args.cache is True or str(args.cache).lower() == "ram"  # cache images into RAM
-        if self.cache_ram:
-            LOGGER.warning(
-                "Classification `cache_ram` training has known memory leak in "
-                "https://github.com/ultralytics/ultralytics/issues/9824, setting `cache_ram=False`."
-            )
-            self.cache_ram = False
-        self.cache_disk = str(args.cache).lower() == "disk"  # cache images on hard drive as uncompressed *.npy files
-        self.samples = self.verify_images()  # filter out bad images
-        self.samples = [list(x) + [Path(x[0]).with_suffix(".npy"), None] for x in self.samples]  # file, index, npy, im
-        scale = (1.0 - args.scale, 1.0)  # (0.08, 1.0)
-        self.torch_transforms = (
-            classify_augmentations(
-                size=args.imgsz,
-                scale=scale,
-                hflip=args.fliplr,
-                vflip=args.flipud,
-                erasing=args.erasing,
-                auto_augment=args.auto_augment,
-                hsv_h=args.hsv_h,
-                hsv_s=args.hsv_s,
-                hsv_v=args.hsv_v,
-            )
-            if augment
-            else classify_transforms(size=args.imgsz)
-        )
