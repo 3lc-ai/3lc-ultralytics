@@ -72,7 +72,6 @@ class TLCClassificationTrainer(TLCTrainerMixin, yolo.classify.ClassificationTrai
         )
 
     def get_dataloader(self, dataset_path, batch_size=16, rank=0, mode="train"):
-
         sampler = create_sampler(dataset_path, mode, self._settings, distributed=rank != -1)
 
         # Patch parent class module to use our build_dataloader

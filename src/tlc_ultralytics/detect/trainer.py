@@ -59,7 +59,7 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
             exclude_zero=exclude_zero,
             class_map=self.data["3lc_class_to_range"],
             image_column_name=self._image_column_name,
-            label_column_name=self._label_column_name
+            label_column_name=self._label_column_name,
         )
 
         result = DetectionTrainer.build_dataset(self, *args, **kwargs)
