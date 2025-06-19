@@ -20,7 +20,7 @@ class TLCTrainerMixin(BaseTrainer):
 
     def __init__(self, cfg=DEFAULT_CFG, overrides=None, _callbacks=None):
         LOGGER.info("Using 3LC Trainer 🌟")
-        self._settings = Settings() if "settings" not in overrides else overrides.pop("settings")
+        self._settings = overrides.pop("settings", Settings())
         self._settings.verify(training=True)
 
         assert "data" in overrides or "tables" in overrides, (
