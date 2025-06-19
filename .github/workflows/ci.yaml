@@ -31,7 +31,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies (3lc from PyPI)
-        run: uv sync --group dev-pypi
+        run: uv sync --group dev-pypi --no-group dev-local
 
       - name: Run ruff formatter
         run: uv run ruff format --check .
