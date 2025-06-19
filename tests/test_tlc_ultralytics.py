@@ -11,9 +11,9 @@ import tlc
 import cv2
 import os
 import torch
+import multiprocessing as mp
 
 from ultralytics.models.yolo import YOLO
-from ultralytics.models.yolo.detect import DetectionTrainer
 
 from tlc_ultralytics import (
     Settings,
@@ -117,6 +117,7 @@ def test_training(task) -> None:
     model_3lc = TLCYOLO(TASK2MODEL[task])
     results_3lc = model_3lc.train(**overrides, settings=settings)
     assert results_3lc, "Detection training failed"
+    print(results_3lc.results_dict)
 
     # Compare 3LC integration with ultralytics results
     # assert results_ultralytics.results_dict == results_3lc.results_dict, (
@@ -1114,28 +1115,67 @@ def _compare_dataset_rows(row_ultralytics, row_3lc) -> None:
         else:
             assert value_ultralytics == value_3lc, f"Value {key} not equal in 3LC and Ultralytics"
 
+def _create_dataset_samples_in_process(overrides, mode, trainer_type):
+    """Helper function to create dataset samples in a separate process."""
+    if trainer_type == "3lc":
+        from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
+        trainer = TLCDetectionTrainer(overrides=overrides)
+    else:
+        from ultralytics.models.yolo.detect import DetectionTrainer
+        trainer = DetectionTrainer(overrides=overrides)
+
+    trainer.model = None
+    dataset = trainer.build_dataset(trainer.data["train"], mode=mode, batch=4)
+    rows = list(dataset)
+
+    # Convert tensors to numpy arrays for pickling
+    serializable_rows = []
+    for row in rows:
+        serializable_row = {}
+        for key, value in row.items():
+            if isinstance(value, torch.Tensor):
+                serializable_row[key] = value.cpu().numpy()
+            elif isinstance(value, np.ndarray):
+                serializable_row[key] = value
+            else:
+                serializable_row[key] = value
+        serializable_rows.append(serializable_row)
+
+    return serializable_rows
+
 @pytest.mark.parametrize("mode", ["train", "val"])
 def test_dataset_determinism(mode) -> None:
-    """Test that datasets are deterministic with the same seed."""
+    """Test that datasets are deterministic with the same seed across separate processes."""
     settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}")
     overrides = {
         "data": TASK2DATASET["detect"],
         "model": TASK2MODEL["detect"],
-        "settings": settings,
         "seed": 42,  # Fixed seed
         "deterministic": True,
     }
 
-    trainer_3lc = TLCDetectionTrainer(overrides=overrides)
-    trainer_3lc.model = None
-    dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=4)
-    rows_3lc = list(dataset_3lc)
+    overrides_3lc = overrides.copy()
+    overrides_3lc["settings"] = settings
 
-    trainer_ultralytics = DetectionTrainer(overrides=overrides)
-    trainer_ultralytics.model = None
-    dataset_ultralytics = trainer_ultralytics.build_dataset(trainer_ultralytics.data["train"], mode=mode, batch=4)
-    rows_ultralytics = list(dataset_ultralytics)
+    # Create datasets in separate processes
+    with mp.Pool(processes=2) as pool:
+        # Run 3LC trainer in one process
+        result_3lc = pool.apply_async(
+            _create_dataset_samples_in_process,
+            args=(overrides_3lc, mode, "3lc")
+        )
 
-    assert len(rows_3lc) == len(rows_ultralytics)
+        # Run Ultralytics trainer in another process
+        result_ultralytics = pool.apply_async(
+            _create_dataset_samples_in_process, 
+            args=(overrides, mode, "ultralytics")
+        )
+
+        # Get results
+        rows_3lc = result_3lc.get()
+        rows_ultralytics = result_ultralytics.get()
+
+    assert len(rows_3lc) == len(rows_ultralytics), "Number of batches should be the same"
+
     for row_3lc, row_ultralytics in zip(rows_3lc, rows_ultralytics):
         _compare_dataset_rows(row_ultralytics, row_3lc)

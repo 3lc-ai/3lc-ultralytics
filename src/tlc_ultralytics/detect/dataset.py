@@ -6,7 +6,7 @@ from typing import Any, Callable, Literal
 
 from tlc.core.builtins.types.bounding_box import CenteredXYWHBoundingBox
 from ultralytics.data.dataset import YOLODataset
-from ultralytics.data.utils import segments2boxes
+from ultralytics.data.utils import check_file_speeds, segments2boxes
 from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
@@ -105,13 +105,14 @@ class BaseTLCYOLODataset(TLCDatasetMixin, YOLODataset):
 
     def get_img_files(self, _):
         """Images are read in `get_labels` to avoid two loops, return empty list here."""
-        return []
+        im_files, labels = self._get_rows_from_table()
+        check_file_speeds(im_files, prefix=self.prefix)
+        self.labels = labels
+        self.im_files = im_files
+        return self.im_files
 
     def get_labels(self):
         """Get the labels from the table."""
-        im_files, labels = self._get_rows_from_table()
-        self.labels = labels
-        self.im_files = im_files
         return self.labels
 
     def _index_to_example_id(self, index: int) -> int:
