@@ -31,17 +31,17 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies (3lc from PyPI)
-        run: uv sync --group dev-pypi --no-group dev-local
+        run: uv sync --no-sources
 
       - name: Run ruff formatter
-        run: uv run ruff format --check .
+        run: uv run --no-sync ruff format --check .
 
       - name: Run ruff linter
-        run: uv run ruff check .
+        run: uv run --no-sync ruff check .
 
       - name: Run tests
         run: |
           export $(echo ${{ secrets.VARIABLE_NAME }})=${{ secrets.VARIABLE_VALUE }}
           export $(echo ${{ secrets.RUNTIME_NAME }})=${{ secrets.RUNTIME_VALUE }}
           export TLC_API_KEY=${{ secrets.TLC_API_KEY }}
-          uv run pytest tests/test_tlc_ultralytics.py
+          uv run --no-sync pytest tests/test_tlc_ultralytics.py
