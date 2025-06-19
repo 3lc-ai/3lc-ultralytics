@@ -17,7 +17,6 @@ from tlc_ultralytics.detect.utils import (
 from tlc_ultralytics.detect.validator import TLCDetectionValidator
 from tlc_ultralytics.engine.trainer import TLCTrainerMixin
 from tlc_ultralytics.utils import create_sampler
-from ultralytics.utils.torch_utils import de_parallel
 
 
 class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
