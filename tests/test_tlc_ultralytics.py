@@ -1125,18 +1125,17 @@ def test_dataset_determinism(mode) -> None:
         "seed": 42,  # Fixed seed
         "deterministic": True,
     }
-    trainer_3lc = TLCDetectionTrainer(overrides=overrides)
 
+    trainer_3lc = TLCDetectionTrainer(overrides=overrides)
     trainer_3lc.model = None
+    dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=4)
+    rows_3lc = list(dataset_3lc)
 
     trainer_ultralytics = DetectionTrainer(overrides=overrides)
-
     trainer_ultralytics.model = None
-
-    # Create two datasets with the same seed
-    dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=4)
     dataset_ultralytics = trainer_ultralytics.build_dataset(trainer_ultralytics.data["train"], mode=mode, batch=4)
+    rows_ultralytics = list(dataset_ultralytics)
 
-    assert len(dataset_3lc) == len(dataset_ultralytics)
-    for row_3lc, row_ultralytics in zip(dataset_3lc, dataset_ultralytics):
+    assert len(rows_3lc) == len(rows_ultralytics)
+    for row_3lc, row_ultralytics in zip(rows_3lc, rows_ultralytics):
         _compare_dataset_rows(row_ultralytics, row_3lc)
