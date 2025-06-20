@@ -33,22 +33,15 @@ dev = [
     "pytest>=8.3.5",
     "ruff>=0.11.11",
 ]
-dev-local = ["3lc"]
-dev-pypi = ["3lc"]
+local = ["3lc"]
 
 [tool.uv]
-default-groups = ["dev", "dev-local"]
+default-groups = ["dev", "local"]
 constraint-dependencies = [
     "pacmap==0.7.3", # Otherwise fails to reduce for small datasets in tests
-]
-conflicts = [
-    [
-        { group = "dev-local" },
-        { group = "dev-pypi" },
-    ]
 ]
 
 [tool.uv.sources]
 "3lc" = [
-    { path = "../tlc-monorepo", editable=true, group = "dev-local" },
+    { path = "../tlc-monorepo", editable=true },
 ]
