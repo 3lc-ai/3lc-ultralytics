@@ -11,10 +11,6 @@ import tlc
 import cv2
 import os
 import torch
-import subprocess
-import sys
-import json
-import tempfile
 
 from ultralytics.models.yolo import YOLO
 
@@ -126,14 +122,14 @@ def test_training(task) -> None:
 
     # Reset random state before each training run
     _reset_random_state(overrides["seed"])
-    
+
     # First: Run ultralytics training
     model_ultralytics = YOLO(TASK2MODEL[task])
     results_ultralytics = model_ultralytics.train(**overrides)
 
     # Reset random state again to ensure both runs start with identical state
     _reset_random_state(overrides["seed"])
-    
+
     # Second: Run 3LC training
     model_3lc = TLCYOLO(TASK2MODEL[task])
     results_3lc = model_3lc.train(**overrides, settings=settings)
@@ -1238,7 +1234,7 @@ def test_training_determinism():
     _reset_random_state(overrides["seed"])
     model1 = TLCYOLO(TASK2MODEL["detect"])
     results1 = model1.train(**overrides, settings=settings)
-    
+
     _reset_random_state(overrides["seed"])
     model2 = TLCYOLO(TASK2MODEL["detect"])
     results2 = model2.train(**overrides, settings=settings)
