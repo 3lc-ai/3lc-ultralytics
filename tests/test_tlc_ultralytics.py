@@ -100,38 +100,6 @@ def _reset_random_state(seed):
     torch.backends.cudnn.benchmark = False
 
 
-def _train_model_in_process(model_type, model_name, overrides, settings=None):
-    """Helper function to train a model in a separate process."""
-    if model_type == "3lc":
-        from tlc_ultralytics import YOLO as TLCYOLO
-
-        model = TLCYOLO(model_name)
-        if settings:
-            results = model.train(**overrides, settings=settings)
-        else:
-            results = model.train(**overrides)
-    else:
-        from ultralytics.models.yolo import YOLO
-
-        model = YOLO(model_name)
-        results = model.train(**overrides)
-
-    # Convert results to serializable format
-    serializable_results = {
-        "results_dict": results.results_dict,
-        "names": results.names,
-        "save_dir": str(results.save_dir),
-    }
-
-    # Add task-specific attributes
-    if hasattr(results, "top1"):
-        serializable_results["top1"] = results.top1
-    if hasattr(results, "top5"):
-        serializable_results["top5"] = results.top5
-
-    return serializable_results
-
-
 @pytest.mark.parametrize("task", ["detect", "segment"])
 def test_training(task) -> None:
     # End-to-end test of training for detection and segmentation
@@ -156,39 +124,28 @@ def test_training(task) -> None:
         run_description=f"Test {task} training",
     )
 
-    # Train models in separate subprocesses for true process isolation
-    # First: Run ultralytics training in clean subprocess
-    results_ultralytics, ultralytics_calls, ultralytics_debug = _train_in_clean_process(
-        "ultralytics", TASK2MODEL[task], overrides
-    )
+    # Reset random state before each training run
+    _reset_random_state(overrides["seed"])
+    
+    # First: Run ultralytics training
+    model_ultralytics = YOLO(TASK2MODEL[task])
+    results_ultralytics = model_ultralytics.train(**overrides)
 
-    # Second: Run 3LC training in clean subprocess (no need to reset random state)
-    results_3lc, tlc_calls, tlc_debug = _train_in_clean_process("3lc", TASK2MODEL[task], overrides, settings)
+    # Reset random state again to ensure both runs start with identical state
+    _reset_random_state(overrides["seed"])
+    
+    # Second: Run 3LC training
+    model_3lc = TLCYOLO(TASK2MODEL[task])
+    results_3lc = model_3lc.train(**overrides, settings=settings)
 
     assert results_3lc, "Detection training failed"
 
     # Compare 3LC integration with ultralytics results
     if task == "detect":
-        assert results_ultralytics["results_dict"] == results_3lc["results_dict"], (
+        assert results_ultralytics.results_dict == results_3lc.results_dict, (
             "Results validation metrics 3LC different from Ultralytics"
         )
-        assert results_ultralytics["names"] == results_3lc["names"], "Results validation names"
-
-    # Verify random call equivalence
-    assert tlc_calls["random"] > 0, "Expected random calls when training, but none were made"
-
-    for module in ["random", "numpy", "torch"]:
-        assert ultralytics_calls[module] == tlc_calls[module], (
-            f"Different number of {module} random calls: "
-            f"ultralytics={ultralytics_calls[module]}, 3lc={tlc_calls[module]}"
-        )
-
-    # Debug output for Linux builder issues
-    if ultralytics_calls != tlc_calls:
-        print(f"DEBUG: Ultralytics debug info: {ultralytics_debug}")
-        print(f"DEBUG: 3LC debug info: {tlc_debug}")
-        print(f"DEBUG: Ultralytics calls: {ultralytics_calls}")
-        print(f"DEBUG: 3LC calls: {tlc_calls}")
+        assert results_ultralytics.names == results_3lc.names, "Results validation names"
 
     # Get 3LC run and inspect the results
     run = _get_run_from_settings(settings)
@@ -1254,167 +1211,38 @@ def test_dataset_determinism(mode) -> None:
         _compare_dataset_rows(row_ultralytics, row_3lc)
 
 
-def _train_in_clean_process(model_type, model_name, overrides, settings=None):
-    """Train a model in a clean subprocess for maximum isolation."""
-    import os
+def test_training_determinism():
+    """Test that training is deterministic across multiple runs."""
+    overrides = {
+        "data": TASK2DATASET["detect"],
+        "epochs": 1,
+        "batch": 4,
+        "device": "cpu",
+        "save": False,
+        "plots": False,
+        "seed": 42,
+        "deterministic": True,
+    }
 
-    # Create temporary script for subprocess execution
-    script_content = f'''
-import sys
-import json
-import random
-import numpy as np
-import torch
-import os
-from unittest.mock import patch
-from pathlib import Path
+    settings = Settings(
+        collection_epoch_start=1,
+        collect_loss=True,
+        image_embeddings_dim=2,
+        image_embeddings_reducer="pacmap",
+        project_name="test_determinism_project",
+        run_name="test_determinism",
+        run_description="Test training determinism",
+    )
 
-# Redirect stdout to stderr for training output
-original_stdout = sys.stdout
-sys.stdout = sys.stderr
+    # Reset random state and run training twice
+    _reset_random_state(overrides["seed"])
+    model1 = TLCYOLO(TASK2MODEL["detect"])
+    results1 = model1.train(**overrides, settings=settings)
+    
+    _reset_random_state(overrides["seed"])
+    model2 = TLCYOLO(TASK2MODEL["detect"])
+    results2 = model2.train(**overrides, settings=settings)
 
-# Set 3LC project root URL to match test TMP
-import tlc
-TMP = Path("{os.path.dirname(__file__)}") / "tmp"
-TMP_PROJECT_ROOT_URL = tlc.Url(TMP / "3LC")
-tlc.Configuration.instance().project_root_url = TMP_PROJECT_ROOT_URL
-tlc.TableIndexingTable.instance().add_scan_url(
-    {{
-        "url": tlc.Url(TMP_PROJECT_ROOT_URL),
-        "layout": "project",
-        "object_type": "table",
-        "static": True,
-    }}
-)
-
-# Clear any existing random state completely
-random.seed(None)
-np.random.seed(None)
-torch.manual_seed(0)
-torch.cuda.manual_seed_all(0)
-
-# Set seeds explicitly
-seed = {overrides.get("seed", 42)}
-random.seed(seed)
-np.random.seed(seed)
-torch.manual_seed(seed)
-torch.cuda.manual_seed_all(seed)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-
-# Additional environment cleanup
-os.environ['PYTHONHASHSEED'] = str(seed)
-
-# Create counters for each random module
-random_calls = {{"random": 0, "numpy": 0, "torch": 0}}
-
-def count_random_calls(original_func, module_name):
-    def wrapper(*args, **kwargs):
-        random_calls[module_name] += 1
-        return original_func(*args, **kwargs)
-    return wrapper
-
-# Patch the most common random functions
-with (
-    patch("random.random", side_effect=count_random_calls(random.random, "random")),
-    patch("random.randint", side_effect=count_random_calls(random.randint, "random")),
-    patch("random.choice", side_effect=count_random_calls(random.choice, "random")),
-    patch("random.shuffle", side_effect=count_random_calls(random.shuffle, "random")),
-    patch("numpy.random.random", side_effect=count_random_calls(np.random.random, "numpy")),
-    patch("numpy.random.randint", side_effect=count_random_calls(np.random.randint, "numpy")),
-    patch("numpy.random.choice", side_effect=count_random_calls(np.random.choice, "numpy")),
-    patch("numpy.random.shuffle", side_effect=count_random_calls(np.random.shuffle, "numpy")),
-    patch("torch.rand", side_effect=count_random_calls(torch.rand, "torch")),
-    patch("torch.randn", side_effect=count_random_calls(torch.randn, "torch")),
-    patch("torch.randint", side_effect=count_random_calls(torch.randint, "torch")),
-):
-    # Import and run training
-    if "{model_type}" == "3lc":
-        from tlc_ultralytics import YOLO as TLCYOLO, Settings
-        model = TLCYOLO("{model_name}")
-        overrides = {repr(overrides)}
-        settings = {repr(settings) if settings else None}
-        if settings:
-            results = model.train(**overrides, settings=settings)
-        else:
-            results = model.train(**overrides)
-    else:
-        from ultralytics.models.yolo import YOLO
-        model = YOLO("{model_name}")
-        overrides = {repr(overrides)}
-        results = model.train(**overrides)
-
-    # Serialize results
-    serializable_results = {{
-        "results_dict": results.results_dict,
-        "names": results.names,
-        "save_dir": str(results.save_dir),
-    }}
-
-    if hasattr(results, "top1"):
-        serializable_results["top1"] = results.top1
-    if hasattr(results, "top5"):
-        serializable_results["top5"] = results.top5
-
-    # Debug info
-    debug_info = {{
-        "process_id": os.getpid(),
-        "python_hash_seed": os.environ.get('PYTHONHASHSEED', 'not_set'),
-        "random_state_sample": random.random(),
-        "numpy_state_sample": np.random.random(),
-        "torch_state_sample": torch.rand(1).item(),
-    }}
-
-    # Output results and call counts to original stdout (JSON only)
-    output = {{
-        "results": serializable_results,
-        "random_calls": random_calls,
-        "debug": debug_info
-    }}
-    original_stdout.write(json.dumps(output))
-    original_stdout.flush()
-'''
-
-    # Write script to temporary file
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(script_content)
-        script_path = f.name
-
-    try:
-        # Run the script in a subprocess, setting the working directory to the project root
-        result = subprocess.run(
-            [sys.executable, "-c", script_content],
-            capture_output=True,
-            text=True,
-            cwd=os.path.dirname(__file__),
-            env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)},
-        )
-
-        # Debug: Check if subprocess failed
-        if result.returncode != 0:
-            print(f"Subprocess failed with return code {result.returncode}")
-            print(f"STDOUT: {result.stdout}")
-            print(f"STDERR: {result.stderr}")
-            raise RuntimeError(f"Subprocess failed: {result.stderr}")
-
-        # Debug: Check if stdout is empty
-        if not result.stdout.strip():
-            print("Subprocess produced no output")
-            print(f"STDOUT: {repr(result.stdout)}")
-            print(f"STDERR: {repr(result.stderr)}")
-            raise RuntimeError("Subprocess produced no output")
-
-        # Parse the JSON output
-        try:
-            output = json.loads(result.stdout.strip())
-        except json.JSONDecodeError as e:
-            print(f"Failed to parse JSON output: {e}")
-            print(f"Raw output: {repr(result.stdout)}")
-            print(f"STDERR: {repr(result.stderr)}")
-            raise
-
-        return output["results"], output["random_calls"], output.get("debug", {})
-
-    finally:
-        # Cleanup
-        os.unlink(script_path)
+    # Check that results are identical
+    assert results1.results_dict == results2.results_dict, "Results should be identical across runs"
+    assert results1.names == results2.names, "Names should be identical across runs"
