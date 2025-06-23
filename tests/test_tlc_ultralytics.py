@@ -11,7 +11,6 @@ import tlc
 import cv2
 import os
 import torch
-import multiprocessing as mp
 
 from ultralytics.models.yolo import YOLO
 
@@ -83,6 +82,20 @@ def get_metrics_tables_from_run(run: tlc.Run) -> dict[str, list[tlc.Table]]:
     return metrics_tables
 
 
+def _reset_random_state(seed):
+    """Reset all random generators to a specific seed."""
+    import random
+    import numpy as np
+    import torch
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
 def _train_model_in_process(model_type, model_name, overrides, settings=None):
     """Helper function to train a model in a separate process."""
     if model_type == "3lc":
@@ -139,19 +152,15 @@ def test_training(task) -> None:
         run_description=f"Test {task} training",
     )
 
-    # Train models in separate processes
-    with mp.Pool(processes=2) as pool:
-        # Run ultralytics training in one process
-        result_ultralytics = pool.apply_async(
-            _train_model_in_process, args=("ultralytics", TASK2MODEL[task], overrides)
-        )
+    # Train models sequentially with explicit random state reset
+    # First: Run ultralytics training
+    results_ultralytics = _train_model_in_process("ultralytics", TASK2MODEL[task], overrides)
 
-        # Run 3LC training in another process
-        result_3lc = pool.apply_async(_train_model_in_process, args=("3lc", TASK2MODEL[task], overrides, settings))
+    # Reset random state to ensure both runs start with the same state
+    _reset_random_state(overrides["seed"])
 
-        # Get results
-        results_ultralytics = result_ultralytics.get()
-        results_3lc = result_3lc.get()
+    # Second: Run 3LC training with fresh random state
+    results_3lc = _train_model_in_process("3lc", TASK2MODEL[task], overrides, settings)
 
     assert results_3lc, "Detection training failed"
 
@@ -239,11 +248,22 @@ def test_detect_training_with_yolo12() -> None:
 def test_classify_training() -> None:
     model = TASK2MODEL["classify"]
     data = TASK2DATASET["classify"]
-    overrides = {"data": data, "device": "cpu", "epochs": 3, "batch": 64, "imgsz": 32}
+    overrides = {
+        "data": data,
+        "device": "cpu",
+        "epochs": 3,
+        "batch": 64,
+        "imgsz": 32,
+        "seed": 42,
+        "deterministic": True,
+    }
 
     # Compare results from 3LC with ultralytics
     model_ultralytics = YOLO(model)
     results_ultralytics = model_ultralytics.train(**overrides)
+
+    # Reset random state to ensure both runs start with the same state
+    _reset_random_state(overrides["seed"])
 
     model_3lc = TLCYOLO(model)
 
@@ -1199,19 +1219,46 @@ def test_dataset_determinism(mode) -> None:
     overrides_3lc = overrides.copy()
     overrides_3lc["settings"] = settings
 
-    # Create datasets in separate processes
-    with mp.Pool(processes=2) as pool:
-        # Run 3LC trainer in one process
-        result_3lc = pool.apply_async(_create_dataset_samples_in_process, args=(overrides_3lc, mode, "3lc"))
+    # Create datasets sequentially with explicit random state reset
+    # First: Run 3LC trainer
+    rows_3lc = _create_dataset_samples_in_process(overrides_3lc, mode, "3lc")
 
-        # Run Ultralytics trainer in another process
-        result_ultralytics = pool.apply_async(_create_dataset_samples_in_process, args=(overrides, mode, "ultralytics"))
+    # Reset random state to ensure both runs start with the same state
+    _reset_random_state(overrides["seed"])
 
-        # Get results
-        rows_3lc = result_3lc.get()
-        rows_ultralytics = result_ultralytics.get()
+    # Second: Run Ultralytics trainer with fresh random state
+    rows_ultralytics = _create_dataset_samples_in_process(overrides, mode, "ultralytics")
 
     assert len(rows_3lc) == len(rows_ultralytics), "Number of batches should be the same"
 
     for row_3lc, row_ultralytics in zip(rows_3lc, rows_ultralytics):
         _compare_dataset_rows(row_ultralytics, row_3lc)
+
+
+def test_random_state_reset():
+    """Test that random state reset works correctly."""
+    import random
+    import numpy as np
+    import torch
+
+    # Set initial seed
+    seed = 42
+    _reset_random_state(seed)
+
+    # Generate some random numbers
+    rand1 = random.random()
+    np1 = np.random.random()
+    torch1 = torch.rand(1).item()
+
+    # Reset to same seed
+    _reset_random_state(seed)
+
+    # Generate same random numbers again
+    rand2 = random.random()
+    np2 = np.random.random()
+    torch2 = torch.rand(1).item()
+
+    # Should be identical
+    assert rand1 == rand2, "Python random not reset correctly"
+    assert np1 == np2, "NumPy random not reset correctly"
+    assert torch1 == torch2, "PyTorch random not reset correctly"
