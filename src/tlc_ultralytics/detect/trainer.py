@@ -53,7 +53,8 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
     def build_dataset(self, *args, **kwargs):
         from ultralytics.models.yolo.detect.train import build_yolo_dataset as original_build_yolo_dataset
 
-        _, mode, _ = args
+        mode = kwargs.get("mode") or args[1]
+
         exclude_zero = mode == "val" and self._settings.exclude_zero_weight_collection
         ultralytics.models.yolo.detect.train.build_yolo_dataset = partial(
             build_tlc_yolo_dataset,
