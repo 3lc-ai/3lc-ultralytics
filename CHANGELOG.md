@@ -19,6 +19,7 @@ The initial version introduces several breaking changes from the previous fork o
 
 - Raise if the scheme of image URLs used in the integration is not `file://`, instead of failing to read the images.
 - A directory `examples` with example scripts for training and collection for the supported tasks has been added.
+- A check for image read speed introduced in YOLO is now applied to the YOLO datasets coming from 3LC Tables. This logs a warning if reads are slow. It also ensures the same number of calls to `random` is made, such that runs with and without 3LC with `seed` and `deterministic=True` set now have the exact same transforms (which also access the global `random`) applied in training and thus get the same results.
 
 ### Changed
 
