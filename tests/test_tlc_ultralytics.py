@@ -11,8 +11,10 @@ import tlc
 import cv2
 import os
 import torch
-import multiprocessing as mp
-import platform
+import subprocess
+import sys
+import json
+import tempfile
 
 from ultralytics.models.yolo import YOLO
 
@@ -156,10 +158,12 @@ def test_training(task) -> None:
 
     # Train models in separate subprocesses for true process isolation
     # First: Run ultralytics training in clean subprocess
-    results_ultralytics, ultralytics_calls = _train_in_clean_process("ultralytics", TASK2MODEL[task], overrides)
+    results_ultralytics, ultralytics_calls, ultralytics_debug = _train_in_clean_process(
+        "ultralytics", TASK2MODEL[task], overrides
+    )
 
     # Second: Run 3LC training in clean subprocess (no need to reset random state)
-    results_3lc, tlc_calls = _train_in_clean_process("3lc", TASK2MODEL[task], overrides, settings)
+    results_3lc, tlc_calls, tlc_debug = _train_in_clean_process("3lc", TASK2MODEL[task], overrides, settings)
 
     assert results_3lc, "Detection training failed"
 
@@ -178,6 +182,13 @@ def test_training(task) -> None:
             f"Different number of {module} random calls: "
             f"ultralytics={ultralytics_calls[module]}, 3lc={tlc_calls[module]}"
         )
+
+    # Debug output for Linux builder issues
+    if ultralytics_calls != tlc_calls:
+        print(f"DEBUG: Ultralytics debug info: {ultralytics_debug}")
+        print(f"DEBUG: 3LC debug info: {tlc_debug}")
+        print(f"DEBUG: Ultralytics calls: {ultralytics_calls}")
+        print(f"DEBUG: 3LC calls: {tlc_calls}")
 
     # Get 3LC run and inspect the results
     run = _get_run_from_settings(settings)
@@ -1243,153 +1254,167 @@ def test_dataset_determinism(mode) -> None:
         _compare_dataset_rows(row_ultralytics, row_3lc)
 
 
-def _train_worker(args):
-    """Worker function that runs in separate process."""
-    model_type, model_name, overrides, settings = args
-    import random
-    import numpy as np
-    import torch
-    from unittest.mock import patch
-
-    # Set seeds explicitly in clean process
-    seed = overrides.get("seed", 42)
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-    # Create counters for each random module
-    random_calls = {"random": 0, "numpy": 0, "torch": 0}
-
-    def count_random_calls(original_func, module_name):
-        def wrapper(*args, **kwargs):
-            random_calls[module_name] += 1
-            return original_func(*args, **kwargs)
-
-        return wrapper
-
-    # Patch the most common random functions
-    with (
-        patch("random.random", side_effect=count_random_calls(random.random, "random")),
-        patch("random.randint", side_effect=count_random_calls(random.randint, "random")),
-        patch("random.choice", side_effect=count_random_calls(random.choice, "random")),
-        patch("random.shuffle", side_effect=count_random_calls(random.shuffle, "random")),
-        patch("numpy.random.random", side_effect=count_random_calls(np.random.random, "numpy")),
-        patch("numpy.random.randint", side_effect=count_random_calls(np.random.randint, "numpy")),
-        patch("numpy.random.choice", side_effect=count_random_calls(np.random.choice, "numpy")),
-        patch("numpy.random.shuffle", side_effect=count_random_calls(np.random.shuffle, "numpy")),
-        patch("torch.rand", side_effect=count_random_calls(torch.rand, "torch")),
-        patch("torch.randn", side_effect=count_random_calls(torch.randn, "torch")),
-        patch("torch.randint", side_effect=count_random_calls(torch.randint, "torch")),
-    ):
-        # Import and run training
-        if model_type == "3lc":
-            from tlc_ultralytics import YOLO as TLCYOLO
-
-            model = TLCYOLO(model_name)
-            if settings:
-                results = model.train(**overrides, settings=settings)
-            else:
-                results = model.train(**overrides)
-        else:
-            from ultralytics.models.yolo import YOLO
-
-            model = YOLO(model_name)
-            results = model.train(**overrides)
-
-        # Serialize results
-        serializable_results = {
-            "results_dict": results.results_dict,
-            "names": results.names,
-            "save_dir": str(results.save_dir),
-        }
-
-        if hasattr(results, "top1"):
-            serializable_results["top1"] = results.top1
-        if hasattr(results, "top5"):
-            serializable_results["top5"] = results.top5
-
-        # Return results and call counts
-        return {"results": serializable_results, "random_calls": random_calls}
-
-
 def _train_in_clean_process(model_type, model_name, overrides, settings=None):
-    """Train a model in a clean subprocess using multiprocessing with spawn method."""
+    """Train a model in a clean subprocess for maximum isolation."""
+    import os
 
-    # Force spawn method for cross-platform compatibility and clean process state
-    if platform.system() == "Linux":
-        # On Linux, we need to be careful with fork
-        # Use spawn to ensure clean process state
-        mp.set_start_method("spawn", force=True)
+    # Create temporary script for subprocess execution
+    script_content = f'''
+import sys
+import json
+import random
+import numpy as np
+import torch
+import os
+from unittest.mock import patch
+from pathlib import Path
 
-    # Use multiprocessing with spawn method
-    with mp.Pool(processes=1) as pool:
-        # Run the worker process
-        output = pool.apply(_train_worker, args=((model_type, model_name, overrides, settings),))
-        return output["results"], output["random_calls"]
+# Redirect stdout to stderr for training output
+original_stdout = sys.stdout
+sys.stdout = sys.stderr
 
+# Set 3LC project root URL to match test TMP
+import tlc
+TMP = Path("{os.path.dirname(__file__)}") / "tmp"
+TMP_PROJECT_ROOT_URL = tlc.Url(TMP / "3LC")
+tlc.Configuration.instance().project_root_url = TMP_PROJECT_ROOT_URL
+tlc.TableIndexingTable.instance().add_scan_url(
+    {{
+        "url": tlc.Url(TMP_PROJECT_ROOT_URL),
+        "layout": "project",
+        "object_type": "table",
+        "static": True,
+    }}
+)
 
-def _train_with_random_counting(model_type, model_name, overrides, settings=None):
-    """Helper function to train a model while counting random calls."""
-    import random
-    import numpy as np
-    import torch
-    from unittest.mock import patch
+# Clear any existing random state completely
+random.seed(None)
+np.random.seed(None)
+torch.manual_seed(0)
+torch.cuda.manual_seed_all(0)
 
-    # Create counters for each random module
-    random_calls = {"random": 0, "numpy": 0, "torch": 0}
+# Set seeds explicitly
+seed = {overrides.get("seed", 42)}
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
-    def count_random_calls(original_func, module_name):
-        def wrapper(*args, **kwargs):
-            random_calls[module_name] += 1
-            return original_func(*args, **kwargs)
+# Additional environment cleanup
+os.environ['PYTHONHASHSEED'] = str(seed)
 
-        return wrapper
+# Create counters for each random module
+random_calls = {{"random": 0, "numpy": 0, "torch": 0}}
 
-    # Patch the most common random functions
-    with (
-        patch("random.random", side_effect=count_random_calls(random.random, "random")),
-        patch("random.randint", side_effect=count_random_calls(random.randint, "random")),
-        patch("random.choice", side_effect=count_random_calls(random.choice, "random")),
-        patch("random.shuffle", side_effect=count_random_calls(random.shuffle, "random")),
-        patch("numpy.random.random", side_effect=count_random_calls(np.random.random, "numpy")),
-        patch("numpy.random.randint", side_effect=count_random_calls(np.random.randint, "numpy")),
-        patch("numpy.random.choice", side_effect=count_random_calls(np.random.choice, "numpy")),
-        patch("numpy.random.shuffle", side_effect=count_random_calls(np.random.shuffle, "numpy")),
-        patch("torch.rand", side_effect=count_random_calls(torch.rand, "torch")),
-        patch("torch.randn", side_effect=count_random_calls(torch.randn, "torch")),
-        patch("torch.randint", side_effect=count_random_calls(torch.randint, "torch")),
-    ):
-        results = _train_model_in_process(model_type, model_name, overrides, settings)
-        return results, random_calls.copy()
+def count_random_calls(original_func, module_name):
+    def wrapper(*args, **kwargs):
+        random_calls[module_name] += 1
+        return original_func(*args, **kwargs)
+    return wrapper
 
+# Patch the most common random functions
+with (
+    patch("random.random", side_effect=count_random_calls(random.random, "random")),
+    patch("random.randint", side_effect=count_random_calls(random.randint, "random")),
+    patch("random.choice", side_effect=count_random_calls(random.choice, "random")),
+    patch("random.shuffle", side_effect=count_random_calls(random.shuffle, "random")),
+    patch("numpy.random.random", side_effect=count_random_calls(np.random.random, "numpy")),
+    patch("numpy.random.randint", side_effect=count_random_calls(np.random.randint, "numpy")),
+    patch("numpy.random.choice", side_effect=count_random_calls(np.random.choice, "numpy")),
+    patch("numpy.random.shuffle", side_effect=count_random_calls(np.random.shuffle, "numpy")),
+    patch("torch.rand", side_effect=count_random_calls(torch.rand, "torch")),
+    patch("torch.randn", side_effect=count_random_calls(torch.randn, "torch")),
+    patch("torch.randint", side_effect=count_random_calls(torch.randint, "torch")),
+):
+    # Import and run training
+    if "{model_type}" == "3lc":
+        from tlc_ultralytics import YOLO as TLCYOLO, Settings
+        model = TLCYOLO("{model_name}")
+        overrides = {repr(overrides)}
+        settings = {repr(settings) if settings else None}
+        if settings:
+            results = model.train(**overrides, settings=settings)
+        else:
+            results = model.train(**overrides)
+    else:
+        from ultralytics.models.yolo import YOLO
+        model = YOLO("{model_name}")
+        overrides = {repr(overrides)}
+        results = model.train(**overrides)
 
-def test_random_state_reset():
-    """Test that random state reset works correctly."""
-    import random
-    import numpy as np
-    import torch
+    # Serialize results
+    serializable_results = {{
+        "results_dict": results.results_dict,
+        "names": results.names,
+        "save_dir": str(results.save_dir),
+    }}
 
-    # Set initial seed
-    seed = 42
-    _reset_random_state(seed)
+    if hasattr(results, "top1"):
+        serializable_results["top1"] = results.top1
+    if hasattr(results, "top5"):
+        serializable_results["top5"] = results.top5
 
-    # Generate some random numbers
-    rand1 = random.random()
-    np1 = np.random.random()
-    torch1 = torch.rand(1).item()
+    # Debug info
+    debug_info = {{
+        "process_id": os.getpid(),
+        "python_hash_seed": os.environ.get('PYTHONHASHSEED', 'not_set'),
+        "random_state_sample": random.random(),
+        "numpy_state_sample": np.random.random(),
+        "torch_state_sample": torch.rand(1).item(),
+    }}
 
-    # Reset to same seed
-    _reset_random_state(seed)
+    # Output results and call counts to original stdout (JSON only)
+    output = {{
+        "results": serializable_results,
+        "random_calls": random_calls,
+        "debug": debug_info
+    }}
+    original_stdout.write(json.dumps(output))
+    original_stdout.flush()
+'''
 
-    # Generate same random numbers again
-    rand2 = random.random()
-    np2 = np.random.random()
-    torch2 = torch.rand(1).item()
+    # Write script to temporary file
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+        f.write(script_content)
+        script_path = f.name
 
-    # Should be identical
-    assert rand1 == rand2, "Python random not reset correctly"
-    assert np1 == np2, "NumPy random not reset correctly"
-    assert torch1 == torch2, "PyTorch random not reset correctly"
+    try:
+        # Run the script in a subprocess, setting the working directory to the project root
+        result = subprocess.run(
+            [sys.executable, "-c", script_content],
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(__file__),
+            env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)},
+        )
+
+        # Debug: Check if subprocess failed
+        if result.returncode != 0:
+            print(f"Subprocess failed with return code {result.returncode}")
+            print(f"STDOUT: {result.stdout}")
+            print(f"STDERR: {result.stderr}")
+            raise RuntimeError(f"Subprocess failed: {result.stderr}")
+
+        # Debug: Check if stdout is empty
+        if not result.stdout.strip():
+            print("Subprocess produced no output")
+            print(f"STDOUT: {repr(result.stdout)}")
+            print(f"STDERR: {repr(result.stderr)}")
+            raise RuntimeError("Subprocess produced no output")
+
+        # Parse the JSON output
+        try:
+            output = json.loads(result.stdout.strip())
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse JSON output: {e}")
+            print(f"Raw output: {repr(result.stdout)}")
+            print(f"STDERR: {repr(result.stderr)}")
+            raise
+
+        return output["results"], output["random_calls"], output.get("debug", {})
+
+    finally:
+        # Cleanup
+        os.unlink(script_path)
