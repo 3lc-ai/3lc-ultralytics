@@ -127,6 +127,7 @@ def test_training(task) -> None:
         "plots": False,
         "seed": 3 + ord("L") + ord("C"),
         "deterministic": True,
+        "workers": 0,
     }
 
     settings = Settings(
