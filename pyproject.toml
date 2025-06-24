@@ -11,6 +11,7 @@ dependencies = [
     "3lc>=2.13.1",
     "pacmap>=0.7.0",
     "ultralytics==8.3.146",
+    "setuptools",
 ]
 
 [build]

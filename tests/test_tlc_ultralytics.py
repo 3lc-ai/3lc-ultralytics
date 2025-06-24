@@ -140,8 +140,9 @@ def test_training(task) -> None:
         run_description=f"Test {task} training",
     )
 
-    # Train models in separate processes
-    with mp.Pool(processes=2) as pool:
+    # Train models in separate processes using spawn
+    ctx = mp.get_context("spawn")
+    with ctx.Pool(processes=2) as pool:
         # Run ultralytics training in one process
         result_ultralytics = pool.apply_async(
             _train_model_in_process, args=("ultralytics", TASK2MODEL[task], overrides)
@@ -1200,8 +1201,9 @@ def test_dataset_determinism(mode) -> None:
     overrides_3lc = overrides.copy()
     overrides_3lc["settings"] = settings
 
-    # Create datasets in separate processes
-    with mp.Pool(processes=2) as pool:
+    # Create datasets in separate processes using spawn
+    ctx = mp.get_context("spawn")
+    with ctx.Pool(processes=2) as pool:
         # Run 3LC trainer in one process
         result_3lc = pool.apply_async(_create_dataset_samples_in_process, args=(overrides_3lc, mode, "3lc"))
 

@@ -178,6 +178,7 @@ source = { editable = "." }
 dependencies = [
     { name = "3lc" },
     { name = "pacmap" },
+    { name = "setuptools" },
     { name = "ultralytics" },
 ]
 
@@ -194,6 +195,7 @@ local = [
 requires-dist = [
     { name = "3lc", editable = "../tlc-monorepo" },
     { name = "pacmap", specifier = ">=0.7.0" },
+    { name = "setuptools" },
     { name = "ultralytics", specifier = "==8.3.146" },
 ]
 
