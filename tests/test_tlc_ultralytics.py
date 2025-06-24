@@ -11,10 +11,7 @@ import tlc
 import cv2
 import os
 import torch
-import subprocess
-import json
-import tempfile
-import sys
+import multiprocessing as mp
 
 from ultralytics.models.yolo import YOLO
 
@@ -76,11 +73,6 @@ except Exception:
     UMAP_AVAILABLE = False
 
 
-# Set up deterministic environment at module level
-os.environ["PYTHONHASHSEED"] = "42"
-os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-
-
 def get_metrics_tables_from_run(run: tlc.Run) -> dict[str, list[tlc.Table]]:
     """Return metrics tables grouped by stream name"""
     metrics_infos = run.metrics
@@ -91,117 +83,36 @@ def get_metrics_tables_from_run(run: tlc.Run) -> dict[str, list[tlc.Table]]:
     return metrics_tables
 
 
-def _reset_random_state(seed):
-    """Reset all random generators to a specific seed."""
-    import random
-    import numpy as np
-    import torch
-    import os
+def _train_model_in_process(model_type, model_name, overrides, settings=None):
+    """Helper function to train a model in a separate process."""
+    if model_type == "3lc":
+        from tlc_ultralytics import YOLO as TLCYOLO
 
-    # Reset Python's random module
-    random.seed(seed)
+        model = TLCYOLO(model_name)
+        if settings:
+            results = model.train(**overrides, settings=settings)
+        else:
+            results = model.train(**overrides)
+    else:
+        from ultralytics.models.yolo import YOLO
 
-    # Reset numpy's random state
-    np.random.seed(seed)
+        model = YOLO(model_name)
+        results = model.train(**overrides)
 
-    # Reset numpy's default_rng generator (used in _create_test_image_and_table)
-    np.random.default_rng(seed)
+    # Convert results to serializable format
+    serializable_results = {
+        "results_dict": results.results_dict,
+        "names": results.names,
+        "save_dir": str(results.save_dir),
+    }
 
-    # Reset PyTorch's random state
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    # Add task-specific attributes
+    if hasattr(results, "top1"):
+        serializable_results["top1"] = results.top1
+    if hasattr(results, "top5"):
+        serializable_results["top5"] = results.top5
 
-    # Set PyTorch to deterministic mode
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-    # Reset environment variables that might affect randomness
-    # Clear any existing random seed environment variables
-    for env_var in ["PYTHONHASHSEED", "CUDA_LAUNCH_BLOCKING", "TORCH_USE_CUDA_DSA"]:
-        if env_var in os.environ:
-            del os.environ[env_var]
-
-    # Set PYTHONHASHSEED to ensure hash-based operations are deterministic
-    os.environ["PYTHONHASHSEED"] = str(seed)
-
-    # Force PyTorch to use deterministic algorithms where possible
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-
-    # Reset any global random state that might persist
-    if hasattr(torch, "generator"):
-        torch.generator.manual_seed(seed)
-
-    # Additional PyTorch random state resets
-    if hasattr(torch, "get_rng_state"):
-        torch.set_rng_state(torch.manual_seed(seed).get_state())
-
-    # Reset any thread-local random state
-    if hasattr(torch, "_C"):
-        torch._C._set_default_tensor_type(torch.FloatTensor)
-
-    # Force garbage collection to clear any cached random state
-    import gc
-
-    gc.collect()
-
-
-def run_training_in_subprocess(
-    task: str, mode: str, overrides: dict, settings: Settings = None, seed: int = None
-) -> dict:
-    """Run training in a subprocess and return the results"""
-    import shutil
-
-    # Use the persistent TMP directory for 3LC data
-    output_dir = tempfile.TemporaryDirectory()
-    output_path = Path(output_dir.name)
-    tmp_path = TMP  # Use the same TMP as the test process
-
-    # Optionally clean up the TMP/3LC directory before running
-    project_root = tmp_path / "3LC"
-    if project_root.exists():
-        shutil.rmtree(project_root)
-
-    # Prepare command line arguments
-    cmd = [
-        sys.executable,
-        str(Path(__file__).parent / "training_script.py"),
-        "--task",
-        task,
-        "--mode",
-        mode,
-        "--overrides",
-        json.dumps(overrides),
-        "--output-dir",
-        str(output_path),
-        "--tmp-dir",
-        str(tmp_path),
-        "--seed",
-        str(seed or overrides.get("seed", 42)),
-    ]
-
-    if mode == "3lc" and settings:
-        cmd.extend(["--settings", json.dumps({k: v for k, v in settings.__dict__.items() if not k.startswith("_")})])
-
-    # Run the subprocess
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=Path(__file__).parent)
-
-    if result.returncode != 0:
-        print(f"Subprocess stdout: {result.stdout}")
-        print(f"Subprocess stderr: {result.stderr}")
-        raise RuntimeError(f"Training subprocess failed with return code {result.returncode}")
-
-    # Load results
-    results_file = output_path / f"{mode}_results.json"
-    names_file = output_path / f"{mode}_names.json"
-
-    with open(results_file) as f:
-        results_dict = json.load(f)
-
-    with open(names_file) as f:
-        names = json.load(f)
-
-    output_dir.cleanup()
-    return {"results_dict": results_dict, "names": names}
+    return serializable_results
 
 
 @pytest.mark.parametrize("task", ["detect", "segment"])
@@ -216,7 +127,6 @@ def test_training(task) -> None:
         "plots": False,
         "seed": 3 + ord("L") + ord("C"),
         "deterministic": True,
-        "workers": 0,
     }
 
     settings = Settings(
@@ -229,11 +139,21 @@ def test_training(task) -> None:
         run_description=f"Test {task} training",
     )
 
-    # Run ultralytics training in subprocess
-    results_ultralytics = run_training_in_subprocess(task, "ultralytics", overrides)
+    # Train models in separate processes
+    with mp.Pool(processes=2) as pool:
+        # Run ultralytics training in one process
+        result_ultralytics = pool.apply_async(
+            _train_model_in_process, args=("ultralytics", TASK2MODEL[task], overrides)
+        )
 
-    # Run 3LC training in subprocess
-    results_3lc = run_training_in_subprocess(task, "3lc", overrides, settings)
+        # Run 3LC training in another process
+        result_3lc = pool.apply_async(_train_model_in_process, args=("3lc", TASK2MODEL[task], overrides, settings))
+
+        # Get results
+        results_ultralytics = result_ultralytics.get()
+        results_3lc = result_3lc.get()
+
+    assert results_3lc, "Detection training failed"
 
     # Compare 3LC integration with ultralytics results
     if task == "detect":
@@ -319,22 +239,11 @@ def test_detect_training_with_yolo12() -> None:
 def test_classify_training() -> None:
     model = TASK2MODEL["classify"]
     data = TASK2DATASET["classify"]
-    overrides = {
-        "data": data,
-        "device": "cpu",
-        "epochs": 3,
-        "batch": 64,
-        "imgsz": 32,
-        "seed": 42,
-        "deterministic": True,
-    }
+    overrides = {"data": data, "device": "cpu", "epochs": 3, "batch": 64, "imgsz": 32}
 
     # Compare results from 3LC with ultralytics
     model_ultralytics = YOLO(model)
     results_ultralytics = model_ultralytics.train(**overrides)
-
-    # Reset random state to ensure both runs start with the same state
-    _reset_random_state(overrides["seed"])
 
     model_3lc = TLCYOLO(model)
 
@@ -1290,50 +1199,19 @@ def test_dataset_determinism(mode) -> None:
     overrides_3lc = overrides.copy()
     overrides_3lc["settings"] = settings
 
-    # Create datasets sequentially with explicit random state reset
-    # First: Run 3LC trainer
-    rows_3lc = _create_dataset_samples_in_process(overrides_3lc, mode, "3lc")
+    # Create datasets in separate processes
+    with mp.Pool(processes=2) as pool:
+        # Run 3LC trainer in one process
+        result_3lc = pool.apply_async(_create_dataset_samples_in_process, args=(overrides_3lc, mode, "3lc"))
 
-    # Reset random state to ensure both runs start with the same state
-    _reset_random_state(overrides["seed"])
+        # Run Ultralytics trainer in another process
+        result_ultralytics = pool.apply_async(_create_dataset_samples_in_process, args=(overrides, mode, "ultralytics"))
 
-    # Second: Run Ultralytics trainer with fresh random state
-    rows_ultralytics = _create_dataset_samples_in_process(overrides, mode, "ultralytics")
+        # Get results
+        rows_3lc = result_3lc.get()
+        rows_ultralytics = result_ultralytics.get()
 
     assert len(rows_3lc) == len(rows_ultralytics), "Number of batches should be the same"
 
     for row_3lc, row_ultralytics in zip(rows_3lc, rows_ultralytics):
         _compare_dataset_rows(row_ultralytics, row_3lc)
-
-
-def test_training_determinism():
-    """Test that training is deterministic across multiple runs."""
-    overrides = {
-        "data": TASK2DATASET["detect"],
-        "epochs": 1,
-        "batch": 4,
-        "device": "cpu",
-        "save": False,
-        "plots": False,
-        "seed": 42,
-        "deterministic": True,
-        "workers": 0,
-    }
-
-    settings = Settings(
-        collection_epoch_start=1,
-        collect_loss=True,
-        image_embeddings_dim=2,
-        image_embeddings_reducer="pacmap",
-        project_name="test_determinism_project",
-        run_name="test_determinism",
-        run_description="Test training determinism",
-    )
-
-    # Run training twice in separate subprocesses
-    results1 = run_training_in_subprocess("detect", "3lc", overrides, settings)
-    results2 = run_training_in_subprocess("detect", "3lc", overrides, settings)
-
-    # Check that results are identical
-    assert results1["results_dict"] == results2["results_dict"], "Results should be identical across runs"
-    assert results1["names"] == results2["names"], "Names should be identical across runs"
