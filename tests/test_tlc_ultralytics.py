@@ -11,6 +11,10 @@ import tlc
 import cv2
 import os
 import torch
+import subprocess
+import json
+import tempfile
+import sys
 
 from ultralytics.models.yolo import YOLO
 
@@ -141,6 +145,65 @@ def _reset_random_state(seed):
     gc.collect()
 
 
+def run_training_in_subprocess(
+    task: str, mode: str, overrides: dict, settings: Settings = None, seed: int = None
+) -> dict:
+    """Run training in a subprocess and return the results"""
+    import shutil
+
+    # Use the persistent TMP directory for 3LC data
+    output_dir = tempfile.TemporaryDirectory()
+    output_path = Path(output_dir.name)
+    tmp_path = TMP  # Use the same TMP as the test process
+
+    # Optionally clean up the TMP/3LC directory before running
+    project_root = tmp_path / "3LC"
+    if project_root.exists():
+        shutil.rmtree(project_root)
+
+    # Prepare command line arguments
+    cmd = [
+        sys.executable,
+        str(Path(__file__).parent / "training_script.py"),
+        "--task",
+        task,
+        "--mode",
+        mode,
+        "--overrides",
+        json.dumps(overrides),
+        "--output-dir",
+        str(output_path),
+        "--tmp-dir",
+        str(tmp_path),
+        "--seed",
+        str(seed or overrides.get("seed", 42)),
+    ]
+
+    if mode == "3lc" and settings:
+        cmd.extend(["--settings", json.dumps({k: v for k, v in settings.__dict__.items() if not k.startswith("_")})])
+
+    # Run the subprocess
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=Path(__file__).parent)
+
+    if result.returncode != 0:
+        print(f"Subprocess stdout: {result.stdout}")
+        print(f"Subprocess stderr: {result.stderr}")
+        raise RuntimeError(f"Training subprocess failed with return code {result.returncode}")
+
+    # Load results
+    results_file = output_path / f"{mode}_results.json"
+    names_file = output_path / f"{mode}_names.json"
+
+    with open(results_file) as f:
+        results_dict = json.load(f)
+
+    with open(names_file) as f:
+        names = json.load(f)
+
+    output_dir.cleanup()
+    return {"results_dict": results_dict, "names": names}
+
+
 @pytest.mark.parametrize("task", ["detect", "segment"])
 def test_training(task) -> None:
     # End-to-end test of training for detection and segmentation
@@ -166,37 +229,18 @@ def test_training(task) -> None:
         run_description=f"Test {task} training",
     )
 
-    # Reset random state before each training run
-    _reset_random_state(overrides["seed"])
+    # Run ultralytics training in subprocess
+    results_ultralytics = run_training_in_subprocess(task, "ultralytics", overrides)
 
-    # First: Run ultralytics training
-    model_ultralytics = YOLO(TASK2MODEL[task])
-    results_ultralytics = model_ultralytics.train(**overrides)
-
-    # Reset random state again to ensure both runs start with identical state
-    _reset_random_state(overrides["seed"])
-
-    # Additional cleanup to ensure deterministic behavior
-    import gc
-
-    gc.collect()
-
-    # Clear any cached data that might affect determinism
-    if hasattr(torch, "cuda"):
-        torch.cuda.empty_cache()
-
-    # Second: Run 3LC training
-    model_3lc = TLCYOLO(TASK2MODEL[task])
-    results_3lc = model_3lc.train(**overrides, settings=settings)
-
-    assert results_3lc, "Detection training failed"
+    # Run 3LC training in subprocess
+    results_3lc = run_training_in_subprocess(task, "3lc", overrides, settings)
 
     # Compare 3LC integration with ultralytics results
     if task == "detect":
-        assert results_ultralytics.results_dict == results_3lc.results_dict, (
+        assert results_ultralytics["results_dict"] == results_3lc["results_dict"], (
             "Results validation metrics 3LC different from Ultralytics"
         )
-        assert results_ultralytics.names == results_3lc.names, "Results validation names"
+        assert results_ultralytics["names"] == results_3lc["names"], "Results validation names"
 
     # Get 3LC run and inspect the results
     run = _get_run_from_settings(settings)
@@ -1264,9 +1308,6 @@ def test_dataset_determinism(mode) -> None:
 
 def test_training_determinism():
     """Test that training is deterministic across multiple runs."""
-    # Ensure we start with a completely clean random state
-    _reset_random_state(42)
-
     overrides = {
         "data": TASK2DATASET["detect"],
         "epochs": 1,
@@ -1289,24 +1330,10 @@ def test_training_determinism():
         run_description="Test training determinism",
     )
 
-    # Reset random state and run training twice
-    _reset_random_state(overrides["seed"])
-    model1 = TLCYOLO(TASK2MODEL["detect"])
-    results1 = model1.train(**overrides, settings=settings)
-
-    # Additional cleanup to ensure deterministic behavior
-    import gc
-
-    gc.collect()
-
-    # Clear any cached data that might affect determinism
-    if hasattr(torch, "cuda"):
-        torch.cuda.empty_cache()
-
-    _reset_random_state(overrides["seed"])
-    model2 = TLCYOLO(TASK2MODEL["detect"])
-    results2 = model2.train(**overrides, settings=settings)
+    # Run training twice in separate subprocesses
+    results1 = run_training_in_subprocess("detect", "3lc", overrides, settings)
+    results2 = run_training_in_subprocess("detect", "3lc", overrides, settings)
 
     # Check that results are identical
-    assert results1.results_dict == results2.results_dict, "Results should be identical across runs"
-    assert results1.names == results2.names, "Names should be identical across runs"
+    assert results1["results_dict"] == results2["results_dict"], "Results should be identical across runs"
+    assert results1["names"] == results2["names"], "Names should be identical across runs"
