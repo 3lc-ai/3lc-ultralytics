@@ -2,9 +2,9 @@
 
 # 3LC Integration
 
-This document outlines how to use the 3LC integration available for Ultralytics YOLO classification, object detection and instance segmentation.
+Ultralytics YOLO classification, object detection and segmentation with 3LC integrated.
 
-For any questions or problems, please reach out on the [3LC Discord](https://discord.com/channels/1236027984150794290/1236118620002586655).
+[![Discord](https://img.shields.io/badge/discord-alfred-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwnwFtfafC)
 
 ## About 3LC
 
