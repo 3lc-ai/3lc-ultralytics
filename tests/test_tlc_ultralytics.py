@@ -72,6 +72,11 @@ except Exception:
     UMAP_AVAILABLE = False
 
 
+# Set up deterministic environment at module level
+os.environ["PYTHONHASHSEED"] = "42"
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
+
 def get_metrics_tables_from_run(run: tlc.Run) -> dict[str, list[tlc.Table]]:
     """Return metrics tables grouped by stream name"""
     metrics_infos = run.metrics
@@ -87,13 +92,53 @@ def _reset_random_state(seed):
     import random
     import numpy as np
     import torch
+    import os
 
+    # Reset Python's random module
     random.seed(seed)
+
+    # Reset numpy's random state
     np.random.seed(seed)
+
+    # Reset numpy's default_rng generator (used in _create_test_image_and_table)
+    np.random.default_rng(seed)
+
+    # Reset PyTorch's random state
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
+    # Set PyTorch to deterministic mode
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+    # Reset environment variables that might affect randomness
+    # Clear any existing random seed environment variables
+    for env_var in ["PYTHONHASHSEED", "CUDA_LAUNCH_BLOCKING", "TORCH_USE_CUDA_DSA"]:
+        if env_var in os.environ:
+            del os.environ[env_var]
+
+    # Set PYTHONHASHSEED to ensure hash-based operations are deterministic
+    os.environ["PYTHONHASHSEED"] = str(seed)
+
+    # Force PyTorch to use deterministic algorithms where possible
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
+    # Reset any global random state that might persist
+    if hasattr(torch, "generator"):
+        torch.generator.manual_seed(seed)
+
+    # Additional PyTorch random state resets
+    if hasattr(torch, "get_rng_state"):
+        torch.set_rng_state(torch.manual_seed(seed).get_state())
+
+    # Reset any thread-local random state
+    if hasattr(torch, "_C"):
+        torch._C._set_default_tensor_type(torch.FloatTensor)
+
+    # Force garbage collection to clear any cached random state
+    import gc
+
+    gc.collect()
 
 
 @pytest.mark.parametrize("task", ["detect", "segment"])
@@ -108,6 +153,7 @@ def test_training(task) -> None:
         "plots": False,
         "seed": 3 + ord("L") + ord("C"),
         "deterministic": True,
+        "workers": 0,
     }
 
     settings = Settings(
@@ -129,6 +175,15 @@ def test_training(task) -> None:
 
     # Reset random state again to ensure both runs start with identical state
     _reset_random_state(overrides["seed"])
+
+    # Additional cleanup to ensure deterministic behavior
+    import gc
+
+    gc.collect()
+
+    # Clear any cached data that might affect determinism
+    if hasattr(torch, "cuda"):
+        torch.cuda.empty_cache()
 
     # Second: Run 3LC training
     model_3lc = TLCYOLO(TASK2MODEL[task])
@@ -1209,6 +1264,9 @@ def test_dataset_determinism(mode) -> None:
 
 def test_training_determinism():
     """Test that training is deterministic across multiple runs."""
+    # Ensure we start with a completely clean random state
+    _reset_random_state(42)
+
     overrides = {
         "data": TASK2DATASET["detect"],
         "epochs": 1,
@@ -1218,6 +1276,7 @@ def test_training_determinism():
         "plots": False,
         "seed": 42,
         "deterministic": True,
+        "workers": 0,
     }
 
     settings = Settings(
@@ -1234,6 +1293,15 @@ def test_training_determinism():
     _reset_random_state(overrides["seed"])
     model1 = TLCYOLO(TASK2MODEL["detect"])
     results1 = model1.train(**overrides, settings=settings)
+
+    # Additional cleanup to ensure deterministic behavior
+    import gc
+
+    gc.collect()
+
+    # Clear any cached data that might affect determinism
+    if hasattr(torch, "cuda"):
+        torch.cuda.empty_cache()
 
     _reset_random_state(overrides["seed"])
     model2 = TLCYOLO(TASK2MODEL["detect"])
