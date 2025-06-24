@@ -1,8 +1,8 @@
 <img src="https://3lc.ai/wp-content/uploads/2023/09/3LC-Logo_Footer.svg">
 
-[![Discord](https://img.shields.io/badge/discord-3LC-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwnwFtfafC)
-
 # 3LC Integration
+
+[![Discord](https://img.shields.io/badge/discord-3LC-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwnwFtfafC)
 
 Ultralytics YOLO classification, object detection and segmentation with 3LC integrated.
 
