@@ -11,7 +11,7 @@ import tlc
 import cv2
 import os
 import torch
-# import multiprocessing as mp
+import multiprocessing as mp
 
 from ultralytics.models.yolo import YOLO
 
@@ -29,13 +29,13 @@ from tlc_ultralytics.engine.utils import _complete_label_column_name
 
 from tlc_ultralytics.constants import (
     DEFAULT_COLLECT_RUN_DESCRIPTION,
-    # MAP,
-    # MAP50_95,
-    # NUM_IMAGES,
-    # NUM_INSTANCES,
+    MAP,
+    MAP50_95,
+    NUM_IMAGES,
+    NUM_INSTANCES,
     PER_CLASS_METRICS_STREAM_NAME,
-    # PRECISION,
-    # RECALL,
+    PRECISION,
+    RECALL,
     TRAINING_PHASE,
 )
 
@@ -115,113 +115,114 @@ def _train_model_in_process(model_type, model_name, overrides, settings=None):
     return serializable_results
 
 
-# @pytest.mark.parametrize("task", ["detect", "segment"])
-# def test_training(task) -> None:
-#     # End-to-end test of training for detection and segmentation
-#     overrides = {
-#         "data": TASK2DATASET[task],
-#         "epochs": 1,
-#         "batch": 4,
-#         "device": "cpu",
-#         "save": False,
-#         "plots": False,
-#         "seed": 3 + ord("L") + ord("C"),
-#         "deterministic": True,
-#         "workers": 0,
-#     }
+@pytest.mark.skip(reason="Skipping training tests due to several issues to be handled in a future PR.")
+@pytest.mark.parametrize("task", ["detect", "segment"])
+def test_training(task) -> None:
+    # End-to-end test of training for detection and segmentation
+    overrides = {
+        "data": TASK2DATASET[task],
+        "epochs": 1,
+        "batch": 4,
+        "device": "cpu",
+        "save": False,
+        "plots": False,
+        "seed": 3 + ord("L") + ord("C"),
+        "deterministic": True,
+        "workers": 0,
+    }
 
-#     settings = Settings(
-#         collection_epoch_start=1,
-#         collect_loss=True,
-#         image_embeddings_dim=2,
-#         image_embeddings_reducer="pacmap",
-#         project_name=f"test_{task}_project",
-#         run_name=f"test_{task}",
-#         run_description=f"Test {task} training",
-#     )
+    settings = Settings(
+        collection_epoch_start=1,
+        collect_loss=True,
+        image_embeddings_dim=2,
+        image_embeddings_reducer="pacmap",
+        project_name=f"test_{task}_project",
+        run_name=f"test_{task}",
+        run_description=f"Test {task} training",
+    )
 
-#     # Train models in separate processes using spawn
-#     ctx = mp.get_context("spawn")
-#     with ctx.Pool(processes=2) as pool:
-#         # Run ultralytics training in one process
-#         result_ultralytics = pool.apply_async(
-#             _train_model_in_process, args=("ultralytics", TASK2MODEL[task], overrides)
-#         )
+    # Train models in separate processes using spawn
+    ctx = mp.get_context("spawn")
+    with ctx.Pool(processes=2) as pool:
+        # Run ultralytics training in one process
+        result_ultralytics = pool.apply_async(
+            _train_model_in_process, args=("ultralytics", TASK2MODEL[task], overrides)
+        )
 
-#         # Run 3LC training in another process
-#         result_3lc = pool.apply_async(_train_model_in_process, args=("3lc", TASK2MODEL[task], overrides, settings))
+        # Run 3LC training in another process
+        result_3lc = pool.apply_async(_train_model_in_process, args=("3lc", TASK2MODEL[task], overrides, settings))
 
-#         # Get results
-#         _ = result_ultralytics.get()
-#         results_3lc = result_3lc.get()
+        # Get results
+        _ = result_ultralytics.get()
+        results_3lc = result_3lc.get()
 
-#     assert results_3lc, "Detection training failed"
+    assert results_3lc, "Detection training failed"
 
-#     # Compare 3LC integration with ultralytics results
-#     # if task == "detect":
-#     #     assert results_ultralytics["results_dict"] == results_3lc["results_dict"], (
-#     #         "Results validation metrics 3LC different from Ultralytics"
-#     #     )
-#     #     assert results_ultralytics["names"] == results_3lc["names"], "Results validation names"
+    # Compare 3LC integration with ultralytics results
+    # if task == "detect":
+    #     assert results_ultralytics["results_dict"] == results_3lc["results_dict"], (
+    #         "Results validation metrics 3LC different from Ultralytics"
+    #     )
+    #     assert results_ultralytics["names"] == results_3lc["names"], "Results validation names"
 
-#     # Get 3LC run and inspect the results
-#     run = _get_run_from_settings(settings)
+    # Get 3LC run and inspect the results
+    run = _get_run_from_settings(settings)
 
-#     assert run.status == tlc.RUN_STATUS_COMPLETED, "Run status not set to completed after training"
+    assert run.status == tlc.RUN_STATUS_COMPLETED, "Run status not set to completed after training"
 
-#     assert run.project_name == settings.project_name, "Project name mismatch"
-#     assert run.description == settings.run_description, "Description mismatch"
-#     # Check that hyperparameters and overrides are saved
-#     for key, value in overrides.items():
-#         assert run.constants["parameters"][key] == value, (
-#             f"Parameter {key} mismatch, {run.constants['parameters'][key]} != {value}"
-#         )
+    assert run.project_name == settings.project_name, "Project name mismatch"
+    assert run.description == settings.run_description, "Description mismatch"
+    # Check that hyperparameters and overrides are saved
+    for key, value in overrides.items():
+        assert run.constants["parameters"][key] == value, (
+            f"Parameter {key} mismatch, {run.constants['parameters'][key]} != {value}"
+        )
 
-#     # Check that confidence-recall-precision-f1 data is written
-#     assert "3LC/Precision" in run.constants["parameters"]
-#     assert "3LC/Recall" in run.constants["parameters"]
-#     assert "3LC/F1_score" in run.constants["parameters"]
+    # Check that confidence-recall-precision-f1 data is written
+    assert "3LC/Precision" in run.constants["parameters"]
+    assert "3LC/Recall" in run.constants["parameters"]
+    assert "3LC/F1_score" in run.constants["parameters"]
 
-#     # Check that there is a per-epoch value written
-#     assert len(run.constants["outputs"]) > 0, "No outputs written"
-#     metrics_tables = get_metrics_tables_from_run(run)
+    # Check that there is a per-epoch value written
+    assert len(run.constants["outputs"]) > 0, "No outputs written"
+    metrics_tables = get_metrics_tables_from_run(run)
 
-#     # Check that the desired metrics were written
-#     metrics_df = pd.concat(
-#         [m.to_pandas() for m in metrics_tables["default_stream"]],
-#         ignore_index=True,
-#     )
+    # Check that the desired metrics were written
+    metrics_df = pd.concat(
+        [m.to_pandas() for m in metrics_tables["default_stream"]],
+        ignore_index=True,
+    )
 
-#     embeddings_column_name = f"embeddings_{settings.image_embeddings_reducer}"
-#     assert embeddings_column_name in metrics_df.columns, "Expected embeddings column missing"
-#     assert len(metrics_df[embeddings_column_name][0]) == settings.image_embeddings_dim, "Embeddings dimension mismatch" # noqa: E501
+    embeddings_column_name = f"embeddings_{settings.image_embeddings_reducer}"
+    assert embeddings_column_name in metrics_df.columns, "Expected embeddings column missing"
+    assert len(metrics_df[embeddings_column_name][0]) == settings.image_embeddings_dim, "Embeddings dimension mismatch"
 
-#     if task == "detect":
-#         assert "loss" in metrics_df.columns, "Expected loss column to be present, but it is missing"
-#     assert 0 in metrics_df[TRAINING_PHASE], "Expected metrics from during training"
-#     assert 1 in metrics_df[TRAINING_PHASE], "Expected metrics from after training"
+    if task == "detect":
+        assert "loss" in metrics_df.columns, "Expected loss column to be present, but it is missing"
+    assert 0 in metrics_df[TRAINING_PHASE], "Expected metrics from during training"
+    assert 1 in metrics_df[TRAINING_PHASE], "Expected metrics from after training"
 
-#     # model.predict() should work and be the same as vanilla ultralytics
-#     # assert all(model_ultralytics.predict(imgsz=320)[0].boxes.cls == model_3lc.predict(imgsz=320)[0].boxes.cls), (
-#     #     "Predictions mismatch"
-#     # )
+    # model.predict() should work and be the same as vanilla ultralytics
+    # assert all(model_ultralytics.predict(imgsz=320)[0].boxes.cls == model_3lc.predict(imgsz=320)[0].boxes.cls), (
+    #     "Predictions mismatch"
+    # )
 
-#     per_class_metrics_tables = metrics_tables[PER_CLASS_METRICS_STREAM_NAME]
-#     assert len(per_class_metrics_tables) == 4, "Expected 4 per-class metrics tables to be written"
-#     per_class_metrics_df = pd.concat(
-#         [m.to_pandas() for m in per_class_metrics_tables],
-#         ignore_index=True,
-#     )
-#     assert TRAINING_PHASE in per_class_metrics_df.columns, "Expected training phase column in per-class metrics"
-#     assert tlc.EPOCH in per_class_metrics_df.columns, "Expected epoch column in per-class metrics"
-#     assert tlc.FOREIGN_TABLE_ID in per_class_metrics_df.columns, "Expected foreign_table_id column in per-class metrics" # noqa: E501
-#     assert tlc.LABEL in per_class_metrics_df.columns, "Expected label column in per-class metrics"
-#     assert PRECISION in per_class_metrics_df.columns, "Expected precision column in per-class metrics"
-#     assert RECALL in per_class_metrics_df.columns, "Expected recall column in per-class metrics"
-#     assert MAP in per_class_metrics_df.columns, "Expected mAP column in per-class metrics"
-#     assert MAP50_95 in per_class_metrics_df.columns, "Expected mAP50-95 column in per-class metrics"
-#     assert NUM_IMAGES in per_class_metrics_df.columns, "Expected num_images column in per-class metrics"
-#     assert NUM_INSTANCES in per_class_metrics_df.columns, "Expected num_instances column in per-class metrics"
+    per_class_metrics_tables = metrics_tables[PER_CLASS_METRICS_STREAM_NAME]
+    assert len(per_class_metrics_tables) == 4, "Expected 4 per-class metrics tables to be written"
+    per_class_metrics_df = pd.concat(
+        [m.to_pandas() for m in per_class_metrics_tables],
+        ignore_index=True,
+    )
+    assert TRAINING_PHASE in per_class_metrics_df.columns, "Expected training phase column in per-class metrics"
+    assert tlc.EPOCH in per_class_metrics_df.columns, "Expected epoch column in per-class metrics"
+    assert tlc.FOREIGN_TABLE_ID in per_class_metrics_df.columns, "Expected foreign_table_id column in per-class metrics"
+    assert tlc.LABEL in per_class_metrics_df.columns, "Expected label column in per-class metrics"
+    assert PRECISION in per_class_metrics_df.columns, "Expected precision column in per-class metrics"
+    assert RECALL in per_class_metrics_df.columns, "Expected recall column in per-class metrics"
+    assert MAP in per_class_metrics_df.columns, "Expected mAP column in per-class metrics"
+    assert MAP50_95 in per_class_metrics_df.columns, "Expected mAP50-95 column in per-class metrics"
+    assert NUM_IMAGES in per_class_metrics_df.columns, "Expected num_images column in per-class metrics"
+    assert NUM_INSTANCES in per_class_metrics_df.columns, "Expected num_instances column in per-class metrics"
 
 
 def test_detect_training_with_yolo12() -> None:
@@ -1187,37 +1188,35 @@ def _create_dataset_samples_in_process(overrides, mode, trainer_type):
     return serializable_rows
 
 
-# @pytest.mark.parametrize("mode", ["train", "val"])
-# def test_dataset_determinism(mode) -> None:
-#     """Test that datasets are deterministic with the same seed across separate processes."""
-#     settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}")
-#     overrides = {
-#         "data": TASK2DATASET["detect"],
-#         "model": TASK2MODEL["detect"],
-#         "seed": 42,  # Fixed seed
-#         "deterministic": True,
-#     }
+@pytest.mark.skip(reason="Skipping dataset determinism test due to reproducibility issues on GitHub builder.")
+@pytest.mark.parametrize("mode", ["train", "val"])
+def test_dataset_determinism(mode) -> None:
+    """Test that datasets are deterministic with the same seed across separate processes."""
+    settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}")
+    overrides = {
+        "data": TASK2DATASET["detect"],
+        "model": TASK2MODEL["detect"],
+        "seed": 42,  # Fixed seed
+        "deterministic": True,
+    }
 
-#     overrides_3lc = overrides.copy()
-#     overrides_3lc["settings"] = settings
+    overrides_3lc = overrides.copy()
+    overrides_3lc["settings"] = settings
 
-#     # Create datasets in separate processes using spawn
-#     ctx = mp.get_context("spawn")
-#     with ctx.Pool(processes=2) as pool:
-#         # Run 3LC trainer in one process
-#         result_3lc = pool.apply_async(_create_dataset_samples_in_process, args=(overrides_3lc, mode, "3lc"))
+    # Create datasets in separate processes using spawn
+    ctx = mp.get_context("spawn")
+    with ctx.Pool(processes=2) as pool:
+        # Run 3LC trainer in one process
+        result_3lc = pool.apply_async(_create_dataset_samples_in_process, args=(overrides_3lc, mode, "3lc"))
 
-#         # Run Ultralytics trainer in another process
-#         result_ultralytics = pool.apply_async(
-#             _create_dataset_samples_in_process,
-#             args=(overrides, mode, "ultralytics")
-#         )
+        # Run Ultralytics trainer in another process
+        result_ultralytics = pool.apply_async(_create_dataset_samples_in_process, args=(overrides, mode, "ultralytics"))
 
-#         # Get results
-#         rows_3lc = result_3lc.get()
-#         rows_ultralytics = result_ultralytics.get()
+        # Get results
+        rows_3lc = result_3lc.get()
+        rows_ultralytics = result_ultralytics.get()
 
-#     assert len(rows_3lc) == len(rows_ultralytics), "Number of batches should be the same"
+    assert len(rows_3lc) == len(rows_ultralytics), "Number of batches should be the same"
 
-#     for row_3lc, row_ultralytics in zip(rows_3lc, rows_ultralytics):
-#         _compare_dataset_rows(row_ultralytics, row_3lc)
+    for row_3lc, row_ultralytics in zip(rows_3lc, rows_ultralytics):
+        _compare_dataset_rows(row_ultralytics, row_3lc)
