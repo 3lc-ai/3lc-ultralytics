@@ -26,7 +26,7 @@ jobs:
           load: true
           tags: 3lc-ultralytics-test:latest
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha
 
       - name: Run tests in Docker
         run: |
