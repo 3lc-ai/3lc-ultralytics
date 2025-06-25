@@ -1,4 +1,5 @@
 import pathlib
+import sys
 from collections import defaultdict
 from unittest.mock import Mock
 from copy import deepcopy
@@ -12,6 +13,7 @@ import cv2
 import os
 import torch
 import multiprocessing as mp
+import subprocess
 
 from ultralytics.models.yolo import YOLO
 
@@ -223,6 +225,20 @@ def test_training(task) -> None:
     assert MAP50_95 in per_class_metrics_df.columns, "Expected mAP50-95 column in per-class metrics"
     assert NUM_IMAGES in per_class_metrics_df.columns, "Expected num_images column in per-class metrics"
     assert NUM_INSTANCES in per_class_metrics_df.columns, "Expected num_instances column in per-class metrics"
+
+
+def test_training_separate() -> None:
+    # Run training by invoking separate scripts
+    subprocess.run([sys.executable, "tests/train_3lc.py"])
+    subprocess.run([sys.executable, "tests/train_ultralytics.py"])
+
+    train_3lc_results = pd.read_csv("tests/tmp/tlc_ultralytics/train_detect/results.csv").drop(columns=["time"])
+    train_ultralytics_results = pd.read_csv("tests/tmp/ultralytics/train_detect/results.csv").drop(columns=["time"])
+
+    # Assert all equal except the `time` column
+    from pandas.testing import assert_frame_equal
+
+    assert_frame_equal(train_3lc_results, train_ultralytics_results)
 
 
 def test_detect_training_with_yolo12() -> None:
