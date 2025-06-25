@@ -1,0 +1,51 @@
+name: Docker CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Build and run tests in Docker
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: false
+          load: true
+          tags: 3lc-ultralytics-test:latest
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: Run tests in Docker
+        run: |
+          docker run \
+            -v ${{ github.workspace }}:/app/3lc-ultralytics \
+            -e TLC_API_KEY=${{ secrets.TLC_API_KEY }} \
+            -e $(echo ${{ secrets.VARIABLE_NAME }})=${{ secrets.VARIABLE_VALUE }} \
+            -e $(echo ${{ secrets.RUNTIME_NAME }})=${{ secrets.RUNTIME_VALUE }} \
+            3lc-ultralytics-test:latest

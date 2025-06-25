@@ -34,10 +34,9 @@ dev = [
     "pytest>=8.3.5",
     "ruff>=0.11.11",
 ]
-local = ["3lc"]
 
 [tool.uv]
-default-groups = ["dev", "local"]
+default-groups = ["dev"]
 constraint-dependencies = [
     "pacmap==0.7.3", # Otherwise fails to reduce for small datasets in tests
 ]
