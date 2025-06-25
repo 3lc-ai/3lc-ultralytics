@@ -150,7 +150,14 @@ class TLCTrainerMixin(BaseTrainer):
                 if f is self.best:
                     LOGGER.info(f"\nValidating {f}...")
                     if not self._settings.collection_val_only and not self._settings.collection_disable:
+                        import ultralytics
+                        import random
+
+                        old_random = ultralytics.data.augment.random
+                        local_random = random.Random()
+                        ultralytics.data.augment.random = local_random
                         self.train_validator(model=f)
+                        ultralytics.data.augment.random = old_random
                     self.validator.args.plots = self.args.plots
                     self.metrics = self.validator(model=f)  # Only a dict! strange..?
                     self.metrics.pop("fitness", None)

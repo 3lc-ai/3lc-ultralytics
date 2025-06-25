@@ -30,6 +30,6 @@ if __name__ == "__main__":
 
     # Save call details for comparison
     call_details = get_call_details()
-    os.makedirs("tests/tmp", exist_ok=True)
-    with open("tests/tmp/ultralytics_random_calls.json", "w") as f:
+    os.makedirs("tmp", exist_ok=True)
+    with open("tmp/ultralytics_random_calls.json", "w") as f:
         json.dump(call_details, f, indent=2)

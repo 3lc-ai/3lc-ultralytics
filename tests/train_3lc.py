@@ -1,4 +1,4 @@
-from ultralytics import YOLO
+from tlc_ultralytics import YOLO
 from random_tracker import start_tracking, stop_tracking, print_random_call_count, get_call_details
 import json
 import os
@@ -30,6 +30,6 @@ if __name__ == "__main__":
 
     # Save call details for comparison
     call_details = get_call_details()
-    os.makedirs("tests/tmp", exist_ok=True)
-    with open("tests/tmp/3lc_random_calls.json", "w") as f:
+    os.makedirs("tmp", exist_ok=True)
+    with open("tmp/3lc_random_calls.json", "w") as f:
         json.dump(call_details, f, indent=2)

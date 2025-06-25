@@ -119,7 +119,7 @@ def _train_model_in_process(model_type, model_name, overrides, settings=None):
     return serializable_results
 
 
-@pytest.mark.skip(reason="Skipping training tests due to several issues to be handled in a future PR.")
+# @pytest.mark.skip(reason="Skipping training tests due to several issues to be handled in a future PR.")
 @pytest.mark.parametrize("task", ["detect", "segment"])
 def test_training(task) -> None:
     # End-to-end test of training for detection and segmentation
@@ -257,9 +257,9 @@ def test_training_separate() -> None:  # noqa: C901
 
     # Load detailed call information
     try:
-        with open("tests/tmp/3lc_random_calls.json") as f:
+        with open("tmp/3lc_random_calls.json") as f:
             calls_3lc = json.load(f)
-        with open("tests/tmp/ultralytics_random_calls.json") as f:
+        with open("tmp/ultralytics_random_calls.json") as f:
             calls_ultralytics = json.load(f)
 
         # Perform detailed comparison

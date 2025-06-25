@@ -1,0 +1,674 @@
+[
+  {
+    "function": "random",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/hub/utils.py",
+    "line": 214,
+    "function_name": "__init__",
+    "line_content": "\"session_id\": round(random.random() * 1e15),",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/hub/utils.py"
+  },
+  {
+    "function": "seed",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/utils/torch_utils.py",
+    "line": 613,
+    "function_name": "init_seeds",
+    "line_content": "random.seed(seed)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/utils/torch_utils.py"
+  },
+  {
+    "function": "sample",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/utils.py",
+    "line": 76,
+    "function_name": "check_file_speeds",
+    "line_content": "files = random.sample(files, min(max_files, len(files)))",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/utils.py"
+  },
+  {
+    "function": "sample",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/utils.py",
+    "line": 76,
+    "function_name": "check_file_speeds",
+    "line_content": "files = random.sample(files, min(max_files, len(files)))",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/utils.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 387,
+    "function_name": "__call__",
+    "line_content": "if random.uniform(0, 1) > self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "choices",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 564,
+    "function_name": "get_indexes",
+    "line_content": "return random.choices(list(self.dataset.buffer), k=self.n - 1)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 682,
+    "function_name": "<genexpr>",
+    "line_content": "yc, xc = (int(random.uniform(-x, 2 * s + x)) for x in self.border)  # mosaic center x, y",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 682,
+    "function_name": "<genexpr>",
+    "line_content": "yc, xc = (int(random.uniform(-x, 2 * s + x)) for x in self.border)  # mosaic center x, y",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1145,
+    "function_name": "affine_transform",
+    "line_content": "P[2, 0] = random.uniform(-self.perspective, self.perspective)  # x perspective (about y)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1146,
+    "function_name": "affine_transform",
+    "line_content": "P[2, 1] = random.uniform(-self.perspective, self.perspective)  # y perspective (about x)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1150,
+    "function_name": "affine_transform",
+    "line_content": "a = random.uniform(-self.degrees, self.degrees)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1152,
+    "function_name": "affine_transform",
+    "line_content": "s = random.uniform(1 - self.scale, 1 + self.scale)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1158,
+    "function_name": "affine_transform",
+    "line_content": "S[0, 1] = math.tan(random.uniform(-self.shear, self.shear) * math.pi / 180)  # x shear (deg)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1159,
+    "function_name": "affine_transform",
+    "line_content": "S[1, 0] = math.tan(random.uniform(-self.shear, self.shear) * math.pi / 180)  # y shear (deg)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1163,
+    "function_name": "affine_transform",
+    "line_content": "T[0, 2] = random.uniform(0.5 - self.translate, 0.5 + self.translate) * self.size[0]  # x translation (pixels)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1164,
+    "function_name": "affine_transform",
+    "line_content": "T[1, 2] = random.uniform(0.5 - self.translate, 0.5 + self.translate) * self.size[1]  # y translation (pixels)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 387,
+    "function_name": "__call__",
+    "line_content": "if random.uniform(0, 1) > self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 387,
+    "function_name": "__call__",
+    "line_content": "if random.uniform(0, 1) > self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "random",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1564,
+    "function_name": "__call__",
+    "line_content": "if self.direction == \"vertical\" and random.random() < self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "random",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1567,
+    "function_name": "__call__",
+    "line_content": "if self.direction == \"horizontal\" and random.random() < self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 387,
+    "function_name": "__call__",
+    "line_content": "if random.uniform(0, 1) > self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "choices",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 564,
+    "function_name": "get_indexes",
+    "line_content": "return random.choices(list(self.dataset.buffer), k=self.n - 1)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 682,
+    "function_name": "<genexpr>",
+    "line_content": "yc, xc = (int(random.uniform(-x, 2 * s + x)) for x in self.border)  # mosaic center x, y",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 682,
+    "function_name": "<genexpr>",
+    "line_content": "yc, xc = (int(random.uniform(-x, 2 * s + x)) for x in self.border)  # mosaic center x, y",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1145,
+    "function_name": "affine_transform",
+    "line_content": "P[2, 0] = random.uniform(-self.perspective, self.perspective)  # x perspective (about y)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1146,
+    "function_name": "affine_transform",
+    "line_content": "P[2, 1] = random.uniform(-self.perspective, self.perspective)  # y perspective (about x)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1150,
+    "function_name": "affine_transform",
+    "line_content": "a = random.uniform(-self.degrees, self.degrees)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1152,
+    "function_name": "affine_transform",
+    "line_content": "s = random.uniform(1 - self.scale, 1 + self.scale)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1158,
+    "function_name": "affine_transform",
+    "line_content": "S[0, 1] = math.tan(random.uniform(-self.shear, self.shear) * math.pi / 180)  # x shear (deg)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1159,
+    "function_name": "affine_transform",
+    "line_content": "S[1, 0] = math.tan(random.uniform(-self.shear, self.shear) * math.pi / 180)  # y shear (deg)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1163,
+    "function_name": "affine_transform",
+    "line_content": "T[0, 2] = random.uniform(0.5 - self.translate, 0.5 + self.translate) * self.size[0]  # x translation (pixels)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1164,
+    "function_name": "affine_transform",
+    "line_content": "T[1, 2] = random.uniform(0.5 - self.translate, 0.5 + self.translate) * self.size[1]  # y translation (pixels)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 387,
+    "function_name": "__call__",
+    "line_content": "if random.uniform(0, 1) > self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 387,
+    "function_name": "__call__",
+    "line_content": "if random.uniform(0, 1) > self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "random",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1564,
+    "function_name": "__call__",
+    "line_content": "if self.direction == \"vertical\" and random.random() < self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "random",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1567,
+    "function_name": "__call__",
+    "line_content": "if self.direction == \"horizontal\" and random.random() < self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 387,
+    "function_name": "__call__",
+    "line_content": "if random.uniform(0, 1) > self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "choices",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 564,
+    "function_name": "get_indexes",
+    "line_content": "return random.choices(list(self.dataset.buffer), k=self.n - 1)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 682,
+    "function_name": "<genexpr>",
+    "line_content": "yc, xc = (int(random.uniform(-x, 2 * s + x)) for x in self.border)  # mosaic center x, y",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 682,
+    "function_name": "<genexpr>",
+    "line_content": "yc, xc = (int(random.uniform(-x, 2 * s + x)) for x in self.border)  # mosaic center x, y",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1145,
+    "function_name": "affine_transform",
+    "line_content": "P[2, 0] = random.uniform(-self.perspective, self.perspective)  # x perspective (about y)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1146,
+    "function_name": "affine_transform",
+    "line_content": "P[2, 1] = random.uniform(-self.perspective, self.perspective)  # y perspective (about x)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1150,
+    "function_name": "affine_transform",
+    "line_content": "a = random.uniform(-self.degrees, self.degrees)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1152,
+    "function_name": "affine_transform",
+    "line_content": "s = random.uniform(1 - self.scale, 1 + self.scale)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1158,
+    "function_name": "affine_transform",
+    "line_content": "S[0, 1] = math.tan(random.uniform(-self.shear, self.shear) * math.pi / 180)  # x shear (deg)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1159,
+    "function_name": "affine_transform",
+    "line_content": "S[1, 0] = math.tan(random.uniform(-self.shear, self.shear) * math.pi / 180)  # y shear (deg)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1163,
+    "function_name": "affine_transform",
+    "line_content": "T[0, 2] = random.uniform(0.5 - self.translate, 0.5 + self.translate) * self.size[0]  # x translation (pixels)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1164,
+    "function_name": "affine_transform",
+    "line_content": "T[1, 2] = random.uniform(0.5 - self.translate, 0.5 + self.translate) * self.size[1]  # y translation (pixels)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 387,
+    "function_name": "__call__",
+    "line_content": "if random.uniform(0, 1) > self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 387,
+    "function_name": "__call__",
+    "line_content": "if random.uniform(0, 1) > self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "random",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1564,
+    "function_name": "__call__",
+    "line_content": "if self.direction == \"vertical\" and random.random() < self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "random",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1567,
+    "function_name": "__call__",
+    "line_content": "if self.direction == \"horizontal\" and random.random() < self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 387,
+    "function_name": "__call__",
+    "line_content": "if random.uniform(0, 1) > self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "choices",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 564,
+    "function_name": "get_indexes",
+    "line_content": "return random.choices(list(self.dataset.buffer), k=self.n - 1)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 682,
+    "function_name": "<genexpr>",
+    "line_content": "yc, xc = (int(random.uniform(-x, 2 * s + x)) for x in self.border)  # mosaic center x, y",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 682,
+    "function_name": "<genexpr>",
+    "line_content": "yc, xc = (int(random.uniform(-x, 2 * s + x)) for x in self.border)  # mosaic center x, y",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1145,
+    "function_name": "affine_transform",
+    "line_content": "P[2, 0] = random.uniform(-self.perspective, self.perspective)  # x perspective (about y)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1146,
+    "function_name": "affine_transform",
+    "line_content": "P[2, 1] = random.uniform(-self.perspective, self.perspective)  # y perspective (about x)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1150,
+    "function_name": "affine_transform",
+    "line_content": "a = random.uniform(-self.degrees, self.degrees)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1152,
+    "function_name": "affine_transform",
+    "line_content": "s = random.uniform(1 - self.scale, 1 + self.scale)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1158,
+    "function_name": "affine_transform",
+    "line_content": "S[0, 1] = math.tan(random.uniform(-self.shear, self.shear) * math.pi / 180)  # x shear (deg)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1159,
+    "function_name": "affine_transform",
+    "line_content": "S[1, 0] = math.tan(random.uniform(-self.shear, self.shear) * math.pi / 180)  # y shear (deg)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1163,
+    "function_name": "affine_transform",
+    "line_content": "T[0, 2] = random.uniform(0.5 - self.translate, 0.5 + self.translate) * self.size[0]  # x translation (pixels)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1164,
+    "function_name": "affine_transform",
+    "line_content": "T[1, 2] = random.uniform(0.5 - self.translate, 0.5 + self.translate) * self.size[1]  # y translation (pixels)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 387,
+    "function_name": "__call__",
+    "line_content": "if random.uniform(0, 1) > self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 387,
+    "function_name": "__call__",
+    "line_content": "if random.uniform(0, 1) > self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "random",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1564,
+    "function_name": "__call__",
+    "line_content": "if self.direction == \"vertical\" and random.random() < self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "random",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 1567,
+    "function_name": "__call__",
+    "line_content": "if self.direction == \"horizontal\" and random.random() < self.p:",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  },
+  {
+    "function": "uniform",
+    "module": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py",
+    "line": 2217,
+    "function_name": "_format_img",
+    "line_content": "img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr and img.shape[0] == 3 else img)",
+    "full_path": "/Users/frederik/repos/3lc-ultralytics/.venv/lib/python3.12/site-packages/ultralytics/data/augment.py"
+  }
+]
