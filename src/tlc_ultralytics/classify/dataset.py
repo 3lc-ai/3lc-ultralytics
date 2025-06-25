@@ -10,6 +10,7 @@ from functools import partial
 
 from typing import Any
 
+
 class _DummyImageFolder:
     def __init__(self, root: tlc.Table, allow_empty: bool = False, samples: list[tuple[str, int]] = None):
         self._root = root
@@ -22,6 +23,7 @@ class _DummyImageFolder:
     @property
     def root(self):
         return self._root.url
+
 
 class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
     """
