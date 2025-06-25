@@ -14,6 +14,8 @@ import os
 import torch
 import multiprocessing as mp
 import subprocess
+import re
+import json
 
 from ultralytics.models.yolo import YOLO
 
@@ -227,10 +229,23 @@ def test_training(task) -> None:
     assert NUM_INSTANCES in per_class_metrics_df.columns, "Expected num_instances column in per-class metrics"
 
 
-def test_training_separate() -> None:
+def test_training_separate() -> None:  # noqa: C901
     # Run training by invoking separate scripts
-    subprocess.run([sys.executable, "tests/train_3lc.py"])
-    subprocess.run([sys.executable, "tests/train_ultralytics.py"])
+    result_3lc = subprocess.run([sys.executable, "tests/train_3lc.py"], capture_output=True, text=True)
+    result_ultralytics = subprocess.run([sys.executable, "tests/train_ultralytics.py"], capture_output=True, text=True)
+
+    # Print outputs for debugging
+    print("3LC script output:")
+    print(result_3lc.stdout)
+    if result_3lc.stderr:
+        print("3LC script stderr:")
+        print(result_3lc.stderr)
+
+    print("Ultralytics script output:")
+    print(result_ultralytics.stdout)
+    if result_ultralytics.stderr:
+        print("Ultralytics script stderr:")
+        print(result_ultralytics.stderr)
 
     train_3lc_results = pd.read_csv("tests/tmp/tlc_ultralytics/train_detect/results.csv").drop(columns=["time"])
     train_ultralytics_results = pd.read_csv("tests/tmp/ultralytics/train_detect/results.csv").drop(columns=["time"])
@@ -239,6 +254,116 @@ def test_training_separate() -> None:
     from pandas.testing import assert_frame_equal
 
     assert_frame_equal(train_3lc_results, train_ultralytics_results)
+
+    # Load detailed call information
+    try:
+        with open("tests/tmp/3lc_random_calls.json") as f:
+            calls_3lc = json.load(f)
+        with open("tests/tmp/ultralytics_random_calls.json") as f:
+            calls_ultralytics = json.load(f)
+
+        # Perform detailed comparison
+        from random_tracker import compare_calls, print_call_comparison
+
+        comparison = compare_calls(calls_3lc, calls_ultralytics)
+        print_call_comparison(comparison)
+
+        # Also show breakdown by module for the differences
+        if comparison["only_in_3lc"]:
+            print("\nDetailed breakdown of calls only in 3LC:")
+            module_breakdown = {}
+            for call in comparison["only_in_3lc"]:
+                module = call["module"].split("/")[-1] if "/" in call["module"] else call["module"]
+                if module not in module_breakdown:
+                    module_breakdown[module] = []
+                module_breakdown[module].append(call)
+
+            for module, calls in sorted(module_breakdown.items()):
+                print(f"\n  {module} ({len(calls)} calls):")
+                for call in calls:
+                    print(f"    {call['function']} at line {call['line']} ({call['function_name']})")
+                    if call["line_content"]:
+                        print(f"      Line: {call['line_content']}")
+
+    except FileNotFoundError as e:
+        print(f"Warning: Could not load call details: {e}")
+
+    # Extract random call counts from output
+    # Look for the random call count pattern in stdout
+    pattern = r"\[([^\]]+)\] Total random calls: (\d+)"
+
+    matches_3lc = re.findall(pattern, result_3lc.stdout)
+    matches_ultralytics = re.findall(pattern, result_ultralytics.stdout)
+
+    if matches_3lc and matches_ultralytics:
+        script_3lc, count_3lc = matches_3lc[0]
+        script_ultralytics, count_ultralytics = matches_ultralytics[0]
+
+        count_3lc = int(count_3lc)
+        count_ultralytics = int(count_ultralytics)
+
+        print("\nRandom call comparison:")
+        print(f"3LC script ({script_3lc}): {count_3lc} calls")
+        print(f"Ultralytics script ({script_ultralytics}): {count_ultralytics} calls")
+
+        # Extract detailed call breakdowns
+        def extract_call_breakdown(output: str) -> dict[str, int]:
+            breakdown = {}
+            lines = output.split("\n")
+            in_breakdown = False
+            for line in lines:
+                if "Call breakdown by module:" in line:
+                    in_breakdown = True
+                    continue
+                elif in_breakdown and line.strip() and not line.startswith("  "):
+                    break
+                elif in_breakdown and line.strip().startswith("  ") and ":" in line:
+                    parts = line.strip().split(": ")
+                    if len(parts) == 2:
+                        module = parts[0]
+                        try:
+                            calls = int(parts[1].split()[0])  # Extract number from "X calls"
+                            breakdown[module] = calls
+                        except (ValueError, IndexError):
+                            pass
+            return breakdown
+
+        breakdown_3lc = extract_call_breakdown(result_3lc.stdout)
+        breakdown_ultralytics = extract_call_breakdown(result_ultralytics.stdout)
+
+        print("\nDetailed breakdown comparison:")
+        print("3LC breakdown:")
+        for module, calls in sorted(breakdown_3lc.items()):
+            print(f"  {module}: {calls} calls")
+
+        print("Ultralytics breakdown:")
+        for module, calls in sorted(breakdown_ultralytics.items()):
+            print(f"  {module}: {calls} calls")
+
+        # Find differences
+        all_modules = set(breakdown_3lc.keys()) | set(breakdown_ultralytics.keys())
+        differences = []
+        for module in all_modules:
+            calls_3lc = breakdown_3lc.get(module, 0)
+            calls_ultralytics = breakdown_ultralytics.get(module, 0)
+            if calls_3lc != calls_ultralytics:
+                differences.append((module, calls_3lc, calls_ultralytics))
+
+        if differences:
+            print("\nDifferences found:")
+            for module, calls_3lc, calls_ultralytics in differences:
+                diff = calls_3lc - calls_ultralytics
+                print(f"  {module}: 3LC={calls_3lc}, Ultralytics={calls_ultralytics} (diff: {diff:+d})")
+
+        # Assert that the random call counts are equal
+        assert count_3lc == count_ultralytics, (
+            f"Random call counts should be equal: 3LC={count_3lc}, Ultralytics={count_ultralytics}"
+        )
+        print(f"✓ Random call counts match: {count_3lc}")
+    else:
+        print("Warning: Could not extract random call counts from script output")
+        print("3LC stdout:", result_3lc.stdout)
+        print("Ultralytics stdout:", result_ultralytics.stdout)
 
 
 def test_detect_training_with_yolo12() -> None:

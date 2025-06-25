@@ -3,6 +3,7 @@ import ultralytics
 from typing import Optional
 from torch.utils.data import Sampler
 
+from ultralytics.data.utils import check_file_speeds as check_file_speeds_ultralytics
 from ultralytics.data.build import InfiniteDataLoader
 from ultralytics.data.build import build_dataloader as build_dataloader_ultralytics
 
@@ -41,3 +42,21 @@ def build_dataloader(*args, **kwargs):
     ultralytics.data.build.InfiniteDataLoader = InfiniteDataLoader
 
     return dataloader
+
+
+_TABLE_CHECK_COUNTS = {}
+
+
+def check_file_speeds(*args, table_url: Optional[str] = None, **kwargs):
+    # Skip if the table has already been loaded and speeds have been checked
+
+    # Check val set twice, train set once
+    if table_url and table_url in _TABLE_CHECK_COUNTS:
+        _TABLE_CHECK_COUNTS[table_url] += 1
+    else:
+        _TABLE_CHECK_COUNTS[table_url] = 1
+
+    if table_url and _TABLE_CHECK_COUNTS[table_url] > 1:
+        return
+
+    return check_file_speeds_ultralytics(*args, **kwargs)

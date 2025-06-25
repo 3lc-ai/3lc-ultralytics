@@ -1,6 +1,12 @@
 from ultralytics import YOLO
+from random_tracker import start_tracking, stop_tracking, print_random_call_count, get_call_details
+import json
+import os
 
 if __name__ == "__main__":
+    # Start tracking random calls before any imports or operations
+    start_tracking()
+
     model = YOLO("yolo11n.pt")
 
     model.train(
@@ -17,3 +23,13 @@ if __name__ == "__main__":
         project="tests/tmp/tlc_ultralytics",
         name="train_detect",
     )
+
+    # Stop tracking and print results
+    stop_tracking()
+    print_random_call_count("train_3lc.py")
+
+    # Save call details for comparison
+    call_details = get_call_details()
+    os.makedirs("tests/tmp", exist_ok=True)
+    with open("tests/tmp/3lc_random_calls.json", "w") as f:
+        json.dump(call_details, f, indent=2)
