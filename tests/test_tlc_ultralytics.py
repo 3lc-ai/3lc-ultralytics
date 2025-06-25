@@ -1329,7 +1329,7 @@ def _create_dataset_samples_in_process(overrides, mode, trainer_type):
     return serializable_rows
 
 
-@pytest.mark.skip(reason="Skipping dataset determinism test due to reproducibility issues on GitHub builder.")
+# @pytest.mark.skip(reason="Skipping dataset determinism test due to reproducibility issues on GitHub builder.")
 @pytest.mark.parametrize("mode", ["train", "val"])
 def test_dataset_determinism(mode) -> None:
     """Test that datasets are deterministic with the same seed across separate processes."""
