@@ -115,7 +115,6 @@ def _train_model_in_process(model_type, model_name, overrides, settings=None):
     return serializable_results
 
 
-@pytest.mark.skip(reason="Skipping training tests due to several issues to be handled in a future PR.")
 @pytest.mark.parametrize("task", ["detect", "segment"])
 def test_training(task) -> None:
     # End-to-end test of training for detection and segmentation
@@ -587,7 +586,6 @@ def test_exclude_zero_weight_collection(task, trainer_class) -> None:
     assert len(sampled_example_ids) == len(edited_table) - 2, "Expected two samples to be excluded"
 
 
-@pytest.mark.skipif(tlc.__version__ < "2.14.0", reason="Test requires 3LC 2.14.0 or higher")
 @pytest.mark.parametrize("task", ["detect", "classify"])
 def test_train_no_weight_column_in_table(task) -> None:
     # Test that training with a table that has no weight column works
@@ -1188,7 +1186,6 @@ def _create_dataset_samples_in_process(overrides, mode, trainer_type):
     return serializable_rows
 
 
-@pytest.mark.skip(reason="Skipping dataset determinism test due to reproducibility issues on GitHub builder.")
 @pytest.mark.parametrize("mode", ["train", "val"])
 def test_dataset_determinism(mode) -> None:
     """Test that datasets are deterministic with the same seed across separate processes."""
