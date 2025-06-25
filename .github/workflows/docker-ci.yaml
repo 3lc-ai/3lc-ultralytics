@@ -23,6 +23,7 @@ jobs:
           context: .
           file: ./docker/Dockerfile
           push: false
+          load: true
           tags: 3lc-ultralytics-test:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
