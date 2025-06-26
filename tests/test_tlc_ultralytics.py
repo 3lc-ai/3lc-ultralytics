@@ -1202,7 +1202,7 @@ def test_dataset_determinism(mode) -> None:
 
     # Create datasets in separate processes using spawn
     ctx = mp.get_context("spawn")
-    with ctx.Pool(processes=2) as pool:
+    with ctx.Pool(processes=1) as pool:
         # Run 3LC trainer in one process
         result_3lc = pool.apply_async(_create_dataset_samples_in_process, args=(overrides_3lc, mode, "3lc"))
 
