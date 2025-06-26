@@ -44,4 +44,4 @@ jobs:
           export $(echo ${{ secrets.VARIABLE_NAME }})=${{ secrets.VARIABLE_VALUE }}
           export $(echo ${{ secrets.RUNTIME_NAME }})=${{ secrets.RUNTIME_VALUE }}
           export TLC_API_KEY=${{ secrets.TLC_API_KEY }}
-          uv run --no-sync --python 3.9 pytest "tests/test_tlc_ultralytics.py::test_dataset_determinism[train]" -s
+          uv run --no-sync --python 3.9 pytest tests/test_tlc_ultralytics.py
