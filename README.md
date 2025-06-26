@@ -216,8 +216,8 @@ This project includes a Docker setup for running tests locally, which mirrors th
 
 2. Run the tests using the provided script:
    ```bash
-   chmod +x run-tests-in-docker.sh
-   ./run-tests-in-docker.sh
+   chmod +x docker/run-tests-in-docker.sh
+   ./docker/run-tests-in-docker.sh
    ```
 
    This script will:
@@ -225,19 +225,35 @@ This project includes a Docker setup for running tests locally, which mirrors th
    - Mount your local repository inside the Docker container
    - Run the tests inside the container
 
+#### Using Pre-built Docker Images
+
+The CI workflow automatically builds and pushes Docker images to GitHub Container Registry (ghcr.io). You can pull and use these images directly:
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/3lc-ai/3lc-ultralytics:latest
+
+# Run tests using the pre-built image
+docker run -v "$(pwd)":/app/3lc-ultralytics ghcr.io/3lc-ai/3lc-ultralytics:latest
+```
+
 #### Custom Commands
 
 If you want to run custom commands inside the Docker container:
 
 ```bash
+# Using locally built image
 docker build -t 3lc-ultralytics-test .
 docker run -v "$(pwd)":/app 3lc-ultralytics-test your-command
+
+# Or using pre-built image from GitHub Container Registry
+docker run -v "$(pwd)":/app/3lc-ultralytics ghcr.io/3lc-ai/3lc-ultralytics:latest your-command
 ```
 
 For example, to run a specific test:
 
 ```bash
-docker run -v "$(pwd)":/app 3lc-ultralytics-test uv run pytest tests/test_tlc_ultralytics.py::test_specific_function
+docker run -v "$(pwd)":/app/3lc-ultralytics ghcr.io/3lc-ai/3lc-ultralytics:latest uv run pytest tests/test_tlc_ultralytics.py::test_specific_function
 ```
 
 #### Environment Variables
@@ -245,5 +261,5 @@ docker run -v "$(pwd)":/app 3lc-ultralytics-test uv run pytest tests/test_tlc_ul
 If your tests require environment variables (like API keys), you can pass them to the Docker container:
 
 ```bash
-docker run -v "$(pwd)":/app -e TLC_API_KEY=your-api-key 3lc-ultralytics-test
+docker run -v "$(pwd)":/app/3lc-ultralytics -e TLC_API_KEY=your-api-key ghcr.io/3lc-ai/3lc-ultralytics:latest
 ```
