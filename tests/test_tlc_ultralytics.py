@@ -118,10 +118,10 @@ def test_training(task) -> None:
 
     # Compare 3LC integration with ultralytics results
     if task == "detect":
-        assert results_ultralytics["results_dict"] == results_3lc["results_dict"], (
+        assert results_ultralytics.results_dict == results_3lc.results_dict, (
             "Results validation metrics 3LC different from Ultralytics"
         )
-        assert results_ultralytics["names"] == results_3lc["names"], "Results validation names"
+    assert results_ultralytics.names == results_3lc.names, "Results validation names"
 
     # Get 3LC run and inspect the results
     run = _get_run_from_settings(settings)
