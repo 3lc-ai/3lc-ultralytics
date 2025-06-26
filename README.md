@@ -194,3 +194,72 @@ In order to collect embeddings (or other additional metrics) for each bounding b
 ## Can I use the Ultralytics YOLO CLI commands in the integration to train and collect metrics?
 
 This is not supported yet, but will be added in a future commit!
+
+## Development and Testing
+
+### Docker Setup for Testing
+
+This project includes a Docker setup for running tests locally, which mirrors the CI/CD environment. This ensures that tests run consistently across different environments.
+
+#### Prerequisites
+
+- Docker installed on your machine
+- Git for cloning the repository
+
+#### Running Tests in Docker
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/3lc-ai/ultralytics.git
+   cd ultralytics
+   ```
+
+2. Run the tests using the provided script:
+   ```bash
+   chmod +x docker/run-tests-in-docker.sh
+   ./docker/run-tests-in-docker.sh
+   ```
+
+   This script will:
+   - Build a Docker image with all necessary dependencies
+   - Mount your local repository inside the Docker container
+   - Run the tests inside the container
+
+#### Using Pre-built Docker Images
+
+The CI workflow automatically builds and pushes Docker images to GitHub Container Registry (ghcr.io). You can pull and use these images directly:
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/3lc-ai/3lc-ultralytics:latest
+
+# Run tests using the pre-built image
+docker run -v "$(pwd)":/app/3lc-ultralytics ghcr.io/3lc-ai/3lc-ultralytics:latest
+```
+
+#### Custom Commands
+
+If you want to run custom commands inside the Docker container:
+
+```bash
+# Using locally built image
+docker build -t 3lc-ultralytics-test .
+docker run -v "$(pwd)":/app 3lc-ultralytics-test your-command
+
+# Or using pre-built image from GitHub Container Registry
+docker run -v "$(pwd)":/app/3lc-ultralytics ghcr.io/3lc-ai/3lc-ultralytics:latest your-command
+```
+
+For example, to run a specific test:
+
+```bash
+docker run -v "$(pwd)":/app/3lc-ultralytics ghcr.io/3lc-ai/3lc-ultralytics:latest uv run pytest tests/test_tlc_ultralytics.py::test_specific_function
+```
+
+#### Environment Variables
+
+If your tests require environment variables (like API keys), you can pass them to the Docker container:
+
+```bash
+docker run -v "$(pwd)":/app/3lc-ultralytics -e TLC_API_KEY=your-api-key ghcr.io/3lc-ai/3lc-ultralytics:latest
+```

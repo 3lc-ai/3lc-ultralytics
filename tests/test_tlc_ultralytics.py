@@ -115,7 +115,6 @@ def _train_model_in_process(model_type, model_name, overrides, settings=None):
     return serializable_results
 
 
-@pytest.mark.skip(reason="Skipping training tests due to several issues to be handled in a future PR.")
 @pytest.mark.parametrize("task", ["detect", "segment"])
 def test_training(task) -> None:
     # End-to-end test of training for detection and segmentation
@@ -587,7 +586,6 @@ def test_exclude_zero_weight_collection(task, trainer_class) -> None:
     assert len(sampled_example_ids) == len(edited_table) - 2, "Expected two samples to be excluded"
 
 
-@pytest.mark.skipif(tlc.__version__ < "2.14.0", reason="Test requires 3LC 2.14.0 or higher")
 @pytest.mark.parametrize("task", ["detect", "classify"])
 def test_train_no_weight_column_in_table(task) -> None:
     # Test that training with a table that has no weight column works
@@ -1159,36 +1157,48 @@ def _compare_dataset_rows(row_ultralytics, row_3lc) -> None:
 
 def _create_dataset_samples_in_process(overrides, mode, trainer_type):
     """Helper function to create dataset samples in a separate process."""
-    if trainer_type == "3lc":
-        from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
+    from random_tracker import enable_tracking, disable_tracking, reset_tracking, get_tracking_info
 
-        trainer = TLCDetectionTrainer(overrides=overrides)
-    else:
-        from ultralytics.models.yolo.detect import DetectionTrainer
+    # Reset and enable random call tracking
+    reset_tracking()
+    enable_tracking()
 
-        trainer = DetectionTrainer(overrides=overrides)
+    try:
+        if trainer_type == "3lc":
+            from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
 
-    trainer.model = None
-    dataset = trainer.build_dataset(trainer.data["train"], mode=mode, batch=4)
-    rows = list(dataset)
+            trainer = TLCDetectionTrainer(overrides=overrides)
+        else:
+            from ultralytics.models.yolo.detect import DetectionTrainer
 
-    # Convert tensors to numpy arrays for pickling
-    serializable_rows = []
-    for row in rows:
-        serializable_row = {}
-        for key, value in row.items():
-            if isinstance(value, torch.Tensor):
-                serializable_row[key] = value.cpu().numpy()
-            elif isinstance(value, np.ndarray):
-                serializable_row[key] = value
-            else:
-                serializable_row[key] = value
-        serializable_rows.append(serializable_row)
+            trainer = DetectionTrainer(overrides=overrides)
 
-    return serializable_rows
+        trainer.model = None
+        dataset = trainer.build_dataset(trainer.data["train"], mode=mode, batch=4)
+        rows = list(dataset)
+
+        # Get random call tracking information
+        random_tracking_info = get_tracking_info()
+
+        # Convert tensors to numpy arrays for pickling
+        serializable_rows = []
+        for row in rows:
+            serializable_row = {}
+            for key, value in row.items():
+                if isinstance(value, torch.Tensor):
+                    serializable_row[key] = value.cpu().numpy()
+                elif isinstance(value, np.ndarray):
+                    serializable_row[key] = value
+                else:
+                    serializable_row[key] = value
+            serializable_rows.append(serializable_row)
+
+        return serializable_rows, random_tracking_info
+    finally:
+        # Always disable tracking before returning
+        disable_tracking()
 
 
-@pytest.mark.skip(reason="Skipping dataset determinism test due to reproducibility issues on GitHub builder.")
 @pytest.mark.parametrize("mode", ["train", "val"])
 def test_dataset_determinism(mode) -> None:
     """Test that datasets are deterministic with the same seed across separate processes."""
@@ -1205,7 +1215,7 @@ def test_dataset_determinism(mode) -> None:
 
     # Create datasets in separate processes using spawn
     ctx = mp.get_context("spawn")
-    with ctx.Pool(processes=2) as pool:
+    with ctx.Pool(processes=1) as pool:
         # Run 3LC trainer in one process
         result_3lc = pool.apply_async(_create_dataset_samples_in_process, args=(overrides_3lc, mode, "3lc"))
 
@@ -1213,10 +1223,115 @@ def test_dataset_determinism(mode) -> None:
         result_ultralytics = pool.apply_async(_create_dataset_samples_in_process, args=(overrides, mode, "ultralytics"))
 
         # Get results
-        rows_3lc = result_3lc.get()
-        rows_ultralytics = result_ultralytics.get()
+        rows_3lc, random_info_3lc = result_3lc.get()
+        rows_ultralytics, random_info_ultralytics = result_ultralytics.get()
 
-    assert len(rows_3lc) == len(rows_ultralytics), "Number of batches should be the same"
+    print_random_info(mode, random_info_3lc, random_info_ultralytics, rows_3lc, rows_ultralytics)
 
     for row_3lc, row_ultralytics in zip(rows_3lc, rows_ultralytics):
         _compare_dataset_rows(row_ultralytics, row_3lc)
+
+    assert len(rows_3lc) == len(rows_ultralytics), "Number of batches should be the same"
+
+
+def print_call_summary(title, call_counts):
+    """Print a summary of random function calls.
+
+    Args:
+        title: Title for the summary section
+        call_counts: Dictionary of function names to call counts
+    """
+    print(f"\n{title}:")
+    for func, count in call_counts.items():
+        print(f"{func}: {count} calls")
+
+
+def find_different_call_counts(call_counts_1, call_counts_2):
+    """Find functions with different call counts between two sets.
+
+    Args:
+        call_counts_1: First set of call counts
+        call_counts_2: Second set of call counts
+
+    Returns:
+        Dictionary mapping function names to tuples of (count_1, count_2)
+    """
+    different_counts = {}
+    all_funcs = set(call_counts_1.keys()) | set(call_counts_2.keys())
+
+    for func in all_funcs:
+        count_1 = call_counts_1.get(func, 0)
+        count_2 = call_counts_2.get(func, 0)
+
+        if count_1 != count_2:
+            different_counts[func] = (count_1, count_2)
+
+    return different_counts
+
+
+def print_call_locations(func, call_stacks_1, call_stacks_2, title_1, title_2):
+    """Print call locations for a function from two different sources.
+
+    Args:
+        func: Function name
+        call_stacks_1: Call stacks from first source
+        call_stacks_2: Call stacks from second source
+        title_1: Title for first source
+        title_2: Title for second source
+    """
+    if func in call_stacks_1:
+        print(f"{title_1} call locations for {func}:")
+        for location in set(call_stacks_1[func]):
+            print(f"  {location}")
+
+    if func in call_stacks_2:
+        print(f"{title_2} call locations for {func}:")
+        for location in set(call_stacks_2[func]):
+            print(f"  {location}")
+
+
+def add_tracking_info_to_rows(rows, call_counts, different_call_counts):
+    """Add random tracking information to dataset rows.
+
+    Args:
+        rows: List of dataset rows
+        call_counts: Dictionary of function names to call counts
+        different_call_counts: Dictionary of functions with different call counts
+    """
+    for row in rows:
+        row["random_tracking_info"] = {
+            "call_counts": call_counts,
+            "different_call_counts": different_call_counts,
+        }
+
+
+def print_random_info(mode, random_info_3lc, random_info_ultralytics, rows_3lc, rows_ultralytics):
+    """Print information about random function calls and add tracking info to rows.
+
+    Args:
+        mode: Dataset mode (train or val)
+        random_info_3lc: Random tracking info from 3LC
+        random_info_ultralytics: Random tracking info from Ultralytics
+        rows_3lc: Dataset rows from 3LC
+        rows_ultralytics: Dataset rows from Ultralytics
+    """
+    print(f"\n--- Random call information for mode: {mode} ---")
+
+    # Print call summaries
+    print_call_summary("3LC random calls", random_info_3lc["call_counts"])
+    print_call_summary("Ultralytics random calls", random_info_ultralytics["call_counts"])
+
+    # Find and print differences in call counts
+    different_call_counts = find_different_call_counts(
+        random_info_3lc["call_counts"], random_info_ultralytics["call_counts"]
+    )
+
+    for func, (count_3lc, count_ultralytics) in different_call_counts.items():
+        print(f"\nDifferent call counts for {func}: 3LC={count_3lc}, Ultralytics={count_ultralytics}")
+        print_call_locations(
+            func, random_info_3lc["call_stacks"], random_info_ultralytics["call_stacks"], "3LC", "Ultralytics"
+        )
+
+    # Add tracking info to rows
+    add_tracking_info_to_rows(rows_3lc, random_info_3lc["call_counts"], different_call_counts)
+    add_tracking_info_to_rows(rows_ultralytics, random_info_ultralytics["call_counts"], different_call_counts)
