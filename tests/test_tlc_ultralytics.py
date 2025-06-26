@@ -1159,11 +1159,6 @@ def _compare_dataset_rows(row_ultralytics, row_3lc) -> None:
 def _create_dataset_samples_in_process(overrides, mode, trainer_type):
     """Helper function to create dataset samples in a separate process."""
     if trainer_type == "3lc":
-        import random
-        import sentry_sdk
-
-        sentry_sdk.profiler.transaction_profiler.random = random.Random()
-
         from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
 
         trainer = TLCDetectionTrainer(overrides=overrides)
