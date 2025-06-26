@@ -115,7 +115,6 @@ def _train_model_in_process(model_type, model_name, overrides, settings=None):
     return serializable_results
 
 
-@pytest.mark.skip(reason="Skipping training tests due to several issues to be handled in a future PR.")
 @pytest.mark.parametrize("task", ["detect", "segment"])
 def test_training(task) -> None:
     # End-to-end test of training for detection and segmentation
@@ -143,7 +142,7 @@ def test_training(task) -> None:
 
     # Train models in separate processes using spawn
     ctx = mp.get_context("spawn")
-    with ctx.Pool(processes=2) as pool:
+    with ctx.Pool(processes=1) as pool:
         # Run ultralytics training in one process
         result_ultralytics = pool.apply_async(
             _train_model_in_process, args=("ultralytics", TASK2MODEL[task], overrides)
@@ -1160,6 +1159,11 @@ def _compare_dataset_rows(row_ultralytics, row_3lc) -> None:
 def _create_dataset_samples_in_process(overrides, mode, trainer_type):
     """Helper function to create dataset samples in a separate process."""
     if trainer_type == "3lc":
+        import random
+        import sentry_sdk
+
+        sentry_sdk.profiler.transaction_profiler.random = random.Random()
+
         from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
 
         trainer = TLCDetectionTrainer(overrides=overrides)
@@ -1188,7 +1192,6 @@ def _create_dataset_samples_in_process(overrides, mode, trainer_type):
     return serializable_rows
 
 
-@pytest.mark.skip(reason="Skipping dataset determinism test due to reproducibility issues on GitHub builder.")
 @pytest.mark.parametrize("mode", ["train", "val"])
 def test_dataset_determinism(mode) -> None:
     """Test that datasets are deterministic with the same seed across separate processes."""
@@ -1205,7 +1208,7 @@ def test_dataset_determinism(mode) -> None:
 
     # Create datasets in separate processes using spawn
     ctx = mp.get_context("spawn")
-    with ctx.Pool(processes=2) as pool:
+    with ctx.Pool(processes=1) as pool:
         # Run 3LC trainer in one process
         result_3lc = pool.apply_async(_create_dataset_samples_in_process, args=(overrides_3lc, mode, "3lc"))
 
