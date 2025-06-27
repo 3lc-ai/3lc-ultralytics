@@ -1,32 +1,25 @@
+import multiprocessing as mp
+import os
 import pathlib
 from collections import defaultdict
-from unittest.mock import Mock
 from copy import deepcopy
+from pathlib import Path
+from unittest.mock import Mock
+
+import cv2
 import numpy as np
 import pandas as pd
 import pytest
-from PIL import Image
-from pathlib import Path
 import tlc
-import cv2
-import os
 import torch
-
+from PIL import Image
 from ultralytics.models.yolo import YOLO
 from ultralytics.models.yolo.detect import DetectionTrainer
 
-from tlc_ultralytics import Settings, YOLO as TLCYOLO
+from tlc_ultralytics import YOLO as TLCYOLO
+from tlc_ultralytics import Settings
 from tlc_ultralytics.classify.trainer import TLCClassificationTrainer
 from tlc_ultralytics.classify.utils import tlc_check_cls_dataset
-from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
-from tlc_ultralytics.detect.utils import tlc_check_det_dataset
-from tlc_ultralytics.segment.trainer import TLCSegmentationTrainer
-from tlc_ultralytics.segment.utils import tlc_check_seg_dataset, check_seg_table
-from tlc_ultralytics.utils import check_tlc_dataset
-from tlc_ultralytics.engine.dataset import TLCDatasetMixin
-from tlc_ultralytics.detect.dataset import TLCYOLODataset
-from tlc_ultralytics.engine.utils import _complete_label_column_name
-
 from tlc_ultralytics.constants import (
     DEFAULT_COLLECT_RUN_DESCRIPTION,
     MAP,
@@ -38,6 +31,14 @@ from tlc_ultralytics.constants import (
     RECALL,
     TRAINING_PHASE,
 )
+from tlc_ultralytics.detect.dataset import TLCYOLODataset
+from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
+from tlc_ultralytics.detect.utils import tlc_check_det_dataset
+from tlc_ultralytics.engine.dataset import TLCDatasetMixin
+from tlc_ultralytics.engine.utils import _complete_label_column_name
+from tlc_ultralytics.segment.trainer import TLCSegmentationTrainer
+from tlc_ultralytics.segment.utils import check_seg_table, tlc_check_seg_dataset
+from tlc_ultralytics.utils import check_tlc_dataset
 
 DUMMY_IMAGE_FILE = Path(__file__).parent.parent / "src" / "tlc_ultralytics" / "_static" / "dashboard.png"
 TMP = Path(__file__).parent / "tmp"
@@ -932,6 +933,63 @@ def test_absolutize_image_url() -> None:
     url = tlc.Url("<UNEXPANDED_ALIAS>/in/my/url.png")
     with pytest.raises(ValueError):
         TLCDatasetMixin._absolutize_image_url(url, tlc.Url("some_table_url"))
+
+
+def test_extra_metrics() -> None:
+    """Test providing extra metrics callback and schemas work as expected"""
+
+    yolo_dataset_path, (table_train, table_val) = _create_test_image_and_table()
+
+    BATCH_SIZE = 2
+
+    def extra_metrics(preds, batch):
+        return {
+            "constant_metric": [1] * BATCH_SIZE * 2,
+            "metric_with_schema": list(range(BATCH_SIZE * 2)),
+        }
+
+    metric_schemas = {
+        "metric_with_schema": tlc.Schema(
+            value=tlc.Int32Value(value_map={float(i): tlc.MapElement(f"value_{i}") for i in range(BATCH_SIZE * 2)}),
+        ),
+    }
+
+    settings = Settings(
+        metrics_collection_function=extra_metrics,
+        metrics_schemas=metric_schemas,
+        project_name="test_extra_metrics",
+        run_name="test_extra_metrics",
+        run_description="Test extra metrics",
+    )
+
+    model = TLCYOLO("yolo11n.pt")
+    results = model.train(
+        tables={"train": table_train, "val": table_val},
+        settings=settings,
+        epochs=1,
+        device="cpu",
+        imgsz=640,
+        batch=BATCH_SIZE,
+    )
+    assert results, "Training should succeed"
+
+    run = _get_run_from_settings(settings)
+
+    sample_metrics_tables = [m for m in run.metrics_tables if "constant_metric" in m.columns]
+    assert len(sample_metrics_tables) == 2, "Should have two metrics tables"
+
+    for metrics_table in sample_metrics_tables:
+        assert "constant_metric" in metrics_table.columns, "Constant metric should be present"
+
+        assert "metric_with_schema" in metrics_table.columns, "Metric with schema should be present"
+
+        constant_column = metrics_table.get_column("constant_metric").to_numpy()
+        assert np.all(constant_column == 1), "Constant metric should be 1"
+        metric_with_schema_column = metrics_table.get_column("metric_with_schema").to_numpy()
+        assert np.all(
+            metric_with_schema_column == np.array([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3], dtype=np.int32)
+        )
+        assert metrics_table.rows_schema["metric_with_schema"].value.map is not None
 
 
 def test_no_predictions() -> None:
