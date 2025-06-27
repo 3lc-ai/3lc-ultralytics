@@ -238,7 +238,7 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
         column_name, instances_name, _ = label_column_name.split(".")
 
         try:
-            rles_schema_value = table.rows_schema.values[column_name].values[instances_name]
+            rles_schema_value = table.rows_schema.values[column_name].values["rles"].value
             segment_type = "relative" if getattr(rles_schema_value, "polygons_are_relative", False) else "absolute"
         except Exception as e:
             raise ValueError(f"Table {table.url} is not a segmentation table: {e}") from None

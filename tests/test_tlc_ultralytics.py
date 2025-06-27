@@ -117,10 +117,14 @@ def test_training(task) -> None:
     assert results_3lc, "Detection training failed"
 
     # Compare 3LC integration with ultralytics results
-    if task == "detect":
-        assert results_ultralytics.results_dict == results_3lc.results_dict, (
-            "Results validation metrics 3LC different from Ultralytics"
+    # Segmentation results will be slightly different due to the 3lc mask storage format and conversion
+    # back to polygons
+    atol = 0.1 if task == "segment" else 0
+    for k in results_ultralytics.results_dict.keys():
+        assert np.isclose(results_ultralytics.results_dict[k], results_3lc.results_dict[k], atol=atol), (
+            f"Results validation metrics 3LC different from Ultralytics for {k}"
         )
+
     assert results_ultralytics.names == results_3lc.names, "Results validation names"
 
     # Get 3LC run and inspect the results
