@@ -88,10 +88,10 @@ def test_training(task) -> None:
     # End-to-end test of training for detection and segmentation
     overrides = {
         "data": TASK2DATASET[task],
-        "epochs": 1,
+        "epochs": 2,
         "batch": 4,
         "device": "cpu",
-        "save": False,
+        "save": True,
         "plots": False,
         "seed": 3 + ord("L") + ord("C"),
         "deterministic": True,
@@ -161,12 +161,13 @@ def test_training(task) -> None:
     assert 1 in metrics_df[TRAINING_PHASE], "Expected metrics from after training"
 
     # model.predict() should work and be the same as vanilla ultralytics
-    # assert all(model_ultralytics.predict(imgsz=320)[0].boxes.cls == model_3lc.predict(imgsz=320)[0].boxes.cls), (
-    #     "Predictions mismatch"
-    # )
+    assert all(model_ultralytics.predict(imgsz=320)[0].boxes.cls == model_3lc.predict(imgsz=320)[0].boxes.cls), (
+        "Predictions mismatch"
+    )
 
     per_class_metrics_tables = metrics_tables[PER_CLASS_METRICS_STREAM_NAME]
-    assert len(per_class_metrics_tables) == 4, "Expected 4 per-class metrics tables to be written"
+    # 6 = 2 epochs * 2 splits + 2 splits after training
+    assert len(per_class_metrics_tables) == 6, "Expected 6 per-class metrics tables to be written"
     per_class_metrics_df = pd.concat(
         [m.to_pandas() for m in per_class_metrics_tables],
         ignore_index=True,

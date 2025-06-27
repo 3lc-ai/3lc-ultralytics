@@ -1,3 +1,7 @@
+import contextlib
+import random
+
+
 def _complete_label_column_name(label_column_name: str, default_label_column_name: str) -> str:
     """Create a complete label column name from a potentially partial one.
 
@@ -19,3 +23,11 @@ def _complete_label_column_name(label_column_name: str, default_label_column_nam
             parts.append(default_part)
 
     return ".".join(parts)
+
+
+@contextlib.contextmanager
+def _restore_random_state():
+    """Context manager to ensure the global random state is unchanged by the wrapped code."""
+    state = random.getstate()
+    yield
+    random.setstate(state)
