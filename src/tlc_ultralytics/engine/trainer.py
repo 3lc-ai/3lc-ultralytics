@@ -167,6 +167,7 @@ class TLCTrainerMixin(BaseTrainer):
                     method=self._settings.image_embeddings_reducer,
                     n_components=self._settings.image_embeddings_dim,
                     foreign_table_url=foreign_table_url,
+                    reducer_args=self._settings.image_embeddings_reducer_args,
                 )
             self._run.set_status_completed()
 

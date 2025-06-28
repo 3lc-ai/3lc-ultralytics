@@ -4,9 +4,11 @@ import importlib
 import os
 from dataclasses import dataclass, field, fields
 from difflib import get_close_matches
-from typing import Any
+from typing import Any, Callable
 
+import tlc
 from ultralytics.utils import LOGGER
+
 from tlc_ultralytics.constants import TLC_COLORSTR
 
 
@@ -48,6 +50,14 @@ class Settings:
     """Reduction algorithm for image embeddings. Options: pacmap and umap. Only used if IMAGE_EMBEDDINGS_DIM > 0.
     Default: 'pacmap'"""
 
+    image_embeddings_reducer_args: dict = field(default_factory=dict)
+    """Reduction-method specific arguments to exert fine-grained control over the reduction process.
+
+    See [PaCMAPTableArgs](https://docs.3lc.ai/3lc/latest/apidocs/tlc/tlc.client.reduce.pacmap.html#tlc.client.reduce.pacmap.PaCMAPTableArgs)
+    or [UMAPTableArgs](https://docs.3lc.ai/3lc/latest/apidocs/tlc/tlc.client.reduce.umap.html#tlc.client.reduce.umap.UMAPTableArgs)
+     for more details.
+    """
+
     sampling_weights: bool = field(default=False)
     """Whether to use 3LC Sampling Weights. Default: False"""
 
@@ -68,6 +78,36 @@ class Settings:
 
     collection_epoch_interval: int = field(default=1)
     """Epoch interval for collection. Only used if a starting epoch is set. Default: 1"""
+
+    metrics_collection_function: Callable[[Any, Any], dict[str, Any]] | None = field(default=None)
+    """Function to compute additional metrics during collection.
+
+    This function should take predictions and batch data as arguments and return
+    a dictionary of additional metrics to be included in the collection.
+
+    Args:
+        preds: Model predictions (format depends on task)
+        batch: Input batch data
+
+    Returns:
+        Dictionary of additional metrics to collect
+
+    Example:
+        def custom_metrics(preds, batch):
+            return {"custom_metric": compute_something(preds, batch)}
+
+    Note:
+        This function must be pickleable if using multiprocessing. Avoid lambda
+        functions and ensure the function is defined at module level.
+
+    Default: None"""
+
+    metrics_schemas: dict[str, tlc.Schema] | None = field(default=None)
+    """Schemas for any additional metrics returned by the metrics_collection_function.
+
+    Providing schemas is optional, but for complex metrics, it is recommended to provide a schema.
+
+    Default: None"""
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -112,6 +152,12 @@ class Settings:
         )
         if self.image_embeddings_dim > 0:
             self._check_reducer_available()
+
+        # Validate metrics collection function if provided
+        if self.metrics_collection_function is not None:
+            assert callable(self.metrics_collection_function), (
+                f"metrics_collection_function must be callable, got {type(self.metrics_collection_function)}"
+            )
 
         # Train / collect specific settings
         self._verify_training() if training else self._verify_collection()
