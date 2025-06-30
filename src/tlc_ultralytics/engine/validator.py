@@ -25,7 +25,6 @@ from tlc_ultralytics.constants import (
 from tlc_ultralytics.engine.utils import _complete_label_column_name
 from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import image_embeddings_schema, training_phase_schema
-# from tlc_ultralytics.overrides import set_dataset_checking_bypass, reset_dataset_checking
 
 
 def execute_when_collecting(method):
@@ -220,6 +219,9 @@ class TLCValidatorMixin(BaseValidator):
             **self._compute_3lc_metrics(preds, batch),  # Task specific metrics
         }
 
+        if self._settings.metrics_collection_function:
+            batch_metrics.update(self._settings.metrics_collection_function(preds, batch))
+
         if self._settings.image_embeddings_dim > 0:
             batch_metrics["embeddings"] = self.embeddings
 
@@ -236,6 +238,9 @@ class TLCValidatorMixin(BaseValidator):
         """Prepare the validator for metrics collection"""
         column_schemas = {}
         column_schemas.update(self._get_metrics_schemas())  # Add task-specific metrics schema
+
+        if self._settings.metrics_schemas:
+            column_schemas.update(self._settings.metrics_schemas)
 
         self._prepare_loss_fn(model)
 

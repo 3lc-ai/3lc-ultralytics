@@ -1,32 +1,24 @@
+import os
 import pathlib
 from collections import defaultdict
-from unittest.mock import Mock
 from copy import deepcopy
+from pathlib import Path
+from unittest.mock import Mock
+
+import cv2
 import numpy as np
 import pandas as pd
 import pytest
-from PIL import Image
-from pathlib import Path
 import tlc
-import cv2
-import os
 import torch
-import multiprocessing as mp
-
+from PIL import Image
 from ultralytics.models.yolo import YOLO
+from ultralytics.models.yolo.detect import DetectionTrainer
 
-from tlc_ultralytics import Settings, YOLO as TLCYOLO
+from tlc_ultralytics import YOLO as TLCYOLO
+from tlc_ultralytics import Settings
 from tlc_ultralytics.classify.trainer import TLCClassificationTrainer
 from tlc_ultralytics.classify.utils import tlc_check_cls_dataset
-from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
-from tlc_ultralytics.detect.utils import tlc_check_det_dataset
-from tlc_ultralytics.segment.trainer import TLCSegmentationTrainer
-from tlc_ultralytics.segment.utils import tlc_check_seg_dataset, check_seg_table
-from tlc_ultralytics.utils import check_tlc_dataset
-from tlc_ultralytics.engine.dataset import TLCDatasetMixin
-from tlc_ultralytics.detect.dataset import TLCYOLODataset
-from tlc_ultralytics.engine.utils import _complete_label_column_name
-
 from tlc_ultralytics.constants import (
     DEFAULT_COLLECT_RUN_DESCRIPTION,
     MAP,
@@ -38,6 +30,14 @@ from tlc_ultralytics.constants import (
     RECALL,
     TRAINING_PHASE,
 )
+from tlc_ultralytics.detect.dataset import TLCYOLODataset
+from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
+from tlc_ultralytics.detect.utils import tlc_check_det_dataset
+from tlc_ultralytics.engine.dataset import TLCDatasetMixin
+from tlc_ultralytics.engine.utils import _complete_label_column_name
+from tlc_ultralytics.segment.trainer import TLCSegmentationTrainer
+from tlc_ultralytics.segment.utils import check_seg_table, tlc_check_seg_dataset
+from tlc_ultralytics.utils import check_tlc_dataset
 
 DUMMY_IMAGE_FILE = Path(__file__).parent.parent / "src" / "tlc_ultralytics" / "_static" / "dashboard.png"
 TMP = Path(__file__).parent / "tmp"
@@ -83,47 +83,15 @@ def get_metrics_tables_from_run(run: tlc.Run) -> dict[str, list[tlc.Table]]:
     return metrics_tables
 
 
-def _train_model_in_process(model_type, model_name, overrides, settings=None):
-    """Helper function to train a model in a separate process."""
-    if model_type == "3lc":
-        from tlc_ultralytics import YOLO as TLCYOLO
-
-        model = TLCYOLO(model_name)
-        if settings:
-            results = model.train(**overrides, settings=settings)
-        else:
-            results = model.train(**overrides)
-    else:
-        from ultralytics.models.yolo import YOLO
-
-        model = YOLO(model_name)
-        results = model.train(**overrides)
-
-    # Convert results to serializable format
-    serializable_results = {
-        "results_dict": results.results_dict,
-        "names": results.names,
-        "save_dir": str(results.save_dir),
-    }
-
-    # Add task-specific attributes
-    if hasattr(results, "top1"):
-        serializable_results["top1"] = results.top1
-    if hasattr(results, "top5"):
-        serializable_results["top5"] = results.top5
-
-    return serializable_results
-
-
 @pytest.mark.parametrize("task", ["detect", "segment"])
 def test_training(task) -> None:
     # End-to-end test of training for detection and segmentation
     overrides = {
         "data": TASK2DATASET[task],
-        "epochs": 1,
+        "epochs": 2,
         "batch": 4,
         "device": "cpu",
-        "save": False,
+        "save": True,
         "plots": False,
         "seed": 3 + ord("L") + ord("C"),
         "deterministic": True,
@@ -140,29 +108,24 @@ def test_training(task) -> None:
         run_description=f"Test {task} training",
     )
 
-    # Train models in separate processes using spawn
-    ctx = mp.get_context("spawn")
-    with ctx.Pool(processes=2) as pool:
-        # Run ultralytics training in one process
-        result_ultralytics = pool.apply_async(
-            _train_model_in_process, args=("ultralytics", TASK2MODEL[task], overrides)
-        )
+    model_ultralytics = YOLO(TASK2MODEL[task])
+    results_ultralytics = model_ultralytics.train(**overrides)
 
-        # Run 3LC training in another process
-        result_3lc = pool.apply_async(_train_model_in_process, args=("3lc", TASK2MODEL[task], overrides, settings))
-
-        # Get results
-        _ = result_ultralytics.get()
-        results_3lc = result_3lc.get()
+    model_3lc = TLCYOLO(TASK2MODEL[task])
+    results_3lc = model_3lc.train(**overrides, settings=settings)
 
     assert results_3lc, "Detection training failed"
 
     # Compare 3LC integration with ultralytics results
-    # if task == "detect":
-    #     assert results_ultralytics["results_dict"] == results_3lc["results_dict"], (
-    #         "Results validation metrics 3LC different from Ultralytics"
-    #     )
-    #     assert results_ultralytics["names"] == results_3lc["names"], "Results validation names"
+    # Segmentation results will be slightly different due to the 3lc mask storage format and conversion
+    # back to polygons
+    atol = 0.1 if task == "segment" else 0
+    for k in results_ultralytics.results_dict.keys():
+        assert np.isclose(results_ultralytics.results_dict[k], results_3lc.results_dict[k], atol=atol), (
+            f"Results validation metrics 3LC different from Ultralytics for {k}"
+        )
+
+    assert results_ultralytics.names == results_3lc.names, "Results validation names"
 
     # Get 3LC run and inspect the results
     run = _get_run_from_settings(settings)
@@ -202,12 +165,13 @@ def test_training(task) -> None:
     assert 1 in metrics_df[TRAINING_PHASE], "Expected metrics from after training"
 
     # model.predict() should work and be the same as vanilla ultralytics
-    # assert all(model_ultralytics.predict(imgsz=320)[0].boxes.cls == model_3lc.predict(imgsz=320)[0].boxes.cls), (
-    #     "Predictions mismatch"
-    # )
+    assert all(model_ultralytics.predict(imgsz=320)[0].boxes.cls == model_3lc.predict(imgsz=320)[0].boxes.cls), (
+        "Predictions mismatch"
+    )
 
     per_class_metrics_tables = metrics_tables[PER_CLASS_METRICS_STREAM_NAME]
-    assert len(per_class_metrics_tables) == 4, "Expected 4 per-class metrics tables to be written"
+    # 6 = 2 epochs * 2 splits + 2 splits after training
+    assert len(per_class_metrics_tables) == 6, "Expected 6 per-class metrics tables to be written"
     per_class_metrics_df = pd.concat(
         [m.to_pandas() for m in per_class_metrics_tables],
         ignore_index=True,
@@ -975,6 +939,63 @@ def test_absolutize_image_url() -> None:
         TLCDatasetMixin._absolutize_image_url(url, tlc.Url("some_table_url"))
 
 
+def test_extra_metrics() -> None:
+    """Test providing extra metrics callback and schemas work as expected"""
+
+    yolo_dataset_path, (table_train, table_val) = _create_test_image_and_table()
+
+    BATCH_SIZE = 2
+
+    def extra_metrics(preds, batch):
+        return {
+            "constant_metric": [1] * BATCH_SIZE * 2,
+            "metric_with_schema": list(range(BATCH_SIZE * 2)),
+        }
+
+    metric_schemas = {
+        "metric_with_schema": tlc.Schema(
+            value=tlc.Int32Value(value_map={float(i): tlc.MapElement(f"value_{i}") for i in range(BATCH_SIZE * 2)}),
+        ),
+    }
+
+    settings = Settings(
+        metrics_collection_function=extra_metrics,
+        metrics_schemas=metric_schemas,
+        project_name="test_extra_metrics",
+        run_name="test_extra_metrics",
+        run_description="Test extra metrics",
+    )
+
+    model = TLCYOLO("yolo11n.pt")
+    results = model.train(
+        tables={"train": table_train, "val": table_val},
+        settings=settings,
+        epochs=1,
+        device="cpu",
+        imgsz=640,
+        batch=BATCH_SIZE,
+    )
+    assert results, "Training should succeed"
+
+    run = _get_run_from_settings(settings)
+
+    sample_metrics_tables = [m for m in run.metrics_tables if "constant_metric" in m.columns]
+    assert len(sample_metrics_tables) == 2, "Should have two metrics tables"
+
+    for metrics_table in sample_metrics_tables:
+        assert "constant_metric" in metrics_table.columns, "Constant metric should be present"
+
+        assert "metric_with_schema" in metrics_table.columns, "Metric with schema should be present"
+
+        constant_column = metrics_table.get_column("constant_metric").to_numpy()
+        assert np.all(constant_column == 1), "Constant metric should be 1"
+        metric_with_schema_column = metrics_table.get_column("metric_with_schema").to_numpy()
+        assert np.all(
+            metric_with_schema_column == np.array([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3], dtype=np.int32)
+        )
+        assert metrics_table.rows_schema["metric_with_schema"].value.map is not None
+
+
 def test_no_predictions() -> None:
     yolo_dataset_path, (table_train, table_val) = _create_test_image_and_table()
 
@@ -1014,6 +1035,36 @@ def test_complete_label_column_name() -> None:
     assert _complete_label_column_name("a", "a.b.c") == "a.b.c"
     assert _complete_label_column_name("a.b.c", "d.e.f") == "a.b.c"
     assert _complete_label_column_name("", "a.b.c") == "a.b.c"
+
+
+@pytest.mark.parametrize("mode", ["train", "val"])
+def test_dataset_determinism(mode) -> None:
+    """Test that datasets are deterministic with the same seed across separate processes."""
+    settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}")
+    overrides = {
+        "data": TASK2DATASET["detect"],
+        "model": TASK2MODEL["detect"],
+        "seed": 42,  # Fixed seed
+        "deterministic": True,
+    }
+
+    overrides_3lc = overrides.copy()
+    overrides_3lc["settings"] = settings
+
+    trainer_ultralytics = DetectionTrainer(overrides=overrides)
+    trainer_ultralytics.model = None
+    dataset_ultralytics = trainer_ultralytics.build_dataset(trainer_ultralytics.data["train"], mode=mode, batch=4)
+    rows_ultralytics = list(dataset_ultralytics)
+
+    trainer_3lc = TLCDetectionTrainer(overrides=overrides_3lc)
+    trainer_3lc.model = None
+    dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=4)
+    rows_3lc = list(dataset_3lc)
+
+    assert len(rows_3lc) == len(rows_ultralytics), "Number of batches should be the same"
+
+    for row_3lc, row_ultralytics in zip(rows_3lc, rows_ultralytics):
+        _compare_dataset_rows(row_ultralytics, row_3lc)
 
 
 # HELPERS
@@ -1154,70 +1205,3 @@ def _compare_dataset_rows(row_ultralytics, row_3lc) -> None:
             assert (value_ultralytics == value_3lc).all(), f"Value {key} not equal in 3LC and Ultralytics"
         else:
             assert value_ultralytics == value_3lc, f"Value {key} not equal in 3LC and Ultralytics"
-
-
-def _create_dataset_samples_in_process(overrides, mode, trainer_type):
-    """Helper function to create dataset samples in a separate process."""
-    if trainer_type == "3lc":
-        from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
-
-        trainer = TLCDetectionTrainer(overrides=overrides)
-    else:
-        from ultralytics.models.yolo.detect import DetectionTrainer
-
-        trainer = DetectionTrainer(overrides=overrides)
-
-    trainer.model = None
-    dataset = trainer.build_dataset(trainer.data["train"], mode=mode, batch=4)
-    rows = list(dataset)
-
-    # Convert tensors to numpy arrays for pickling
-    serializable_rows = []
-    for row in rows:
-        serializable_row = {}
-        for key, value in row.items():
-            if isinstance(value, torch.Tensor):
-                serializable_row[key] = value.cpu().numpy()
-            elif isinstance(value, np.ndarray):
-                serializable_row[key] = value
-            else:
-                serializable_row[key] = value
-        serializable_rows.append(serializable_row)
-
-    return serializable_rows
-
-
-# @pytest.mark.parametrize("mode", ["train", "val"])
-# def test_dataset_determinism(mode) -> None:
-#     """Test that datasets are deterministic with the same seed across separate processes."""
-#     settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}")
-#     overrides = {
-#         "data": TASK2DATASET["detect"],
-#         "model": TASK2MODEL["detect"],
-#         "seed": 42,  # Fixed seed
-#         "deterministic": True,
-#     }
-
-#     overrides_3lc = overrides.copy()
-#     overrides_3lc["settings"] = settings
-
-#     # Create datasets in separate processes using spawn
-#     ctx = mp.get_context("spawn")
-#     with ctx.Pool(processes=2) as pool:
-#         # Run 3LC trainer in one process
-#         result_3lc = pool.apply_async(_create_dataset_samples_in_process, args=(overrides_3lc, mode, "3lc"))
-
-#         # Run Ultralytics trainer in another process
-#         result_ultralytics = pool.apply_async(
-#             _create_dataset_samples_in_process,
-#             args=(overrides, mode, "ultralytics")
-#         )
-
-#         # Get results
-#         rows_3lc = result_3lc.get()
-#         rows_ultralytics = result_ultralytics.get()
-
-#     assert len(rows_3lc) == len(rows_ultralytics), "Number of batches should be the same"
-
-#     for row_3lc, row_ultralytics in zip(rows_3lc, rows_ultralytics):
-#         _compare_dataset_rows(row_ultralytics, row_3lc)
