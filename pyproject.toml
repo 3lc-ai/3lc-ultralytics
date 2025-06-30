@@ -1,6 +1,6 @@
 [project]
 name = "3lc-ultralytics"
-version = "0.1.0"
+version = "0.0.0"
 description = "3LC integration with Ultralytics YOLO"
 readme = "README.md"
 authors = [
