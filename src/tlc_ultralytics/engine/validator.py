@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import numpy as np
-import ultralytics
 import tlc
-
+import ultralytics
 from ultralytics.engine.validator import BaseValidator
 from ultralytics.utils import LOGGER, colorstr
+
 from tlc_ultralytics.constants import (
     DEFAULT_COLLECT_RUN_DESCRIPTION,
     MAP,
-    MAP_SEG,
     MAP50_95,
     MAP50_95_SEG,
+    MAP_SEG,
     NUM_IMAGES,
     NUM_INSTANCES,
     PER_CLASS_METRICS_STREAM_NAME,
@@ -25,6 +25,7 @@ from tlc_ultralytics.constants import (
 from tlc_ultralytics.engine.utils import _complete_label_column_name
 from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import image_embeddings_schema, training_phase_schema
+
 # from tlc_ultralytics.overrides import set_dataset_checking_bypass, reset_dataset_checking
 
 
@@ -41,7 +42,6 @@ class TLCValidatorMixin(BaseValidator):
         self,
         dataloader=None,
         save_dir=None,
-        pbar=None,
         args=None,
         _callbacks=None,
         run=None,
@@ -80,7 +80,7 @@ class TLCValidatorMixin(BaseValidator):
         self._final_validation = False
         self._hook_handles = []
 
-        super().__init__(dataloader, save_dir, pbar, args, _callbacks)
+        super().__init__(dataloader, save_dir, args, _callbacks)
 
         if not self._training:
             # Set up dataset checking bypass before calling check_dataset
