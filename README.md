@@ -46,13 +46,10 @@ pip install "git+https://github.com/3lc-ai/3lc-ultralytics@develop"
 Import `YOLO` from `tlc_ultralytics` and start training with 3LC integration:
 
 ```python
-from tlc_ultralytics import Settings, YOLO
+from tlc_ultralytics import YOLO
 
 model = YOLO("yolo11n.pt")
-model.train(
-    data="coco128.yaml",
-    epochs=1,
-)
+model.train(data="coco128.yaml", epochs=1)
 ```
 
 In the background, 3LC creates `tlc.Table`s for each split and a `tlc.Run`, which can be opened in the 3LC Dashboard.
