@@ -83,6 +83,7 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
             image_column_name=self._image_column_name,
             label_column_name=self._label_column_name,
             settings=self._settings,
+            training=True,
         )
 
     def _process_metrics(self, metrics):
