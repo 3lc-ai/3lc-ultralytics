@@ -50,13 +50,8 @@ Check out the [examples directory](examples/) for complete training and metrics 
 
 ## Working with Datasets
 
-### Using Existing YOLO Datasets
-
-The easiest way to get started is to use your existing YOLO dataset. Simply set `data=<path to your dataset>` as you normally would. See the [Ultralytics Documentation](https://docs.ultralytics.com/datasets/) to learn more.
-
-3LC parses these datasets and creates tables for each split, which can be viewed in the Dashboard. Once you make new versions of your data in the 3LC Dashboard, you can use the same command with `data=<path to your dataset>`, and the latest version will be used automatically.
-
-### Using 3LC Tables Directly
+<details open>
+<summary><strong>Using 3LC Tables Directly (Recommended)</strong></summary>
 
 If you have existing `tlc.Table` instances or want to use specific versions:
 
@@ -78,7 +73,19 @@ model.train(tables=tables)
 
 When `tables` is provided, any value of `data` is ignored. In training, the table for the key `"train"` is used for training, and `"val"` or `"test"` for validation (val takes precedence).
 
-### Using 3LC YAML Files
+</details>
+
+<details>
+<summary>Using Existing YOLO Datasets</summary>
+
+The easiest way to get started is to use your existing YOLO dataset. Simply set `data=<path to your dataset>` as you normally would. See the [Ultralytics Documentation](https://docs.ultralytics.com/datasets/) to learn more.
+
+3LC parses these datasets and creates tables for each split, which can be viewed in the Dashboard. Once you make new versions of your data in the 3LC Dashboard, you can use the same command with `data=<path to your dataset>`, and the latest version will be used automatically.
+
+</details>
+
+<details>
+<summary>Using 3LC YAML Files</summary>
 
 Create a YAML file to specify your tables:
 
@@ -93,11 +100,14 @@ val: s3://path/to/val/table
 ```
 
 Then use it with the `3LC://` prefix:
+
 ```python
 model.train(data="3LC://my_dataset.yaml")
 ```
 
 Note: `names` and `nc` are not needed since the `tlc.Table`s themselves contain the category names and indices.
+
+</details>
 
 ## Task-Specific Configuration
 
