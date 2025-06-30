@@ -69,6 +69,7 @@ class TLCClassificationTrainer(TLCTrainerMixin, yolo.classify.ClassificationTrai
             image_column_name=self._image_column_name,
             label_column_name=self._label_column_name,
             settings=self._settings,
+            training=True,
         )
 
     def get_dataloader(self, dataset_path, batch_size=16, rank=0, mode="train"):

@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import numpy as np
-import ultralytics
 import tlc
-
+import ultralytics
 from ultralytics.engine.validator import BaseValidator
 from ultralytics.utils import LOGGER, colorstr
+
 from tlc_ultralytics.constants import (
     DEFAULT_COLLECT_RUN_DESCRIPTION,
     MAP,
-    MAP_SEG,
     MAP50_95,
     MAP50_95_SEG,
+    MAP_SEG,
     NUM_IMAGES,
     NUM_INSTANCES,
     PER_CLASS_METRICS_STREAM_NAME,
@@ -38,39 +38,23 @@ def execute_when_collecting(method):
 class TLCValidatorMixin(BaseValidator):
     def __init__(
         self,
-        dataloader=None,
-        save_dir=None,
-        pbar=None,
-        args=None,
-        _callbacks=None,
-        run=None,
-        image_column_name=None,
-        label_column_name=None,
-        settings=None,
+        *args,
+        run: tlc.Run | None = None,
+        image_column_name: str | None = None,
+        label_column_name: str | None = None,
+        settings: Settings | None = None,
+        training: bool = False,
+        **kwargs,
     ):
-        # Called by trainer (Get run and settings from trainer)
-        if run is not None:
-            self._run = run
-            self._settings: Settings = settings
-            self._image_column_name = image_column_name or self._default_image_column_name
-            self._label_column_name = label_column_name or self._default_label_column_name
-            self._training = True
+        self._run = run
+        self._image_column_name = image_column_name or self._default_image_column_name
+        self._label_column_name = _complete_label_column_name(label_column_name, self._default_label_column_name)
+        # Settings can be passed as an argument directly to the validator, or as a keyword from the trainer
+        self._settings = settings or kwargs.get("args", {}).pop("settings", None) or Settings()
+        self._training = training
 
-        # Called directly (Create a run and get settings directly)
-        else:
-            if run in args:
-                self._run = args.pop("run")
-            else:
-                self._run = None  # Create run
-            self._settings: Settings = args.pop("settings", Settings())
-            self._image_column_name = args.pop("image_column_name", self._default_image_column_name)
-            self._label_column_name = args.pop("label_column_name", self._default_label_column_name)
-            self._label_column_name = _complete_label_column_name(
-                self._label_column_name, self._default_label_column_name
-            )
-
-            self._table = args.pop("table", None)
-            self._training = False
+        # Table is passed when doing validation only, not when training
+        self._table = kwargs.get("args", {}).pop("table", None) if not training else None
 
         # State
         self._epoch = None
@@ -79,11 +63,10 @@ class TLCValidatorMixin(BaseValidator):
         self._final_validation = False
         self._hook_handles = []
 
-        super().__init__(dataloader, save_dir, pbar, args, _callbacks)
+        super().__init__(*args, **kwargs)
 
         if not self._training:
             # Set up dataset checking bypass before calling check_dataset
-            # set_dataset_checking_bypass({})
             self.data = self.check_dataset(
                 self.args.data,
                 {self.args.split: self._table} if self._table is not None else None,
@@ -92,8 +75,6 @@ class TLCValidatorMixin(BaseValidator):
                 project_name=self._settings.project_name,
                 splits=(self.args.split,),
             )
-            # Update the data object in the bypass
-            # set_dataset_checking_bypass(self.data)
 
         # Create a run if not provided
         if self._run is None:

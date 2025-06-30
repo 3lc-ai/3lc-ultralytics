@@ -52,4 +52,5 @@ class TLCSegmentationTrainer(SegmentationTrainer, TLCDetectionTrainer):
             _callbacks=self.callbacks,
             run=self._run,
             settings=self._settings,
+            training=True,
         )
