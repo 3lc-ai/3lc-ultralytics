@@ -74,6 +74,10 @@ The recommended way of providing the data to use is to pass `tlc.Table`s or `tlc
 To learn how to create `tlc.Table`s for your dataset, check out the [examples directory](/examples/).
 
 ```python
+from tlc_ultralytics import YOLO
+
+model = YOLO("yolo11n.pt")
+
 # Using table instances
 tables = {
     "train": my_train_table, 
@@ -122,6 +126,9 @@ val: s3://path/to/val/table
 Then use it with the `3LC://` prefix to specify that it is a 3LC YOLO YAML file:
 
 ```python
+from tlc_ultralytics import YOLO
+
+model = YOLO("yolo11n.pt")
 model.train(data="3LC://my_dataset.yaml")
 ```
 
