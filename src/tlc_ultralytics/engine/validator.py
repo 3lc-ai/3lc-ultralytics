@@ -25,7 +25,6 @@ from tlc_ultralytics.constants import (
 from tlc_ultralytics.engine.utils import _complete_label_column_name
 from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import image_embeddings_schema, training_phase_schema
-# from tlc_ultralytics.overrides import set_dataset_checking_bypass, reset_dataset_checking
 
 
 def execute_when_collecting(method):
