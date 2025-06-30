@@ -136,14 +136,9 @@ class TLCTrainerMixin(BaseTrainer):
         return super().validate()
 
     def final_eval(self):
-        """Perform normal final validation with metrics collection on the val set, then do extra metrics collection on
-        the train set.
+        """Perform normal final validation with metrics collection on the val set, after first doing metrics collection
+        on the train set.
         """
-        self.validator._final_validation = True
-
-        super().final_eval()
-        self._save_confidence_metrics()
-
         if not self._settings.collection_val_only and not self._settings.collection_disable:
             if self.best.exists():
                 with _restore_random_state():
@@ -151,6 +146,10 @@ class TLCTrainerMixin(BaseTrainer):
                     self.train_validator._epoch = self.epoch
                     self.train_validator.data = self.data
                     self.train_validator(model=self.best)
+
+        self.validator._final_validation = True
+        super().final_eval()
+        self._save_confidence_metrics()
 
         if RANK in {-1, 0}:
             if self._settings.image_embeddings_dim > 0:
