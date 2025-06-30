@@ -1,10 +1,27 @@
+<p align="center">
 <img src="https://3lc.ai/wp-content/uploads/2023/09/3LC-Logo_Footer.svg">
+</p>
 
-# 3LC YOLO Integration
+<h1 align="center">3LC YOLO Integration</h1>
+
+<div align="center">
 
 [![Discord](https://img.shields.io/badge/discord-3LC-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwnwFtfafC)
 
+</div>
+
+<p align="center">
+<a href="#quick-start">Quick Start</a> • 
+<a href="#working-with-datasets">Working with Datasets</a> • 
+<a href="#task-specific-configuration">Task-Specific Configuration</a> • 
+<a href="#metrics-collection-only">Metrics Collection</a> • 
+<a href="#3lc-settings">3LC Settings</a> • 
+<a href="#frequently-asked-questions">FAQ</a>
+</p>
+
+<p align="center">
 Ultralytics YOLO classification, object detection and segmentation with 3LC integrated.
+</p>
 
 ## About 3LC
 
