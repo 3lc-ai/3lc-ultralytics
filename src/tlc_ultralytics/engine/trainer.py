@@ -7,9 +7,8 @@ from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.constants import TLC_COLORSTR, DEFAULT_TRAIN_RUN_DESCRIPTION
 from tlc_ultralytics.utils import reduce_embeddings
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
-from ultralytics.utils.torch_utils import strip_optimizer
 from ultralytics.utils.metrics import smooth
-from tlc_ultralytics.engine.utils import _complete_label_column_name
+from tlc_ultralytics.engine.utils import _complete_label_column_name, _restore_random_state
 
 
 class TLCTrainerMixin(BaseTrainer):
@@ -130,32 +129,27 @@ class TLCTrainerMixin(BaseTrainer):
             and not self._settings.collection_val_only
             and self.epoch + 1 in self._metrics_collection_epochs
         ):
-            self.train_validator(trainer=self)
+            with _restore_random_state():
+                self.train_validator(trainer=self)
 
         # Validate on the validation/test set like usual
         return super().validate()
 
     def final_eval(self):
-        # Set epoch on validator - required when final validation is called without prior mc during training
+        """Perform normal final validation with metrics collection on the val set, after first doing metrics collection
+        on the train set.
+        """
         if not self._settings.collection_val_only and not self._settings.collection_disable:
-            self.train_validator._final_validation = True
-            self.train_validator._epoch = self.epoch
-            self.train_validator.data = self.data
+            if self.best.exists():
+                with _restore_random_state():
+                    self.train_validator._final_validation = True
+                    self.train_validator._epoch = self.epoch
+                    self.train_validator.data = self.data
+                    self.train_validator(model=self.best)
 
         self.validator._final_validation = True
-
-        for f in self.last, self.best:
-            if f.exists():
-                strip_optimizer(f)  # strip optimizers
-                if f is self.best:
-                    LOGGER.info(f"\nValidating {f}...")
-                    if not self._settings.collection_val_only and not self._settings.collection_disable:
-                        self.train_validator(model=f)
-                    self.validator.args.plots = self.args.plots
-                    self.metrics = self.validator(model=f)  # Only a dict! strange..?
-                    self.metrics.pop("fitness", None)
-                    self._save_confidence_metrics()
-                    self.run_callbacks("on_fit_epoch_end")
+        super().final_eval()
+        self._save_confidence_metrics()
 
         if RANK in {-1, 0}:
             if self._settings.image_embeddings_dim > 0:
