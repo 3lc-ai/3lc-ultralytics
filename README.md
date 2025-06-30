@@ -64,10 +64,14 @@ Check out the [examples directory](examples/) for complete training and metrics 
 
 ## Working with Datasets
 
+The integration supports three ways of providing the data use. These are listed below:
+
 <details open>
 <summary><strong>Using 3LC Tables Directly (Recommended)</strong></summary>
 
-If you have existing `tlc.Table` instances or want to use specific versions:
+The recommended way of providing the data to use is to pass `tlc.Table`s or `tlc.Url`s to `tlc.Table`s directly.
+
+To learn how to create `tlc.Table`s for your dataset, check out the [examples directory](/examples/).
 
 ```python
 # Using table instances
@@ -79,10 +83,10 @@ model.train(tables=tables)
 
 # Using table URLs
 tables = {
-    "train": "s3://path/to/train/table",
-    "val": "s3://path/to/val/table"
+    "train": "/url/or/path/to/train/table",
+    "val": "/url/or/path/to/val/table"
 }
-model.train(tables=tables)
+model.train(tables=tables, ...)
 ```
 
 When `tables` is provided, any value of `data` is ignored. In training, the table for the key `"train"` is used for training, and `"val"` or `"test"` for validation (val takes precedence).
@@ -92,16 +96,18 @@ When `tables` is provided, any value of `data` is ignored. In training, the tabl
 <details>
 <summary>Using Existing YOLO Datasets</summary>
 
-The easiest way to get started is to use your existing YOLO dataset. Simply set `data=<path to your dataset>` as you normally would. See the [Ultralytics Documentation](https://docs.ultralytics.com/datasets/) to learn more.
+Another alternative is to pass the argument `data` like in vanilla Ultralytics, pointing to a YOLO dataset YAML file. See the [Ultralytics Documentation](https://docs.ultralytics.com/datasets/) to learn more.
 
-3LC parses these datasets and creates tables for each split, which can be viewed in the Dashboard. Once you make new versions of your data in the 3LC Dashboard, you can use the same command with `data=<path to your dataset>`, and the latest version will be used automatically.
+3LC parses these datasets and creates `tlc.Table`s for each split, which can be viewed in the Dashboard. Once you make new versions of your data in the 3LC Dashboard, you can use the same command with `data=<path to your dataset>`, and the latest version will be used automatically. The integration will use default values for `project_name` (the name of the provided dataset yaml file, e.g. `"my_dataset"` for `"data=/path/to/my_dataset.yaml"`), `dataset_name` (the split, e.g. `"train"`) and `table_name` (`"initial"`).
 
 </details>
 
 <details>
 <summary>Using 3LC YAML Files</summary>
 
-Create a YAML file to specify your tables:
+The third and final way of providing the data is through what we call a 3LC YOLO YAML file. This is available in order to be compatible with the corresponding [YOLOv5 Integration](https://github.com/3lc-ai/yolov5).
+
+Create a dataset YAML file, and provide the `tlc.Url` to each split in the file:
 
 ```yaml
 # my_dataset.yaml
@@ -113,7 +119,7 @@ train: /path/to/train/table:latest
 val: s3://path/to/val/table
 ```
 
-Then use it with the `3LC://` prefix:
+Then use it with the `3LC://` prefix to specify that it is a 3LC YOLO YAML file:
 
 ```python
 model.train(data="3LC://my_dataset.yaml")
