@@ -1,8 +1,6 @@
 # Changelog
 
-## Unreleased
-
-## 0.1.0
+## Unreleased (0.1.0)
 
 Initial version with training and collection for detection, segmentation and classification.
 
