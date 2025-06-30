@@ -10,10 +10,8 @@ import numpy as np
 import pandas as pd
 import pytest
 import tlc
-import torch
 from PIL import Image
 from ultralytics.models.yolo import YOLO
-from ultralytics.models.yolo.detect import DetectionTrainer
 
 from tlc_ultralytics import YOLO as TLCYOLO
 from tlc_ultralytics import Settings
@@ -1040,31 +1038,44 @@ def test_complete_label_column_name() -> None:
 @pytest.mark.parametrize("mode", ["train", "val"])
 def test_dataset_determinism(mode) -> None:
     """Test that datasets are deterministic with the same seed across separate processes."""
-    settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}")
-    overrides = {
-        "data": TASK2DATASET["detect"],
-        "model": TASK2MODEL["detect"],
-        "seed": 42,  # Fixed seed
-        "deterministic": True,
-    }
+    from dataset_determinism import create_dataset_samples, _compare_dataset_rows
 
-    overrides_3lc = overrides.copy()
-    overrides_3lc["settings"] = settings
-
-    trainer_ultralytics = DetectionTrainer(overrides=overrides)
-    trainer_ultralytics.model = None
-    dataset_ultralytics = trainer_ultralytics.build_dataset(trainer_ultralytics.data["train"], mode=mode, batch=4)
-    rows_ultralytics = list(dataset_ultralytics)
-
-    trainer_3lc = TLCDetectionTrainer(overrides=overrides_3lc)
-    trainer_3lc.model = None
-    dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=4)
-    rows_3lc = list(dataset_3lc)
+    rows_3lc, rows_ultralytics = create_dataset_samples(mode)
 
     assert len(rows_3lc) == len(rows_ultralytics), "Number of batches should be the same"
 
     for row_3lc, row_ultralytics in zip(rows_3lc, rows_ultralytics):
         _compare_dataset_rows(row_ultralytics, row_3lc)
+
+
+@pytest.mark.parametrize("mode", ["train", "val"])
+def test_dataset_determinism_with_random_tracking(mode) -> None:
+    """Test that datasets are deterministic and don't make unexpected random calls.
+
+    This test spawns a subprocess, enables random tracking, and checks that no
+    unexpected random calls are made.
+    """
+    import json
+    import subprocess
+    import sys
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=True) as temp_file:
+        output_file = temp_file.name
+        cmd = [
+            sys.executable,
+            "-c",
+            "from dataset_determinism import create_dataset_samples_with_tracking;"
+            f"create_dataset_samples_with_tracking('{mode}', '{output_file}')",
+        ]
+        subprocess.run(cmd, check=True)
+
+        with open(output_file) as f:
+            tracking_result = json.load(f)
+
+        assert tracking_result["rows_count_3lc"] == tracking_result["rows_count_ultralytics"], (
+            "Number of batches should be the same"
+        )
 
 
 # HELPERS
@@ -1192,16 +1203,3 @@ def cleanup_tmp():
 
     if TMP.exists():
         shutil.rmtree(TMP)
-
-
-def _compare_dataset_rows(row_ultralytics, row_3lc) -> None:
-    for key in row_ultralytics.keys():
-        value_ultralytics = row_ultralytics[key]
-
-        assert key in row_3lc, f"Key {key} not found in 3LC row"
-        value_3lc = row_3lc[key]
-
-        if isinstance(value_ultralytics, (np.ndarray, torch.Tensor)):
-            assert (value_ultralytics == value_3lc).all(), f"Value {key} not equal in 3LC and Ultralytics"
-        else:
-            assert value_ultralytics == value_3lc, f"Value {key} not equal in 3LC and Ultralytics"
