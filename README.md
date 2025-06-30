@@ -58,9 +58,9 @@ In the background, 3LC creates `tlc.Table`s for each split and a `tlc.Run`, whic
 
 Check out the [examples directory](examples/) for complete training and metrics collection examples for each supported task:
 
-- **Classification**: [examples/classify/train.py](examples/classify/train.py)
+- **Classification**: [examples/classify/train.py](examples/classify/train.py) and [examples/classify/collect.py](examples/classify/collect.py)
 - **Object Detection**: [examples/detect/train.py](examples/detect/train.py) and [examples/detect/collect.py](examples/detect/collect.py)
-- **Segmentation**: Coming soon
+- **Segmentation**: [examples/detect/train.py](examples/segment/train.py) and [examples/detect/collect.py](examples/segment/collect.py)
 
 ## Working with Datasets
 

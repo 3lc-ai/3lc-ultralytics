@@ -1,11 +1,12 @@
-from tlc_ultralytics import YOLO
+from tlc_ultralytics import Settings, YOLO
 
 if __name__ == "__main__":
     model = YOLO("yolo11n-cls.pt")
 
+    settings = Settings(image_embeddings_dim=3)
+
     model.train(
         data="mnist",
-        epochs=100,
-        imgsz=32,
-        workers=0,
+        epochs=10,
+        settings=settings,
     )
