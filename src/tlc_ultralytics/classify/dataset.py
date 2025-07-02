@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import tlc
+from functools import partial
+from typing import Any
 
+import tlc
 from ultralytics.data.dataset import ClassificationDataset
 
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
-
-from functools import partial
-
-from typing import Any
 
 
 class _DummyImageFolder:

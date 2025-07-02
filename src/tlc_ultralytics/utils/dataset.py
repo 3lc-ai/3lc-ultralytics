@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import tlc
-import yaml
-
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
+import tlc
+import yaml
 from ultralytics.utils import LOGGER, colorstr
-from tlc_ultralytics.constants import TLC_COLORSTR, TLC_PREFIX
 
-from collections.abc import Callable, Iterable
+from tlc_ultralytics.constants import TLC_COLORSTR, TLC_PREFIX
 
 
 def check_tlc_dataset(  # noqa: C901

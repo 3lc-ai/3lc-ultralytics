@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import tlc
-
+from collections.abc import Iterable
 from pathlib import Path
 
+import tlc
 from ultralytics.data.utils import IMG_FORMATS, check_cls_dataset
 from ultralytics.utils import ROOT, YAML
-from tlc_ultralytics.utils import check_tlc_dataset
 
-from collections.abc import Iterable
+from tlc_ultralytics.utils import check_tlc_dataset
 
 
 def tlc_check_cls_dataset(

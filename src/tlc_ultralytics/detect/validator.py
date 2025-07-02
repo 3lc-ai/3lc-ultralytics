@@ -1,22 +1,23 @@
 from __future__ import annotations
 
-import tlc
-import torch
 import weakref
 
+import tlc
+import torch
 from ultralytics.models.yolo.detect import DetectionValidator
 from ultralytics.utils import metrics, ops
+
 from tlc_ultralytics.constants import (
-    IMAGE_COLUMN_NAME,
     DETECTION_LABEL_COLUMN_NAME,
+    IMAGE_COLUMN_NAME,
 )
 from tlc_ultralytics.detect.loss import v8UnreducedDetectionLoss
 from tlc_ultralytics.detect.utils import (
     build_tlc_yolo_dataset,
-    yolo_predicted_bounding_box_schema,
     construct_bbox_struct,
     tlc_check_det_dataset,
     yolo_loss_schemas,
+    yolo_predicted_bounding_box_schema,
 )
 from tlc_ultralytics.engine.validator import TLCValidatorMixin
 

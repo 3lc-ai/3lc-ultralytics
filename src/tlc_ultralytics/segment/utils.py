@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import tlc
-
+from collections.abc import Iterable
 from pathlib import Path
 
-from collections.abc import Iterable
-from tlc_ultralytics.utils import check_tlc_dataset
+import tlc
 from ultralytics.data.utils import check_det_dataset
+
+from tlc_ultralytics.utils import check_tlc_dataset
 
 
 def tlc_check_seg_dataset(

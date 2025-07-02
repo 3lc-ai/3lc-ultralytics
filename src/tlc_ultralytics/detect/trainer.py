@@ -5,10 +5,9 @@ from functools import partial
 import ultralytics
 from ultralytics.models.yolo.detect import DetectionTrainer
 
-from tlc_ultralytics.overrides import build_dataloader
 from tlc_ultralytics.constants import (
-    IMAGE_COLUMN_NAME,
     DETECTION_LABEL_COLUMN_NAME,
+    IMAGE_COLUMN_NAME,
 )
 from tlc_ultralytics.detect.utils import (
     build_tlc_yolo_dataset,
@@ -16,6 +15,7 @@ from tlc_ultralytics.detect.utils import (
 )
 from tlc_ultralytics.detect.validator import TLCDetectionValidator
 from tlc_ultralytics.engine.trainer import TLCTrainerMixin
+from tlc_ultralytics.overrides import build_dataloader
 from tlc_ultralytics.utils import create_sampler
 
 

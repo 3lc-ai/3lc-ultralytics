@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import tlc
+from collections.abc import Iterable
 
+import tlc
 from ultralytics.models import yolo
 from ultralytics.models.yolo.model import YOLO as YOLOBase
 from ultralytics.nn.tasks import ClassificationModel, DetectionModel, SegmentationModel
@@ -19,8 +20,6 @@ from tlc_ultralytics.segment import (
 )
 from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import check_tlc_version, reduce_embeddings
-
-from collections.abc import Iterable
 
 
 class YOLO(YOLOBase):

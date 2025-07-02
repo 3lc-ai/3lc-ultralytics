@@ -2,9 +2,9 @@ import numpy as np
 import tlc
 import torch
 from tlc.client.data_format import InstanceSegmentationDict
-
 from ultralytics.models.yolo.segment.val import SegmentationValidator
 from ultralytics.utils import ops
+
 from tlc_ultralytics.constants import (
     IMAGE_COLUMN_NAME,
     SEGMENTATION_LABEL_COLUMN_NAME,
