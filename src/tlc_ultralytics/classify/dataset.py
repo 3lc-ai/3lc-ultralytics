@@ -12,7 +12,7 @@ from typing import Any
 
 
 class _DummyImageFolder:
-    def __init__(self, root: tlc.Table, allow_empty: bool = False, samples: list[tuple[str, int]] = None):
+    def __init__(self, root: tlc.Table, allow_empty: bool = False, samples: list[tuple[str, int]] | None = None):
         self._root = root
         self._samples = samples
 

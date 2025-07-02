@@ -82,7 +82,7 @@ class TLCValidatorMixin(BaseValidator):
             if self._settings.project_name:
                 project_name = self._settings.project_name
             else:
-                first_split = list(self.data.keys())[0]
+                first_split = next(iter(self.data.keys()))
                 project_name = self.data[first_split].project_name
                 LOGGER.info(f"{TLC_COLORSTR}Using project name '{project_name}' from the provided table to create run.")
 

@@ -80,7 +80,7 @@ def check_seg_table(table: tlc.Table, image_column_name: str, label_column_name:
         )
 
     except AssertionError as e:
-        msg = f"Schema validation failed for '{label_column_name}' column in table with URL {table.url}. {str(e)}"
+        msg = f"Schema validation failed for '{label_column_name}' column in table with URL {table.url}. {e!s}"
         raise ValueError(msg) from e
 
     # Check that the table data is compatible with its schema
@@ -92,5 +92,5 @@ def check_seg_table(table: tlc.Table, image_column_name: str, label_column_name:
         )
 
     except (AssertionError, ValueError) as e:
-        msg = f"Data validation failed for {label_column_name} column in table with URL {table.url}. {str(e)}"
+        msg = f"Data validation failed for {label_column_name} column in table with URL {table.url}. {e!s}"
         raise ValueError(msg) from e
