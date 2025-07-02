@@ -1,8 +1,7 @@
 # This file is based on the original file in ultralytics/utils/loss.py
 
 import torch
-
-from ultralytics.utils.loss import v8DetectionLoss, BboxLoss
+from ultralytics.utils.loss import BboxLoss, v8DetectionLoss
 from ultralytics.utils.metrics import bbox_iou
 from ultralytics.utils.tal import bbox2dist, make_anchors
 

@@ -1,5 +1,4 @@
 import tlc
-
 from ultralytics.utils import colorstr
 
 # Column names

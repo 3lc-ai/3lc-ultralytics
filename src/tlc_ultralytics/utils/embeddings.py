@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import tlc
-
 from ultralytics.utils import LOGGER
+
 from tlc_ultralytics.constants import TLC_COLORSTR
 
 

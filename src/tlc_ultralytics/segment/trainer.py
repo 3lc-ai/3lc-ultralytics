@@ -1,10 +1,11 @@
 from copy import deepcopy
 
 from ultralytics.models.yolo.segment.train import SegmentationTrainer
+
 from tlc_ultralytics.constants import SEGMENTATION_LABEL_COLUMN_NAME
 from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
-from tlc_ultralytics.segment.validator import TLCSegmentationValidator
 from tlc_ultralytics.segment.utils import tlc_check_seg_dataset
+from tlc_ultralytics.segment.validator import TLCSegmentationValidator
 
 
 class TLCSegmentationTrainer(SegmentationTrainer, TLCDetectionTrainer):

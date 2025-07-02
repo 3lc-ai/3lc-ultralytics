@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import tlc
-
 from ultralytics.engine.trainer import BaseTrainer
-from tlc_ultralytics.settings import Settings
-from tlc_ultralytics.constants import TLC_COLORSTR, DEFAULT_TRAIN_RUN_DESCRIPTION
-from tlc_ultralytics.utils import reduce_embeddings
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
 from ultralytics.utils.metrics import smooth
+
+from tlc_ultralytics.constants import DEFAULT_TRAIN_RUN_DESCRIPTION, TLC_COLORSTR
 from tlc_ultralytics.engine.utils import _complete_label_column_name, _restore_random_state
+from tlc_ultralytics.settings import Settings
+from tlc_ultralytics.utils import reduce_embeddings
 
 
 class TLCTrainerMixin(BaseTrainer):

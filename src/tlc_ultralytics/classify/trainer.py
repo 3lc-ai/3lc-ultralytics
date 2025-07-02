@@ -5,14 +5,14 @@ from functools import partial
 import ultralytics
 from ultralytics.models import yolo
 
-from tlc_ultralytics.constants import (
-    IMAGE_COLUMN_NAME,
-    CLASSIFY_LABEL_COLUMN_NAME,
-)
 from tlc_ultralytics.classify.dataset import TLCClassificationDataset
-from tlc_ultralytics.engine.trainer import TLCTrainerMixin
-from tlc_ultralytics.classify.validator import TLCClassificationValidator
 from tlc_ultralytics.classify.utils import tlc_check_cls_dataset
+from tlc_ultralytics.classify.validator import TLCClassificationValidator
+from tlc_ultralytics.constants import (
+    CLASSIFY_LABEL_COLUMN_NAME,
+    IMAGE_COLUMN_NAME,
+)
+from tlc_ultralytics.engine.trainer import TLCTrainerMixin
 from tlc_ultralytics.overrides import build_dataloader
 from tlc_ultralytics.utils import create_sampler
 

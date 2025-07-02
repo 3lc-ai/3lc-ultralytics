@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 
 import tlc
@@ -7,12 +8,10 @@ from tlc.client.torch.metrics.metrics_collectors.bounding_box_metrics_collector 
     _TLCPredictedBoundingBox,
     _TLCPredictedBoundingBoxes,
 )
-
 from ultralytics.data.utils import check_det_dataset
+
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
 from tlc_ultralytics.utils import check_tlc_dataset
-
-from collections.abc import Iterable
 
 
 def tlc_check_det_dataset(

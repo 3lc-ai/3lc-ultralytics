@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from typing import Literal
+
 import tlc
 import torch
-from typing import Literal
 
 from tlc_ultralytics.settings import Settings
 

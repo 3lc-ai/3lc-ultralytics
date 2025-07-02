@@ -1,12 +1,11 @@
 from __future__ import annotations
+
 from multiprocessing.pool import ThreadPool
+from typing import Any
 
 import tlc
-
 from ultralytics.data.utils import verify_image
-from ultralytics.utils import LOGGER, TQDM, colorstr, NUM_THREADS
-
-from typing import Any
+from ultralytics.utils import LOGGER, NUM_THREADS, TQDM, colorstr
 
 
 # Responsible for any generic 3LC dataset handling, such as scanning, caching and adding example ids to each sample

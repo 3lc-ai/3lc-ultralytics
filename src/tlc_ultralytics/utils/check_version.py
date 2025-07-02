@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import tlc
-
 from packaging import version
 
 from tlc_ultralytics.constants import TLC_REQUIRED_VERSION

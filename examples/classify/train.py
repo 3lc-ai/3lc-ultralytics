@@ -1,4 +1,4 @@
-from tlc_ultralytics import Settings, YOLO
+from tlc_ultralytics import YOLO, Settings
 
 if __name__ == "__main__":
     model = YOLO("yolo11n-cls.pt")

@@ -1,8 +1,7 @@
-import ultralytics
-
 from typing import Optional
-from torch.utils.data import Sampler
 
+import ultralytics
+from torch.utils.data import Sampler
 from ultralytics.data.build import InfiniteDataLoader
 from ultralytics.data.build import build_dataloader as build_dataloader_ultralytics
 
