@@ -1,9 +1,10 @@
 from __future__ import annotations
+from multiprocessing.pool import ThreadPool
 
 import tlc
 
 from ultralytics.data.utils import verify_image
-from ultralytics.utils import LOGGER, TQDM, colorstr
+from ultralytics.utils import LOGGER, TQDM, colorstr, NUM_THREADS
 
 from typing import Any
 
@@ -60,46 +61,51 @@ class TLCDatasetMixin:
         """Get the rows from the table and return a list of rows, excluding zero weight samples and samples with
         problematic images.
 
-        :return: A list of example ids, image paths and labels.
+        :return: A list of image paths and labels.
         """
-
         im_files, labels = [], []
+        verified_count, corrupt_count, excluded, msgs = 0, 0, 0, []
 
-        nf, nc, excluded, msgs = 0, 0, 0, []
         colored_prefix = colorstr(self.prefix + ":")
         desc = f"{colored_prefix} Preparing data from {self.table.url.to_str()}"
-        pbar = TQDM(enumerate(self.table.table_rows), desc=desc, total=len(self.table))
-
         weight_column_name = self.table.weights_column_name
 
-        for example_id, row in pbar:
-            if self._exclude_zero and row.get(weight_column_name, 1) == 0:
-                excluded += 1
-                continue
+        image_paths = [
+            self._absolutize_image_url(row[self._image_column_name], self.table.url) for row in self.table.table_rows
+        ]
 
-            im_file = self._absolutize_image_url(row[self._image_column_name], self.table.url)
+        image_iterator = (((im_file, None), "") for im_file in image_paths)
 
-            (im_file, _), nf_f, nc_f, msg = verify_image(((im_file, None), ""))
+        with ThreadPool(NUM_THREADS) as pool:
+            verified_count, corrupt_count, excluded_count, msgs = 0, 0, 0, []
+            results = pool.imap(func=verify_image, iterable=image_iterator)
+            iterator = zip(enumerate(self.table.table_rows), results)
+            pbar = TQDM(iterator, desc=desc, total=len(image_paths))
 
-            nf += nf_f
-            nc += nc_f
+            for (example_id, row), ((im_file, _), verified, corrupt, msg) in pbar:
+                # Skip zero-weight rows if enabled
+                if self._exclude_zero and row.get(weight_column_name, 1) == 0:
+                    excluded_count += 1
+                else:
+                    if verified:
+                        im_files.append(im_file)
+                        labels.append(self._get_label_from_row(im_file, row, example_id))
+                    if msg:
+                        msgs.append(msg)
 
-            if nc_f:
-                msgs.append(msg)
-                continue
+                    verified_count += verified
+                    corrupt_count += corrupt
 
-            im_files.append(im_file)
-            labels.append(self._get_label_from_row(im_file, row, example_id))
+                exclude_str = f" {excluded_count} excluded" if excluded_count > 0 else ""
+                pbar.desc = f"{desc} {verified_count} images, {corrupt_count} corrupt{exclude_str}"
 
-            exclude_str = f" {excluded} excluded" if excluded > 0 else ""
-            pbar.desc = f"{desc} {nf} images, {nc} corrupt{exclude_str}"
-
-        pbar.close()
+            pbar.close()
 
         if excluded > 0:
-            percentage_excluded = excluded / len(self.table) * 100
+            percentage_excluded = excluded_count / len(self.table) * 100
             LOGGER.info(
-                f"{colored_prefix} Excluded {excluded} ({percentage_excluded:.2f}% of the table) zero-weight rows."
+                f"{colored_prefix} Excluded {excluded_count} ({percentage_excluded:.2f}% of the table) "
+                "zero-weight rows."
             )
 
         if msgs:
@@ -112,11 +118,12 @@ class TLCDatasetMixin:
             if truncated:
                 msgs_str += f"\n... (showing first 10 of {len(msgs)} messages)"
 
-            percentage_corrupt = nc / (len(self.table) - excluded) * 100
+            percentage_corrupt = corrupt_count / (len(self.table) - excluded) * 100
 
-            verb = "is" if nc == 1 else "are"
+            verb = "is" if corrupt_count == 1 else "are"
+            plural = "s" if corrupt_count != 1 else ""
             LOGGER.warning(
-                f"{colored_prefix} There {verb} {nc} ({percentage_corrupt:.2f}%) corrupt image{'' if nc == 1 else 's'}:"
+                f"{colored_prefix} There {verb} {corrupt_count} ({percentage_corrupt:.2f}%) corrupt image{plural}:"
                 f"\n{msgs_str}"
             )
 
