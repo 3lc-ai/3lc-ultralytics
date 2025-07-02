@@ -77,34 +77,35 @@ class TLCDatasetMixin:
         image_iterator = (((im_file, None), "") for im_file in image_paths)
 
         with ThreadPool(NUM_THREADS) as pool:
-            verified_count, corrupt_count, excluded, msgs = 0, 0, 0, []
+            verified_count, corrupt_count, excluded_count, msgs = 0, 0, 0, []
             results = pool.imap(func=verify_image, iterable=image_iterator)
             iterator = zip(enumerate(self.table.table_rows), results)
             pbar = TQDM(iterator, desc=desc, total=len(image_paths))
 
-            for (example_id, row), (im_file, verified_f, corrupt_f, msg) in pbar:
+            for (example_id, row), (im_file, verified, corrupt, msg) in pbar:
                 # Skip zero-weight rows if enabled
                 if self._exclude_zero and row.get(weight_column_name, 1) == 0:
-                    excluded += 1
+                    excluded_count += 1
                 else:
-                    if verified_f:
+                    if verified:
                         im_files.append(im_file[0])
                         labels.append(self._get_label_from_row(im_file, row, example_id))
                     if msg:
                         msgs.append(msg)
 
-                    verified_count += verified_f
-                    corrupt_count += corrupt_f
+                    verified_count += verified
+                    corrupt_count += corrupt
 
-                exclude_str = f" {excluded} excluded" if excluded > 0 else ""
+                exclude_str = f" {excluded_count} excluded" if excluded_count > 0 else ""
                 pbar.desc = f"{desc} {verified_count} images, {corrupt_count} corrupt{exclude_str}"
 
             pbar.close()
 
         if excluded > 0:
-            percentage_excluded = excluded / len(self.table) * 100
+            percentage_excluded = excluded_count / len(self.table) * 100
             LOGGER.info(
-                f"{colored_prefix} Excluded {excluded} ({percentage_excluded:.2f}% of the table) zero-weight rows."
+                f"{colored_prefix} Excluded {excluded_count} ({percentage_excluded:.2f}% of the table) "
+                "zero-weight rows."
             )
 
         if msgs:
