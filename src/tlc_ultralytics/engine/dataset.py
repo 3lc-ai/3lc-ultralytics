@@ -61,7 +61,7 @@ class TLCDatasetMixin:
         """Get the rows from the table and return a list of rows, excluding zero weight samples and samples with
         problematic images.
 
-        :return: A list of example ids, image paths and labels.
+        :return: A list of image paths and labels.
         """
         im_files, labels = [], []
         verified_count, corrupt_count, excluded, msgs = 0, 0, 0, []
@@ -82,13 +82,13 @@ class TLCDatasetMixin:
             iterator = zip(enumerate(self.table.table_rows), results)
             pbar = TQDM(iterator, desc=desc, total=len(image_paths))
 
-            for (example_id, row), (im_file, verified, corrupt, msg) in pbar:
+            for (example_id, row), ((im_file, _), verified, corrupt, msg) in pbar:
                 # Skip zero-weight rows if enabled
                 if self._exclude_zero and row.get(weight_column_name, 1) == 0:
                     excluded_count += 1
                 else:
                     if verified:
-                        im_files.append(im_file[0])
+                        im_files.append(im_file)
                         labels.append(self._get_label_from_row(im_file, row, example_id))
                     if msg:
                         msgs.append(msg)
