@@ -1038,7 +1038,7 @@ def test_complete_label_column_name() -> None:
 @pytest.mark.parametrize("mode", ["train", "val"])
 def test_dataset_determinism(mode) -> None:
     """Test that datasets are deterministic with the same seed across separate processes."""
-    from dataset_determinism import create_dataset_samples, _compare_dataset_rows
+    from dataset_determinism import _compare_dataset_rows, create_dataset_samples
 
     rows_3lc, rows_ultralytics = create_dataset_samples(mode)
 
@@ -1060,7 +1060,7 @@ def test_dataset_determinism_with_random_tracking(mode) -> None:
     import sys
     import tempfile
 
-    with tempfile.NamedTemporaryFile(suffix=".json", delete=True) as temp_file:
+    with tempfile.NamedTemporaryFile(suffix=".json", dir=TMP, delete=True) as temp_file:
         output_file = temp_file.name
         cmd = [
             sys.executable,
@@ -1068,7 +1068,7 @@ def test_dataset_determinism_with_random_tracking(mode) -> None:
             "from dataset_determinism import create_dataset_samples_with_tracking;"
             f"create_dataset_samples_with_tracking('{mode}', '{output_file}')",
         ]
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, cwd=str(Path(__file__).parent))
 
         with open(output_file) as f:
             tracking_result = json.load(f)
