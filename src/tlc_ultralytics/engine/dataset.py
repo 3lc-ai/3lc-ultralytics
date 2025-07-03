@@ -186,8 +186,13 @@ class TLCDatasetMixin:
             example_ids = self._get_example_ids_from_table(image_paths)
             self._save_cached_example_ids(cache_path, example_ids)
 
-        im_files = [image_paths[i] for i in example_ids]
-        labels = [self._get_label_from_row(im_file, self.table.table_rows[i], i) for i, im_file in enumerate(im_files)]
+        im_files, labels = [], []
+        for example_id in example_ids:
+            im_file = image_paths[example_id]
+            im_files.append(im_file)
+
+            row = self.table.table_rows[example_id]
+            labels.append(self._get_label_from_row(im_file, row, example_id))
 
         return im_files, labels
 

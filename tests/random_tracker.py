@@ -16,7 +16,6 @@ from typing import Any, Union, cast
 
 import numpy as np
 import torch
-
 from torch import _C
 
 # Store the original random functions

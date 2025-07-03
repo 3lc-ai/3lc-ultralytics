@@ -1038,7 +1038,7 @@ def test_complete_label_column_name() -> None:
 @pytest.mark.parametrize("mode", ["train", "val"])
 def test_dataset_determinism(mode) -> None:
     """Test that datasets are deterministic with the same seed across separate processes."""
-    from dataset_determinism import create_dataset_samples, _compare_dataset_rows
+    from dataset_determinism import _compare_dataset_rows, create_dataset_samples
 
     rows_3lc, rows_ultralytics = create_dataset_samples(mode)
 

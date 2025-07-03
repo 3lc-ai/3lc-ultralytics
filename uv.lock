@@ -189,9 +189,6 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
-local = [
-    { name = "3lc" },
-]
 
 [package.metadata]
 requires-dist = [
@@ -206,7 +203,6 @@ dev = [
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "ruff", specifier = ">=0.11.11" },
 ]
-local = [{ name = "3lc", editable = "../tlc-monorepo" }]
 
 [[package]]
 name = "aiobotocore"
