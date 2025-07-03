@@ -1081,6 +1081,8 @@ def test_dataset_determinism_with_random_tracking(mode) -> None:
 @pytest.mark.parametrize("task", ["classify", "detect", "segment"])
 def test_dataset_cache(task) -> None:
     """Test that the dataset cache is used correctly."""
+    from dataset_determinism import _compare_dataset_rows
+
     # Create a table to use
     settings = Settings(project_name=f"test_dataset_cache_{task}")
     trainer = TASK2TRAINER[task](
@@ -1106,8 +1108,7 @@ def test_dataset_cache(task) -> None:
     # Check that the dataset has the same rows
     assert len(dataset_first) == len(dataset_second), "Number of rows should be the same"
     for row_first, row_second in zip(dataset_first, dataset_second):
-        assert row_first["im_file"] == row_second["im_file"], "Rows should be the same"
-        assert row_first["example_id"] == row_second["example_id"], "Rows should have the same example_id"
+        _compare_dataset_rows(row_second, row_first)
 
     cache_paths = list(Path(trainer.data["train"].url.to_str()).glob("yolo_*.json"))
     assert len(cache_paths) == 1, "There should still be one cache file"
@@ -1115,7 +1116,7 @@ def test_dataset_cache(task) -> None:
     cache_path = cache_paths[0]
     cache_data = json.loads(cache_path.read_text())
     assert cache_data["version"] == 1, "Cache version should be 1"
-    assert cache_data["ranges"] == [{"start": 0, "end": 3}], "Cache ranges should be the same"
+    assert cache_data["ranges"] == [{"start": 0, "end": len(dataset_first) - 1}], "Cache ranges should be the same"
 
 
 # HELPERS
