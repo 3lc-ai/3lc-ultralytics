@@ -4,6 +4,8 @@ This module contains functions for testing that datasets are deterministic
 with the same seed across separate processes.
 """
 
+from __future__ import annotations
+
 import json
 from typing import Any
 
