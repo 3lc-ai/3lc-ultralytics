@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from multiprocessing.pool import ThreadPool
 from typing import Any
 
@@ -56,22 +58,150 @@ class TLCDatasetMixin:
     def _index_to_example_id(self, index: int) -> int:
         raise NotImplementedError("Subclasses must implement this method")
 
-    def _get_rows_from_table(self) -> tuple[list[int], list[str], list[Any]]:
-        """Get the rows from the table and return a list of rows, excluding zero weight samples and samples with
-        problematic images.
+    def _get_cache_key(self, image_paths: list[str], exclude_zero: bool) -> str:
+        """Generate a cache key based on the hash of all image paths and whether to exclude zero weight samples.
+
+        :param image_paths: List of absolute image paths
+        :param exclude_zero: Whether to exclude zero weight samples
+        :return: Cache key string
+        """
+        # Sort paths to ensure consistent hash regardless of order
+        sorted_paths = sorted(image_paths)
+
+        # Create hash of all paths concatenated
+        paths_str = "".join(sorted_paths)
+
+        # Add exclude_zero flag to the hash
+        paths_str += f"exclude_zero={exclude_zero}"
+        return hashlib.md5(paths_str.encode()).hexdigest()
+
+    def _get_cache_path(self, table_url: tlc.Url, cache_key: str) -> tlc.Url:
+        """Get the URL to the cache file, in the same directory as the table.
+
+        :param table_url: The table URL to use for the cache path
+        :param cache_key: The cache key to use for the cache path
+        :return: The URL to the cache file
+        """
+        return table_url / f"yolo_{cache_key}.json"
+
+    def _encode_example_ids(self, example_ids: list[int]) -> list[dict[str, int]]:
+        """Encode a list of example IDs into ranges for efficient storage.
+
+        :param example_ids: List of example IDs (assumed to be sorted)
+        :return: List of range dictionaries with 'start' and 'end' keys
+        """
+        if not example_ids:
+            return []
+
+        ranges = []
+        start = example_ids[0]
+        end = start
+
+        for i in range(1, len(example_ids)):
+            if example_ids[i] == end + 1:
+                # Consecutive, extend current range
+                end = example_ids[i]
+            else:
+                # Gap found, save current range and start new one
+                ranges.append({"start": start, "end": end})
+                start = example_ids[i]
+                end = start
+
+        # Don't forget the last range
+        ranges.append({"start": start, "end": end})
+
+        return ranges
+
+    def _decode_example_ids(self, ranges: list[dict[str, int]]) -> list[int]:
+        """Decode ranges back into a list of example IDs.
+
+        :param ranges: List of range dictionaries with 'start' and 'end' keys
+        :return: List of example IDs
+        """
+        example_ids = []
+        for range_dict in ranges:
+            start = range_dict["start"]
+            end = range_dict["end"]
+            example_ids.extend(range(start, end + 1))
+        return example_ids
+
+    def _load_cached_example_ids(self, cache_url: tlc.Url) -> list[int] | None:
+        """Load the cached example ids from the cache file.
+
+        :param cache_path: The path to the cache file
+        :return: A list of example ids
+        """
+        try:
+            cache_data = json.loads(cache_url.read(mode="s"))
+
+            # Check cache version
+            if cache_data.get("version") != 1:
+                LOGGER.info("Cache version mismatch, regenerating cache.")
+                return None
+
+            if "ranges" in cache_data:
+                return self._decode_example_ids(cache_data["ranges"])
+            else:
+                LOGGER.warning("Cache file missing ranges field, regenerating cache.")
+                return None
+
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            LOGGER.warning(f"Failed to load cache: {e}, regenerating cache.")
+            return None
+
+    def _save_cached_example_ids(self, cache_url: tlc.Url, example_ids: list[int]):
+        """Save the example ids to the cache file.
+
+        :param cache_url: The URL to the cache file
+        :param example_ids: A list of example ids
+        """
+        ranges = self._encode_example_ids(example_ids)
+
+        content = {
+            "version": 1,
+            "ranges": ranges,
+        }
+        cache_url.write(json.dumps(content, indent=2), mode="s")
+
+    def _get_rows_from_table(self) -> tuple[list[str], list[Any]]:
+        """Get the rows from the table and return a list of example ids, excluding zero weight and corrupt images.
+        Rely on the cache to avoid recomputing example ids if possible.
 
         :return: A list of image paths and labels.
         """
-        im_files, labels = [], []
-        verified_count, corrupt_count, excluded, msgs = 0, 0, 0, []
-
-        colored_prefix = colorstr(self.prefix + ":")
-        desc = f"{colored_prefix} Preparing data from {self.table.url.to_str()}"
-        weight_column_name = self.table.weights_column_name
 
         image_paths = [
             self._absolutize_image_url(row[self._image_column_name], self.table.url) for row in self.table.table_rows
         ]
+
+        cache_key = self._get_cache_key(image_paths, self._exclude_zero)
+        cache_path = self._get_cache_path(self.table.url, cache_key)
+
+        example_ids = self._load_cached_example_ids(cache_path) if cache_path.exists() else None
+
+        if example_ids is not None:
+            LOGGER.info(f"{colorstr(self.prefix)}: Loaded {len(example_ids)} samples from cache.")
+
+        if example_ids is None:
+            example_ids = self._get_example_ids_from_table(image_paths)
+            self._save_cached_example_ids(cache_path, example_ids)
+
+        im_files = [image_paths[i] for i in example_ids]
+        labels = [self._get_label_from_row(im_file, self.table.table_rows[i], i) for i, im_file in enumerate(im_files)]
+
+        return im_files, labels
+
+    def _get_example_ids_from_table(self, image_paths: list[str]) -> list[int]:
+        """Get the example ids to use from the table, excluding zero weight samples and samples with problematic images.
+
+        :param image_paths: List of absolute image paths
+        :return: A list of example ids
+        """
+        example_ids = []
+        verified_count, corrupt_count, excluded_count, msgs = 0, 0, 0, []
+        colored_prefix = colorstr(self.prefix + ":")
+        desc = f"{colored_prefix} Preparing data from {self.table.url.to_str()}"
+        weight_column_name = self.table.weights_column_name
 
         image_iterator = (((im_file, None), "") for im_file in image_paths)
 
@@ -81,14 +211,13 @@ class TLCDatasetMixin:
             iterator = zip(enumerate(self.table.table_rows), results)
             pbar = TQDM(iterator, desc=desc, total=len(image_paths))
 
-            for (example_id, row), ((im_file, _), verified, corrupt, msg) in pbar:
+            for (example_id, row), (_, verified, corrupt, msg) in pbar:
                 # Skip zero-weight rows if enabled
                 if self._exclude_zero and row.get(weight_column_name, 1) == 0:
                     excluded_count += 1
                 else:
                     if verified:
-                        im_files.append(im_file)
-                        labels.append(self._get_label_from_row(im_file, row, example_id))
+                        example_ids.append(example_id)
                     if msg:
                         msgs.append(msg)
 
@@ -100,7 +229,7 @@ class TLCDatasetMixin:
 
             pbar.close()
 
-        if excluded > 0:
+        if excluded_count > 0:
             percentage_excluded = excluded_count / len(self.table) * 100
             LOGGER.info(
                 f"{colored_prefix} Excluded {excluded_count} ({percentage_excluded:.2f}% of the table) "
@@ -117,7 +246,7 @@ class TLCDatasetMixin:
             if truncated:
                 msgs_str += f"\n... (showing first 10 of {len(msgs)} messages)"
 
-            percentage_corrupt = corrupt_count / (len(self.table) - excluded) * 100
+            percentage_corrupt = corrupt_count / (len(self.table) - excluded_count) * 100
 
             verb = "is" if corrupt_count == 1 else "are"
             plural = "s" if corrupt_count != 1 else ""
@@ -126,4 +255,4 @@ class TLCDatasetMixin:
                 f"\n{msgs_str}"
             )
 
-        return im_files, labels
+        return example_ids
