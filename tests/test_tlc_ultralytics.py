@@ -63,6 +63,7 @@ TASK2PREDICTED_LABEL_COLUMN_NAME = {
     "classify": "predicted",
     "segment": "segmentations_predicted.instance_properties.label",
 }
+TASK2TRAINER = {"detect": TLCDetectionTrainer, "classify": TLCClassificationTrainer, "segment": TLCSegmentationTrainer}
 
 try:
     import umap  # noqa: F401
@@ -378,7 +379,7 @@ def test_invalid_tables() -> None:
 def test_table_resolving() -> None:
     # Check that repeated runs with 'data' resolve to the same tables, or the latest
     settings = Settings(project_name="test_table_resolving")
-    trainer = TLCDetectionTrainer(
+    trainer = TASK2TRAINER["detect"](
         overrides={"data": TASK2DATASET["detect"], "model": TASK2MODEL["detect"], "settings": settings},
     )
 
@@ -392,14 +393,14 @@ def test_table_resolving() -> None:
     )
 
     # A new trainer should now use the edited table since it gets latest
-    new_trainer = TLCDetectionTrainer(
+    new_trainer = TASK2TRAINER["detect"](
         overrides={"data": TASK2DATASET["detect"], "model": TASK2MODEL["detect"], "settings": settings},
     )
     assert new_trainer.data["train"].url == train_table_edited.url, "Table not resolved correctly"
 
     # A new trainer should not be able to take the tables directly
     tables = {"train": train_table_edited.url, "val": new_trainer.data.get("val") or new_trainer.data["test"].url}
-    trainer_from_tables = TLCDetectionTrainer(
+    trainer_from_tables = TASK2TRAINER["detect"](
         overrides={
             "tables": tables,
             "model": TASK2MODEL["detect"],
@@ -413,7 +414,7 @@ def test_table_resolving() -> None:
 
 def test_seg_table_checker() -> None:
     settings = Settings(project_name="test_seg_table_checker")
-    trainer = TLCSegmentationTrainer(
+    trainer = TASK2TRAINER["segment"](
         overrides={"data": TASK2DATASET["segment"], "model": TASK2MODEL["segment"], "settings": settings}
     )
 
@@ -441,7 +442,7 @@ def test_seg_table_checker() -> None:
 def test_sampling_weights() -> None:
     # Test that sampling weights are correctly applied, with worker processes enabled
     settings = Settings(project_name="test_sampling_weights", sampling_weights=True)
-    trainer = TLCDetectionTrainer(
+    trainer = TASK2TRAINER["detect"](
         overrides={
             "data": TASK2DATASET["detect"],
             "model": TASK2MODEL["detect"],
@@ -484,7 +485,7 @@ def test_sampling_weights() -> None:
 def test_exclude_zero_weight_training() -> None:
     # Test that sampling weights are correctly applied, with worker processes enabled
     settings = Settings(project_name="test_exclude_zero_weight_training", exclude_zero_weight_training=True)
-    trainer = TLCDetectionTrainer(
+    trainer = TASK2TRAINER["detect"](
         overrides={
             "data": TASK2DATASET["detect"],
             "model": TASK2MODEL["detect"],
@@ -513,13 +514,11 @@ def test_exclude_zero_weight_training() -> None:
     assert len(sampled_example_ids) == len(edited_table) - 1, "Expected one sample to be excluded"
 
 
-@pytest.mark.parametrize(
-    "task,trainer_class", [("detect", TLCDetectionTrainer), ("classify", TLCClassificationTrainer)]
-)
-def test_exclude_zero_weight_collection(task, trainer_class) -> None:
+@pytest.mark.parametrize("task", ["detect", "classify", "segment"])
+def test_exclude_zero_weight_collection(task) -> None:
     # Test that sampling weights are correctly applied during metrics collection
     settings = Settings(project_name=f"test_sampling_weights_collection_{task}", exclude_zero_weight_collection=True)
-    trainer = trainer_class(
+    trainer = TASK2TRAINER[task](
         overrides={
             "model": TASK2MODEL[task],
             "data": TASK2DATASET[task],
@@ -1078,12 +1077,14 @@ def test_dataset_determinism_with_random_tracking(mode) -> None:
             "Number of batches should be the same"
         )
 
-def test_dataset_cache() -> None:
+
+@pytest.mark.parametrize("task", ["classify", "detect", "segment"])
+def test_dataset_cache(task) -> None:
     """Test that the dataset cache is used correctly."""
     # Create a table to use
-    settings = Settings(project_name="test_dataset_cache_detect")
-    trainer = TLCDetectionTrainer(
-        overrides={"data": TASK2DATASET["detect"], "model": TASK2MODEL["detect"], "settings": settings},
+    settings = Settings(project_name=f"test_dataset_cache_{task}")
+    trainer = TASK2TRAINER[task](
+        overrides={"data": TASK2DATASET[task], "model": TASK2MODEL[task], "settings": settings},
     )
     trainer.model = None
 
