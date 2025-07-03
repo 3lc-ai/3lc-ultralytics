@@ -4,10 +4,13 @@ This module contains functions for testing that datasets are deterministic
 with the same seed across separate processes.
 """
 
+from __future__ import annotations
+
 import json
+from typing import Any
+
 import numpy as np
 import torch
-from typing import Any
 
 
 def _compare_dataset_rows(row_ultralytics: dict[str, Any], row_3lc: dict[str, Any]) -> None:
@@ -40,9 +43,10 @@ def create_dataset_samples(mode: str) -> tuple[list[dict[str, Any]], list[dict[s
         Tuple of (3lc rows, ultralytics rows)
     """
     from test_tlc_ultralytics import TASK2DATASET, TASK2MODEL
+    from ultralytics.models.yolo.detect import DetectionTrainer
+
     from tlc_ultralytics import Settings
     from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
-    from ultralytics.models.yolo.detect import DetectionTrainer
 
     settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}")
     overrides = {
@@ -68,14 +72,14 @@ def create_dataset_samples(mode: str) -> tuple[list[dict[str, Any]], list[dict[s
     return rows_3lc, rows_ultralytics
 
 
-def create_dataset_samples_with_tracking(mode: str, output_file: str = None) -> None:
+def create_dataset_samples_with_tracking(mode: str, output_file: str | None = None) -> None:
     """Create dataset samples with tracking and write JSON result to a file or stdout.
 
     Args:
         mode: Dataset mode ('train' or 'val')
         output_file: Path to the output file. If None, prints to stdout.
     """
-    from random_tracker import enable_tracking, disable_tracking, reset_tracking, get_tracking_info
+    from random_tracker import disable_tracking, enable_tracking, get_tracking_info, reset_tracking
     from test_tlc_ultralytics import TASK2DATASET, TASK2MODEL
 
     # we want to start the tracking here
@@ -83,9 +87,10 @@ def create_dataset_samples_with_tracking(mode: str, output_file: str = None) -> 
     # enable_tracking()
 
     try:
+        from ultralytics.models.yolo.detect import DetectionTrainer
+
         from tlc_ultralytics import Settings
         from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
-        from ultralytics.models.yolo.detect import DetectionTrainer
 
         # but we start it here.
         reset_tracking()

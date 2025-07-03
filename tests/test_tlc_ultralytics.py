@@ -1038,7 +1038,7 @@ def test_complete_label_column_name() -> None:
 @pytest.mark.parametrize("mode", ["train", "val"])
 def test_dataset_determinism(mode) -> None:
     """Test that datasets are deterministic with the same seed across separate processes."""
-    from dataset_determinism import create_dataset_samples, _compare_dataset_rows
+    from dataset_determinism import _compare_dataset_rows, create_dataset_samples
 
     rows_3lc, rows_ultralytics = create_dataset_samples(mode)
 
@@ -1060,7 +1060,7 @@ def test_dataset_determinism_with_random_tracking(mode) -> None:
     import sys
     import tempfile
 
-    with tempfile.NamedTemporaryFile(suffix=".json", delete=True) as temp_file:
+    with tempfile.NamedTemporaryFile(suffix=".json", dir=TMP, delete=True) as temp_file:
         output_file = temp_file.name
         cmd = [
             sys.executable,
@@ -1068,7 +1068,7 @@ def test_dataset_determinism_with_random_tracking(mode) -> None:
             "from dataset_determinism import create_dataset_samples_with_tracking;"
             f"create_dataset_samples_with_tracking('{mode}', '{output_file}')",
         ]
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, cwd=str(Path(__file__).parent))
 
         with open(output_file) as f:
             tracking_result = json.load(f)
@@ -1193,13 +1193,3 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
     table_val = tlc.Table.from_yolo(yolo_dataset_file, "val", if_exists="overwrite")
 
     return yolo_dataset_file, (table_train, table_val)
-
-
-@pytest.fixture(autouse=True, scope="session")
-def cleanup_tmp():
-    """Clean up the TMP directory after all tests are complete."""
-    yield
-    import shutil
-
-    if TMP.exists():
-        shutil.rmtree(TMP)
