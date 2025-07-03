@@ -1,9 +1,10 @@
+import json
 import os
 import pathlib
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import cv2
 import numpy as np
@@ -1077,6 +1078,44 @@ def test_dataset_determinism_with_random_tracking(mode) -> None:
             "Number of batches should be the same"
         )
 
+def test_dataset_cache() -> None:
+    """Test that the dataset cache is used correctly."""
+    # Create a table to use
+    settings = Settings(project_name="test_dataset_cache_detect")
+    trainer = TLCDetectionTrainer(
+        overrides={"data": TASK2DATASET["detect"], "model": TASK2MODEL["detect"], "settings": settings},
+    )
+    trainer.model = None
+
+    # Check that there is no cache
+    cache_paths = list(Path(trainer.data["train"].url.to_str()).glob("yolo_*.json"))
+    assert len(cache_paths) == 0, "There should be no cache files"
+
+    # Get a dataset for the table
+    dataset_first = trainer.build_dataset(trainer.data["train"], mode="val", batch=1)
+
+    cache_paths = list(Path(trainer.data["train"].url.to_str()).glob("yolo_*.json"))
+    assert len(cache_paths) == 1, "There should be one cache file"
+
+    # Get the dataset again, make sure verify_image is not called here
+    with patch("tlc_ultralytics.engine.dataset.verify_image") as verify_image_mock:
+        dataset_second = trainer.build_dataset(trainer.data["train"], mode="val", batch=1)
+        verify_image_mock.assert_not_called()
+
+    # Check that the dataset has the same rows
+    assert len(dataset_first) == len(dataset_second), "Number of rows should be the same"
+    for row_first, row_second in zip(dataset_first, dataset_second):
+        assert row_first["im_file"] == row_second["im_file"], "Rows should be the same"
+        assert row_first["example_id"] == row_second["example_id"], "Rows should have the same example_id"
+
+    cache_paths = list(Path(trainer.data["train"].url.to_str()).glob("yolo_*.json"))
+    assert len(cache_paths) == 1, "There should still be one cache file"
+
+    cache_path = cache_paths[0]
+    cache_data = json.loads(cache_path.read_text())
+    assert cache_data["version"] == 1, "Cache version should be 1"
+    assert cache_data["ranges"] == [{"start": 0, "end": 3}], "Cache ranges should be the same"
+
 
 # HELPERS
 
@@ -1197,9 +1236,15 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
 
 @pytest.fixture(autouse=True, scope="session")
 def cleanup_tmp():
-    """Clean up the TMP directory after all tests are complete."""
-    yield
+    """Clean up the TMP directory before and after all tests are complete."""
     import shutil
 
+    # Clean up before tests
+    if TMP.exists():
+        shutil.rmtree(TMP)
+
+    yield
+
+    # Clean up after tests
     if TMP.exists():
         shutil.rmtree(TMP)
