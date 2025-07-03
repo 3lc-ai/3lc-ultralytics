@@ -1193,13 +1193,3 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
     table_val = tlc.Table.from_yolo(yolo_dataset_file, "val", if_exists="overwrite")
 
     return yolo_dataset_file, (table_train, table_val)
-
-
-@pytest.fixture(autouse=True, scope="session")
-def cleanup_tmp():
-    """Clean up the TMP directory after all tests are complete."""
-    yield
-    import shutil
-
-    if TMP.exists():
-        shutil.rmtree(TMP)
