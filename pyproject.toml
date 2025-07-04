@@ -9,9 +9,8 @@ authors = [
 requires-python = ">=3.9"
 dependencies = [
     "3lc>=2.13.1",
-    "pacmap>=0.7.0",
+    "pacmap>=0.8.0",
     "ultralytics==8.3.146",
-    "setuptools",
 ]
 
 [build]
@@ -38,9 +37,6 @@ dev = [
 
 [tool.uv]
 default-groups = ["dev"]
-constraint-dependencies = [
-    "pacmap==0.7.3", # Otherwise fails to reduce for small datasets in tests
-]
 
 [tool.uv.sources]
 "3lc" = [
