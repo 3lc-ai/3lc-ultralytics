@@ -18,7 +18,7 @@ if [ "$SCRIPT_ARGS" = "lint" ]; then
     uv run -p 3.9 --no-sources --active ruff check .
 elif [ "$SCRIPT_ARGS" = "test" ]; then
     export PYTHONPATH=$PWD/tests
-    uv run -p 3.9 --no-sources --active pytest
+    uv run -p 3.9 --no-sources --active pytest -n auto
 else
     exec $SCRIPT_ARGS
 fi
