@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterator
 from multiprocessing.pool import ThreadPool
 from typing import Any
 
@@ -58,11 +59,10 @@ class TLCDatasetMixin:
     def _index_to_example_id(self, index: int) -> int:
         raise NotImplementedError("Subclasses must implement this method")
 
-    def _get_cache_key(self, image_paths: list[str], exclude_zero: bool) -> str:
-        """Generate a cache key based on the hash of all image paths and whether to exclude zero weight samples.
+    def _get_cache_key(self, image_paths: list[str]) -> str:
+        """Generate a cache key based on the hash of all image paths.
 
         :param image_paths: List of absolute image paths
-        :param exclude_zero: Whether to exclude zero weight samples
         :return: Cache key string
         """
         # Sort paths to ensure consistent hash regardless of order
@@ -70,9 +70,6 @@ class TLCDatasetMixin:
 
         # Create hash of all paths concatenated
         paths_str = "".join(sorted_paths)
-
-        # Add exclude_zero flag to the hash
-        paths_str += f"exclude_zero={exclude_zero}"
         return hashlib.md5(paths_str.encode()).hexdigest()
 
     def _get_cache_path(self, table_url: tlc.Url, cache_key: str) -> tlc.Url:
@@ -126,10 +123,10 @@ class TLCDatasetMixin:
         return example_ids
 
     def _load_cached_example_ids(self, cache_url: tlc.Url) -> list[int] | None:
-        """Load the cached example ids from the cache file.
+        """Load the cached corrupt example ids from the cache file.
 
-        :param cache_path: The path to the cache file
-        :return: A list of example ids
+        :param cache_url: The path to the cache file
+        :return: A list of corrupt example ids, or None if cache is invalid
         """
         try:
             cache_data = json.loads(cache_url.read(mode="s"))
@@ -139,28 +136,31 @@ class TLCDatasetMixin:
                 LOGGER.info("Cache version mismatch, regenerating cache.")
                 return None
 
-            if "ranges" in cache_data:
-                return self._decode_example_ids(cache_data["ranges"])
-            else:
-                LOGGER.warning("Cache file missing ranges field, regenerating cache.")
+            if "corrupt_ranges" not in cache_data:
+                LOGGER.warning("Cache file missing corrupt_ranges field, regenerating cache.")
                 return None
+
+            # Get corrupt example IDs
+            corrupt_example_ids = self._decode_example_ids(cache_data["corrupt_ranges"])
+            return corrupt_example_ids
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             LOGGER.warning(f"Failed to load cache: {e}, regenerating cache.")
             return None
 
-    def _save_cached_example_ids(self, cache_url: tlc.Url, example_ids: list[int]):
-        """Save the example ids to the cache file.
+    def _save_cached_example_ids(self, cache_url: tlc.Url, corrupt_example_ids: list[int]):
+        """Save the corrupt example ids to the cache file.
 
         :param cache_url: The URL to the cache file
-        :param example_ids: A list of example ids
+        :param corrupt_example_ids: A list of corrupt example ids
         """
-        ranges = self._encode_example_ids(example_ids)
+        corrupt_ranges = self._encode_example_ids(corrupt_example_ids)
 
         content = {
             "version": 1,
-            "ranges": ranges,
+            "corrupt_ranges": corrupt_ranges,
         }
+
         cache_url.write(json.dumps(content, indent=2), mode="s")
 
     def _get_rows_from_table(self) -> tuple[list[str], list[Any]]:
@@ -174,17 +174,20 @@ class TLCDatasetMixin:
             self._absolutize_image_url(row[self._image_column_name], self.table.url) for row in self.table.table_rows
         ]
 
-        cache_key = self._get_cache_key(image_paths, self._exclude_zero)
+        cache_key = self._get_cache_key(image_paths)
         cache_path = self._get_cache_path(self.table.url, cache_key)
 
-        example_ids = self._load_cached_example_ids(cache_path) if cache_path.exists() else None
+        corrupt_example_ids = self._load_cached_example_ids(cache_path) if cache_path.exists() else None
 
-        if example_ids is not None:
-            LOGGER.info(f"{colorstr(self.prefix)}: Loaded {len(example_ids)} samples from cache.")
+        if corrupt_example_ids is not None:
+            LOGGER.info(f"{colorstr(self.prefix)}: Loaded cached images.")
 
-        if example_ids is None:
-            example_ids = self._get_example_ids_from_table(image_paths)
-            self._save_cached_example_ids(cache_path, example_ids)
+        if corrupt_example_ids is None:
+            corrupt_example_ids = self._get_corrupt_example_ids_from_table(image_paths)
+            self._save_cached_example_ids(cache_path, corrupt_example_ids)
+
+        # Filter out corrupt and zero-weight example IDs
+        example_ids = self._filter_example_ids(image_paths, corrupt_example_ids)
 
         im_files, labels = [], []
         for example_id in example_ids:
@@ -196,50 +199,69 @@ class TLCDatasetMixin:
 
         return im_files, labels
 
-    def _get_example_ids_from_table(self, image_paths: list[str]) -> list[int]:
-        """Get the example ids to use from the table, excluding zero weight samples and samples with problematic images.
+    def _filter_example_ids(self, image_paths: list[str], corrupt_example_ids: list[int]) -> Iterator[int]:
+        """Filter example IDs to exclude corrupt and zero-weight images.
 
         :param image_paths: List of absolute image paths
-        :return: A list of example ids
+        :param corrupt_example_ids: List of corrupt example IDs
+        :yield: Valid example IDs
         """
-        example_ids = []
-        verified_count, corrupt_count, excluded_count, msgs = 0, 0, 0, []
-        colored_prefix = colorstr(self.prefix + ":")
-        desc = f"{colored_prefix} Preparing data from {self.table.url.to_str()}"
+        corrupt_set = set(corrupt_example_ids)
         weight_column_name = self.table.weights_column_name
 
-        image_iterator = (((im_file, None), "") for im_file in image_paths)
+        excluded_count = 0
 
-        with ThreadPool(NUM_THREADS) as pool:
-            verified_count, corrupt_count, excluded_count, msgs = 0, 0, 0, []
-            results = pool.imap(func=verify_image, iterable=image_iterator)
-            iterator = zip(enumerate(self.table.table_rows), results)
-            pbar = TQDM(iterator, desc=desc, total=len(image_paths))
+        for example_id in range(len(image_paths)):
+            # Skip corrupt images
+            if example_id in corrupt_set:
+                continue
 
-            for (example_id, row), (_, verified, corrupt, msg) in pbar:
-                # Skip zero-weight rows if enabled
-                if self._exclude_zero and row.get(weight_column_name, 1) == 0:
-                    excluded_count += 1
-                else:
-                    if verified:
-                        example_ids.append(example_id)
-                    if msg:
-                        msgs.append(msg)
+            # Skip zero-weight images if exclusion is enabled
+            if self._exclude_zero and self.table.table_rows[example_id].get(weight_column_name, 1) == 0:
+                excluded_count += 1
+                continue
 
-                    verified_count += verified
-                    corrupt_count += corrupt
-
-                exclude_str = f" {excluded_count} excluded" if excluded_count > 0 else ""
-                pbar.desc = f"{desc} {verified_count} images, {corrupt_count} corrupt{exclude_str}"
-
-            pbar.close()
+            yield example_id
 
         if excluded_count > 0:
             percentage_excluded = excluded_count / len(self.table) * 100
+            colored_prefix = colorstr(self.prefix + ":")
             LOGGER.info(
                 f"{colored_prefix} Excluded {excluded_count} ({percentage_excluded:.2f}% of the table) "
                 "zero-weight rows."
             )
+
+    def _get_corrupt_example_ids_from_table(self, image_paths: list[str]) -> list[int]:
+        """Get the corrupt example ids from the table by scanning all images.
+
+        :param image_paths: List of absolute image paths
+        :return: A list of corrupt example ids
+        """
+        corrupt_example_ids = []
+        verified_count, corrupt_count, msgs = 0, 0, []
+        colored_prefix = colorstr(self.prefix + ":")
+        desc = f"{colored_prefix} Preparing data from {self.table.url.to_str()}"
+
+        image_iterator = (((im_file, None), "") for im_file in image_paths)
+
+        with ThreadPool(NUM_THREADS) as pool:
+            results = pool.imap(func=verify_image, iterable=image_iterator)
+            iterator = enumerate(results)
+            pbar = TQDM(iterator, desc=desc, total=len(image_paths))
+
+            for example_id, (_, verified, corrupt, msg) in pbar:
+                if verified:
+                    verified_count += 1
+                elif corrupt:
+                    corrupt_example_ids.append(example_id)
+                    corrupt_count += 1
+
+                if msg:
+                    msgs.append(msg)
+
+                pbar.desc = f"{desc} {verified_count} images, {corrupt_count} corrupt"
+
+            pbar.close()
 
         if msgs:
             # Only take first 10 messages if there are more
@@ -251,7 +273,7 @@ class TLCDatasetMixin:
             if truncated:
                 msgs_str += f"\n... (showing first 10 of {len(msgs)} messages)"
 
-            percentage_corrupt = corrupt_count / (len(self.table) - excluded_count) * 100
+            percentage_corrupt = corrupt_count / len(image_paths) * 100
 
             verb = "is" if corrupt_count == 1 else "are"
             plural = "s" if corrupt_count != 1 else ""
@@ -260,4 +282,4 @@ class TLCDatasetMixin:
                 f"\n{msgs_str}"
             )
 
-        return example_ids
+        return corrupt_example_ids
