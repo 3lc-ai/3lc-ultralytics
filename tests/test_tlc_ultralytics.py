@@ -99,8 +99,6 @@ def test_training(task) -> None:
     settings = Settings(
         collection_epoch_start=1,
         collect_loss=True,
-        image_embeddings_dim=2,
-        image_embeddings_reducer="pacmap",
         project_name=f"test_{task}_project",
         run_name=f"test_{task}",
         run_description=f"Test {task} training",
@@ -152,10 +150,6 @@ def test_training(task) -> None:
         [m.to_pandas() for m in metrics_tables["default_stream"]],
         ignore_index=True,
     )
-
-    embeddings_column_name = f"embeddings_{settings.image_embeddings_reducer}"
-    assert embeddings_column_name in metrics_df.columns, "Expected embeddings column missing"
-    assert len(metrics_df[embeddings_column_name][0]) == settings.image_embeddings_dim, "Embeddings dimension mismatch"
 
     if task == "detect":
         assert "loss" in metrics_df.columns, "Expected loss column to be present, but it is missing"
@@ -325,6 +319,41 @@ def test_metrics_collection_only(task) -> None:
     )
     assert TRAINING_PHASE not in per_class_metrics_df.columns, "Expected no training phase column"
     assert tlc.EPOCH not in per_class_metrics_df.columns, "Expected no epoch column"
+
+
+def test_embeddings_collection() -> None:
+    settings = Settings(
+        project_name="test_embeddings_collection_project",
+        run_name="test_embeddings_collection_run",
+        image_embeddings_dim=2,
+    )
+
+    overrides = {
+        "batch": 8,
+        "device": "cpu",
+        "workers": 0,
+    }
+
+    model = TLCYOLO(TASK2MODEL["detect"])
+    model.collect(data="coco128.yaml", splits=("train",), settings=settings, **overrides)
+
+    run = _get_run_from_settings(settings)
+    assert len(run.metrics_tables) == 2, "Expected 2 metrics tables to be written"
+    assert any(isinstance(metrics_table, tlc.PaCMAPTable) for metrics_table in run.metrics_tables), (
+        "Expected a PaCMAPTable"
+    )
+
+    embeddings_table = next(
+        metrics_table for metrics_table in run.metrics_tables if isinstance(metrics_table, tlc.PaCMAPTable)
+    )
+    assert "embeddings_pacmap" in embeddings_table.columns, "Expected embeddings column"
+
+    embeddings_column_arrow = embeddings_table.get_column("embeddings_pacmap")
+    embeddings_column_list = embeddings_column_arrow.tolist()
+
+    assert all(len(embedding) == settings.image_embeddings_dim for embedding in embeddings_column_list), (
+        "Expected embeddings to be of correct dimension"
+    )
 
 
 def test_train_collection_val_only() -> None:
