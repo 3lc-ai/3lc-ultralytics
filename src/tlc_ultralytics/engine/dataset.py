@@ -81,47 +81,6 @@ class TLCDatasetMixin:
         """
         return table_url / f"yolo_{cache_key}.json"
 
-    def _encode_example_ids(self, example_ids: list[int]) -> list[dict[str, int]]:
-        """Encode a list of example IDs into ranges for efficient storage.
-
-        :param example_ids: List of example IDs (assumed to be sorted)
-        :return: List of range dictionaries with 'start' and 'end' keys
-        """
-        if not example_ids:
-            return []
-
-        ranges = []
-        start = example_ids[0]
-        end = start
-
-        for i in range(1, len(example_ids)):
-            if example_ids[i] == end + 1:
-                # Consecutive, extend current range
-                end = example_ids[i]
-            else:
-                # Gap found, save current range and start new one
-                ranges.append({"start": start, "end": end})
-                start = example_ids[i]
-                end = start
-
-        # Don't forget the last range
-        ranges.append({"start": start, "end": end})
-
-        return ranges
-
-    def _decode_example_ids(self, ranges: list[dict[str, int]]) -> list[int]:
-        """Decode ranges back into a list of example IDs.
-
-        :param ranges: List of range dictionaries with 'start' and 'end' keys
-        :return: List of example IDs
-        """
-        example_ids = []
-        for range_dict in ranges:
-            start = range_dict["start"]
-            end = range_dict["end"]
-            example_ids.extend(range(start, end + 1))
-        return example_ids
-
     def _load_cached_example_ids(self, cache_url: tlc.Url) -> list[int] | None:
         """Load the cached corrupt example ids from the cache file.
 
@@ -136,12 +95,12 @@ class TLCDatasetMixin:
                 LOGGER.info("Cache version mismatch, regenerating cache.")
                 return None
 
-            if "corrupt_ranges" not in cache_data:
-                LOGGER.warning("Cache file missing corrupt_ranges field, regenerating cache.")
+            if "corrupt_example_ids" not in cache_data:
+                LOGGER.warning("Cache file missing corrupt_example_ids field, regenerating cache.")
                 return None
 
             # Get corrupt example IDs
-            corrupt_example_ids = self._decode_example_ids(cache_data["corrupt_ranges"])
+            corrupt_example_ids = cache_data["corrupt_example_ids"]
             return corrupt_example_ids
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -154,11 +113,9 @@ class TLCDatasetMixin:
         :param cache_url: The URL to the cache file
         :param corrupt_example_ids: A list of corrupt example ids
         """
-        corrupt_ranges = self._encode_example_ids(corrupt_example_ids)
-
         content = {
             "version": 1,
-            "corrupt_ranges": corrupt_ranges,
+            "corrupt_example_ids": corrupt_example_ids,
         }
 
         cache_url.write(json.dumps(content, indent=2), mode="s")
