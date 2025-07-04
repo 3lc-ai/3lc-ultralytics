@@ -1116,7 +1116,7 @@ def test_dataset_cache(task) -> None:
     cache_path = cache_paths[0]
     cache_data = json.loads(cache_path.read_text())
     assert cache_data["version"] == 1, "Cache version should be 1"
-    assert cache_data["corrupt_ranges"] == []
+    assert cache_data["corrupt_example_ids"] == []
 
 
 # HELPERS
