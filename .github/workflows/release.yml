@@ -1,0 +1,117 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v0.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0)'
+        required: true
+        type: string
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v2
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: |
+          uv sync --group dev
+
+      - name: Run linting
+        run: |
+          uv run ruff check .
+
+      - name: Run tests with lowest resolution for direct dependencies
+        run: |
+          uv run pytest tests/ -v --resolution lowest-direct -n auto --no-sources
+
+      - name: Run tests
+        run: |
+          uv run pytest tests/ -v -n auto --no-sources
+        env:
+          TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
+
+  build-and-publish:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v2
+        with:
+          version: "0.7.19"
+
+      - name: Get version from pyproject.toml
+        id: version
+        run: |
+          VERSION=$(uv version --output-format json | jq -r '.version')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using version: $VERSION"
+
+      - name: Extract changelog section
+        id: changelog
+        run: |
+          # Extract the changelog section for this version
+          VERSION="${{ steps.version.outputs.version }}"
+          CHANGELOG_CONTENT=$(awk -v version="$VERSION" '
+            BEGIN { in_section = 0; content = "" }
+            /^## \['"$VERSION"'\]/ { in_section = 1; next }
+            /^## \[/ && in_section { exit }
+            in_section { content = content $0 "\n" }
+            END { print content }
+          ' CHANGELOG.md | sed '/^$/d')
+          
+          # Escape newlines for GitHub Actions
+          CHANGELOG_ESCAPED=$(echo "$CHANGELOG_CONTENT" | sed ':a;N;$!ba;s/\n/\\n/g')
+          echo "changelog=$CHANGELOG_ESCAPED" >> $GITHUB_OUTPUT
+          echo "Extracted changelog for version $VERSION"
+
+      - name: Build package
+        run: |
+          uv build
+
+      - name: Publish to PyPI
+        run: |
+          uv publish
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Release v${{ steps.version.outputs.version }}
+          body: |
+            ${{ steps.changelog.outputs.changelog }}
+            
+            ## Installation
+            
+            ```bash
+            pip install 3lc-ultralytics==${{ steps.version.outputs.version }}
+            ```
+          draft: false
+          prerelease: false
+          generate_release_notes: false 
