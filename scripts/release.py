@@ -72,10 +72,10 @@ def update_changelog(new_version: str, dry_run: bool = False) -> str:
     # This regex captures the entire Unreleased section and replaces it
     # Handles both "## [Unreleased]" and "## [Unreleased] (X.Y.Z)" formats
     new_content = re.sub(
-        r'## \[Unreleased\](?: \([^)]+\))?\n(.*?)(?=\n## \[|$)',
-        f'## [Unreleased]\n\n## [{new_version}] - {get_release_date()}\n\\1',
+        r"## \[Unreleased\](?: \([^)]+\))?\n(.*?)(?=\n## \[|$)",
+        f"## [Unreleased]\n\n## [{new_version}] - {get_release_date()}\n\\1",
         content,
-        flags=re.DOTALL
+        flags=re.DOTALL,
     )
 
     if not dry_run:
