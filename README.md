@@ -38,7 +38,7 @@ Ultralytics YOLO classification, object detection and segmentation with 3LC inte
 Install the package and requirements into a virtual environment:
 
 ```bash
-pip install "git+https://github.com/3lc-ai/3lc-ultralytics@develop"
+pip install 3lc-ultralytics
 ```
 
 > ⚠️ NOTE: If you are using `uv`, instead use
