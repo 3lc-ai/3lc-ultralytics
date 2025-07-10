@@ -16,7 +16,7 @@ def pytest_sessionstart(session):
     TMP.mkdir(parents=True, exist_ok=True)
 
     # Create default folders once (no racing)
-    import tlc
+    import tlc  # noqa: F401, I001
 
 
 def pytest_sessionfinish(session, exitstatus):
