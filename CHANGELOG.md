@@ -1,26 +1,25 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+This package uses a custom versioning scheme in which the minor version is bumped for breaking changes, and the patch version number is bumped for bug fixes, added features, changes to the dependencies (in particular `3lc` and `ultralytics`) and other non-breaking changes.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Since this package integrates with two actively developed dependencies (`ultralytics` and `3lc`), we aim to support newer versions of these packages while maintaining backward compatibility where possible. When this is not possible, the lower bounds of the dependencies `ultralytics` and `3lc` are increased.
 
 ## [Unreleased]
 
 ### Migration Guide
 
-The initial version introduces several breaking changes from the previous fork of `ultralytics`.
+The initial version introduces several breaking changes from the previous fork of `ultralytics`. The following steps should be taken to migrate:
 
 - Uninstall the previous integration fork with `pip uninstall ultralytics` (or equivalent), and install the integration following the top level `README.md`.
 - Change imports to be from the top-level of the new package, e.g. `from tlc_ultralytics import Settings, YOLO`.
 - Change `TLCYOLO` to `YOLO`.
-- (optional) If tables are resolved to by passing the same dataset yaml file through `data` and the project name ends with `YOLOv8` and/or the table name is `original`, `tables` should be passed directly to `model.train(...)` and `model.collect(...)` instead of resolving to them by through a YOLO dataset yaml file passed to `data`.
+- (optional) If tables are resolved to by passing the same dataset yaml file through `data` and the project name ends with `YOLOv8` and/or the table name is `original`, `tables` should be passed directly to `model.train(tables=...)` and `model.collect(tables=...)` instead of resolving to them by through a YOLO dataset yaml file passed to `data`.
 
 ### Added
 
 - Raise if the scheme of image URLs used in the integration is not `file://`, instead of failing to read the images.
 - A directory `examples` with example scripts for training and collection for the supported tasks has been added.
-- A check for image read speed introduced in YOLO is now applied to the YOLO datasets coming from 3LC Tables. This logs a warning if reads are slow. It also ensures the same number of calls to `random` is made, such that runs with and without 3LC with `seed` and `deterministic=True` set now have the exact same transforms (which also access the global `random`) applied in training and thus get the same results.
+- A check for image read speed introduced in YOLO is now applied to the YOLO datasets coming from 3LC Tables. This logs a warning if reads are slow. It also ensures the same number of calls to `random` is made, such that runs with and without 3LC with `seed` and `deterministic=True` now have the exact same transforms (which also access the global `random`) applied in training and thus get the same results.
 - An automated release pipeline has been introduced, enabling installation from PyPI with `pip install 3lc-ultralytics`.
 
 ### Changed
@@ -32,7 +31,7 @@ The initial version introduces several breaking changes from the previous fork o
 
 ### Deprecated
 
-- `TLCYOLO` has been deprecated and will be removed in a future version. Use `YOLO` from `tlc_integration` instead.
+- `TLCYOLO` has been deprecated and will be removed in a future version. Use `YOLO` from `tlc_ultralytics` instead.
 
 ### Removed
 
