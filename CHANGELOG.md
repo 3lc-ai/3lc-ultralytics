@@ -36,4 +36,4 @@ The initial version introduces several breaking changes from the previous fork o
 ### Removed
 
 - The deprecated modules `settings` and `model` in `ultralytics.utils.tlc.detect` have been removed.
-- Task specific `Trainer`s and `Validator`s have been removed top level package, and can still be accessed from the task-specific modules instead.
+- Task specific `Trainer`s and `Validator`s have been removed from the top level package, and can be accessed from the task-specific modules instead.
