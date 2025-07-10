@@ -42,7 +42,7 @@ class TLCDatasetMixin:
             msg += "Make sure the alias is spelled correctly and is registered in your configuration."
             raise ValueError(msg) from e
 
-        if url.scheme is not tlc.Scheme.FILE:
+        if url.scheme not in (tlc.Scheme.FILE, tlc.Scheme.RELATIVE):
             msg = f"Image URL {url.to_str()} is not a local file path, it has scheme {url.scheme.value}. "
             msg += "Only local image file paths are supported. If your image URLs are not local, first copy "
             msg += "the images to a local directory and use an alias."

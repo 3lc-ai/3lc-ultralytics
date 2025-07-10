@@ -40,6 +40,7 @@ from tlc_ultralytics.utils import check_tlc_dataset
 DUMMY_IMAGE_FILE = Path(__file__).parent.parent / "src" / "tlc_ultralytics" / "_static" / "dashboard.png"
 TMP = Path(__file__).parent / "tmp"
 TMP_PROJECT_ROOT_URL = tlc.Url(TMP / "3LC")
+tlc.UrlAliasRegistry.instance().register_url_alias("<TEST_ALIAS>", "/test/alias")
 tlc.Configuration.instance().project_root_url = TMP_PROJECT_ROOT_URL
 tlc.TableIndexingTable.instance().add_scan_url(
     {
@@ -961,9 +962,36 @@ def test_absolute_segmentation_polygons() -> None:
 
 
 def test_absolutize_image_url() -> None:
+    # Unexpanded aliases should fail
     url = tlc.Url("<UNEXPANDED_ALIAS>/in/my/url.png")
     with pytest.raises(ValueError):
         TLCDatasetMixin._absolutize_image_url(url, tlc.Url("some_table_url"))
+
+    # Non-file schemes should fail
+    for scheme in (tlc.Scheme.S3, tlc.Scheme.GS, tlc.Scheme.ABFS):
+        url = tlc.Url(f"{scheme.value}://some/remote/url.png")
+        with pytest.raises(ValueError):
+            TLCDatasetMixin._absolutize_image_url(url, tlc.Url("some_table_url"))
+
+    # Aliases should be expanded
+    url = tlc.Url("<TEST_ALIAS>/in/my/url.png")
+    result = TLCDatasetMixin._absolutize_image_url(url, tlc.Url("some_table_url"))
+    assert result == "/test/alias/in/my/url.png"
+    assert tlc.Url(result).scheme == tlc.Scheme.FILE
+
+    # Relative URLs should be made absolute
+    relative_url = tlc.Url("../some/relative/url.png")
+    assert relative_url.scheme == tlc.Scheme.RELATIVE
+    result = TLCDatasetMixin._absolutize_image_url(relative_url, tlc.Url("/one/two/table"))
+    assert result == "/one/two/some/relative/url.png"
+    assert tlc.Url(result).scheme == tlc.Scheme.FILE
+
+    # Absolute URLs should remain unchanged
+    absolute_url = tlc.Url("/some/absolute/url.png")
+    assert absolute_url.scheme == tlc.Scheme.FILE
+    result = TLCDatasetMixin._absolutize_image_url(absolute_url, tlc.Url("/one/two/table"))
+    assert result == "/some/absolute/url.png"
+    assert tlc.Url(result).scheme == tlc.Scheme.FILE
 
 
 def test_extra_metrics() -> None:
