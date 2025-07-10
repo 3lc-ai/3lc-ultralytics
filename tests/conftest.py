@@ -15,6 +15,9 @@ def pytest_sessionstart(session):
 
     TMP.mkdir(parents=True, exist_ok=True)
 
+    # Create default folders once (no racing)
+    import tlc
+
 
 def pytest_sessionfinish(session, exitstatus):
     """Clean up the TMP directory after all tests are complete."""
