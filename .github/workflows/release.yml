@@ -38,11 +38,17 @@ jobs:
 
       - name: Run tests with lowest resolution for direct dependencies
         run: |
-          uv run pytest tests/ -v --resolution lowest-direct -n auto --no-sources
+          export "${{ secrets.VARIABLE_NAME }}=${{ secrets.VARIABLE_VALUE }}"
+          export "${{ secrets.RUNTIME_NAME }}=${{ secrets.RUNTIME_VALUE }}"
+          uv run --resolution lowest-direct --python 3.9 pytest tests/ -v -n auto --no-sources
+        env:
+          TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
 
-      - name: Run tests
+      - name: Run tests with highest resolution
         run: |
-          uv run pytest tests/ -v -n auto --no-sources
+          export "${{ secrets.VARIABLE_NAME }}=${{ secrets.VARIABLE_VALUE }}"
+          export "${{ secrets.RUNTIME_NAME }}=${{ secrets.RUNTIME_VALUE }}"
+          uv run --resolution highest --python 3.12 pytest tests/ -v -n auto --no-sources
         env:
           TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
 
