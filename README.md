@@ -160,8 +160,10 @@ For instance segmentation, you can provide `image_column_name` and `label_column
 
 ### Unsupported Tasks
 
-- **Pose Estimation**: Not yet supported. Let us know on Discord if you would like us to add it.
-- **OBB (Oriented Object Detection)**: Not yet supported. Let us know on Discord if you would like us to add it.
+Some YOLO tasks can not yet be visualized in the 3LC Dashboard, but these are on the roadmap and will be made available in the future:
+
+- **Pose Estimation**: Not yet supported. Let us know on Discord if you would like this to be supported!
+- **OBB (Oriented Object Detection)**: Not yet supported. Let us know on Discord if you would like this to be supported!
 
 ## Metrics Collection Only
 
