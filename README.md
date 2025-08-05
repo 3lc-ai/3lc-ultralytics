@@ -41,6 +41,8 @@ Install the package and requirements into a virtual environment:
 pip install "git+https://github.com/3lc-ai/3lc-ultralytics@develop"
 ```
 
+> ❗ NOTE: If you are using `uv`, use `uv pip install "git+https://github.com/3lc-ai/3lc-ultralytics@develop" --no-sources` instead.
+
 ### Basic Training
 
 Import `YOLO` from `tlc_ultralytics` and start training with 3LC integration:
