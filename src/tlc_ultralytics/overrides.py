@@ -40,3 +40,10 @@ def build_dataloader(*args, **kwargs):
     ultralytics.data.build.InfiniteDataLoader = InfiniteDataLoader
 
     return dataloader
+
+
+def check_pip_update_available() -> bool:
+    """Check whether a new version is available. This override always returns False such that the user is not prompted
+    to update.
+    """
+    return False
