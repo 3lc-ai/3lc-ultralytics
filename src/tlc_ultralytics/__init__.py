@@ -12,6 +12,7 @@ from tlc_ultralytics.settings import Settings
 
 # Patch the check_pip_update_available function to avoid prompting for an update
 import ultralytics
+
 ultralytics.utils.checks.check_pip_update_available = check_pip_update_available
 
 __all__ = [
