@@ -44,7 +44,7 @@ pip install "git+https://github.com/3lc-ai/3lc-ultralytics@develop"
 > ⚠️ NOTE: If you are using `uv`, instead use
 >
 > ```bash
-> uv pip install "git+https://github.com/3lc-ai/3lc-ultralytics@develop" --no-sources`
+> uv pip install "git+https://github.com/3lc-ai/3lc-ultralytics@develop" --no-sources
 > ```
 
 ### Basic Training
