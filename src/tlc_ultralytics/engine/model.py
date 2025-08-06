@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 import tlc
+import ultralytics
 from ultralytics.models import yolo
 from ultralytics.models.yolo.model import YOLO as YOLOBase
 from ultralytics.nn.tasks import ClassificationModel, DetectionModel, SegmentationModel
@@ -31,6 +32,23 @@ class YOLO(YOLOBase):
         check_tlc_version()
 
         super().__init__(*args, **kwargs)
+
+    def train(self, *args, **kwargs):
+        """Train the model."""
+
+        # Patch the check_pip_update_available function to avoid prompting for an update
+        def check_pip_update_avaliable_return_false():
+            return False
+
+        ultralytics_check_pip_update_available = ultralytics.utils.checks.check_pip_update_available
+        ultralytics.utils.checks.check_pip_update_available = check_pip_update_avaliable_return_false
+
+        output = super().train(*args, **kwargs)
+
+        # Restore the original function
+        ultralytics.utils.checks.check_pip_update_available = ultralytics_check_pip_update_available
+
+        return output
 
     @property
     def task_map(self):
