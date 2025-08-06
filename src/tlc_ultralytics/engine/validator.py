@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import tlc
 import ultralytics
+from packaging import version
 from ultralytics.engine.validator import BaseValidator
 from ultralytics.utils import LOGGER, colorstr
 
@@ -294,12 +295,19 @@ class TLCValidatorMixin(BaseValidator):
             else {}
         )
 
+        if version.Version(ultralytics.__version__) >= version.Version("8.3.154"):
+            nt_per_class = self.metrics.nt_per_class
+            nt_per_image = self.metrics.nt_per_image
+        else:
+            nt_per_class = self.nt_per_class
+            nt_per_image = self.nt_per_image
+
         metrics_batch.update(
             {
                 tlc.FOREIGN_TABLE_ID: [0] * num_classes,
                 tlc.LABEL: list(range(num_classes)),
-                NUM_INSTANCES: np.append(self.nt_per_class, self.nt_per_class.sum()),
-                NUM_IMAGES: np.append(self.nt_per_image, self.seen),
+                NUM_INSTANCES: np.append(nt_per_class, nt_per_class.sum()),
+                NUM_IMAGES: np.append(nt_per_image, self.seen),
                 **self._generate_per_class_metrics(),
             }
         )
