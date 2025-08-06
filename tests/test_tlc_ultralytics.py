@@ -163,11 +163,11 @@ def test_training(task) -> None:
     ultralytics_messages = [record.message for record in ultralytics_records]
     tlc_messages = [record.message for record in tlc_records]
 
-    # Check that there is a message with "New <url> available" and "Update with " in ultralytics outputs
+    # Check that there is a message prompting an update
     msg = "Update with 'pip install -U ultralytics'"
     assert any(msg in message for message in ultralytics_messages), f"Did not find {msg} in ultralytics logs"
 
-    # Check that there is no message with "New <url> available" and "Update with " in 3LC outputs
+    # Check that there are no messages prompting an update
     assert not any(msg in message for message in tlc_messages), (
         f"Found {msg} in 3LC logs, which should be patched to not happen"
     )
