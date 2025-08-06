@@ -1,3 +1,4 @@
+import logging
 import os
 import pathlib
 from collections import defaultdict
@@ -82,9 +83,35 @@ def get_metrics_tables_from_run(run: tlc.Run) -> dict[str, list[tlc.Table]]:
     return metrics_tables
 
 
+class CapturingHandler(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.log_records = []
+        self.log_messages = []
+
+    def emit(self, record):
+        self.log_records.append(record)
+        self.log_messages.append(self.format(record))
+
+
 @pytest.mark.parametrize("task", ["detect", "segment"])
 def test_training(task) -> None:
     # End-to-end test of training for detection and segmentation
+
+    # Capture ultralytics logger output specifically
+    from ultralytics.utils import LOGGER
+
+    ultralytics_logger = LOGGER
+
+    # Create handlers for both ultralytics and 3LC runs
+    ultralytics_handler = CapturingHandler()
+    ultralytics_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(message)s")
+    ultralytics_handler.setFormatter(formatter)
+
+    # Add handler to ultralytics logger
+    ultralytics_logger.addHandler(ultralytics_handler)
+
     overrides = {
         "data": TASK2DATASET[task],
         "epochs": 2,
@@ -105,13 +132,45 @@ def test_training(task) -> None:
         run_description=f"Test {task} training",
     )
 
+    # Run ultralytics training and capture logs
     model_ultralytics = YOLO(TASK2MODEL[task])
     results_ultralytics = model_ultralytics.train(**overrides)
 
+    # Clear the handler to separate ultralytics and 3LC logs
+    ultralytics_logger.removeHandler(ultralytics_handler)
+
+    # Create handler for 3LC run
+    tlc_handler = CapturingHandler()
+    tlc_handler.setLevel(logging.INFO)
+    tlc_handler.setFormatter(formatter)
+
+    # Add handler to ultralytics logger for 3LC run
+    ultralytics_logger.addHandler(tlc_handler)
+
+    # Run 3LC training and capture logs
     model_3lc = TLCYOLO(TASK2MODEL[task])
     results_3lc = model_3lc.train(**overrides, settings=settings)
 
     assert results_3lc, "Detection training failed"
+
+    # Clean up handlers
+    ultralytics_logger.removeHandler(tlc_handler)
+
+    # Get log records from both runs
+    ultralytics_records = ultralytics_handler.log_records
+    tlc_records = tlc_handler.log_records
+
+    ultralytics_messages = [record.message for record in ultralytics_records]
+    tlc_messages = [record.message for record in tlc_records]
+
+    # Check that there is a message with "New <url> available" and "Update with " in ultralytics outputs
+    msg = "Update with 'pip install -U ultralytics'"
+    assert any(msg in message for message in ultralytics_messages), f"Did not find {msg} in ultralytics logs"
+
+    # Check that there is no message with "New <url> available" and "Update with " in 3LC outputs
+    assert not any(msg in message for message in tlc_messages), (
+        f"Found {msg} in 3LC logs, which should be patched to not happen"
+    )
 
     # Compare 3LC integration with ultralytics results
     # Segmentation results will be slightly different due to the 3lc mask storage format and conversion
