@@ -15,7 +15,6 @@ from tlc_ultralytics.classify import (
 )
 from tlc_ultralytics.constants import DEFAULT_COLLECT_RUN_DESCRIPTION
 from tlc_ultralytics.detect import TLCDetectionTrainer, TLCDetectionValidator
-from tlc_ultralytics.overrides import check_pip_update_available
 from tlc_ultralytics.segment import (
     TLCSegmentationTrainer,
     TLCSegmentationValidator,
@@ -36,9 +35,13 @@ class YOLO(YOLOBase):
 
     def train(self, *args, **kwargs):
         """Train the model."""
+
         # Patch the check_pip_update_available function to avoid prompting for an update
+        def check_pip_update_avaliable_return_false():
+            return False
+
         ultralytics_check_pip_update_available = ultralytics.utils.checks.check_pip_update_available
-        ultralytics.utils.checks.check_pip_update_available = check_pip_update_available
+        ultralytics.utils.checks.check_pip_update_available = check_pip_update_avaliable_return_false
 
         output = super().train(*args, **kwargs)
 
