@@ -4,6 +4,8 @@ import weakref
 
 import tlc
 import torch
+import ultralytics
+from packaging import version
 from ultralytics.models.yolo.detect import DetectionValidator
 from ultralytics.utils import metrics, ops
 
@@ -66,16 +68,15 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
         }
 
     def _process_detection_predictions(self, preds, batch):
-        predicted_boxes = []
+        batch_predicted_boxes = []
+
         for i, predictions in enumerate(preds):
-            ori_shape = batch["ori_shape"][i]
-            resized_shape = batch["resized_shape"][i]
-            ratio_pad = batch["ratio_pad"][i]
-            height, width = ori_shape
+            predicted_boxes, predicted_confidences, predicted_classes = self._unpack_predictions(predictions)
+            height, width = batch["ori_shape"][i]
 
             # Handle case with no predictions
             if len(predictions) == 0:
-                predicted_boxes.append(
+                batch_predicted_boxes.append(
                     construct_bbox_struct(
                         [],
                         image_width=width,
@@ -84,51 +85,74 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
                 )
                 continue
 
-            predictions = predictions.clone()
-            predictions = predictions[
-                predictions[:, 4] > self._settings.conf_thres
-            ]  # filter out low confidence predictions
-            # sort by confidence and remove excess boxes
-            predictions = predictions[predictions[:, 4].argsort(descending=True)[: self._settings.max_det]]
-
-            pred_box = predictions[:, :4].clone()
-            pred_scaled = ops.scale_boxes(resized_shape, pred_box, ori_shape, ratio_pad)
-
-            # Compute IoUs
-            pbatch = self._prepare_batch(i, batch)
-            if pbatch["bbox"].shape[0]:
-                ious = metrics.box_iou(pbatch["bbox"], pred_scaled)  # IoU evaluated in xyxy format
-                box_ious = ious.max(dim=0)[0].cpu().tolist()
+            # Handle case with predictions
             else:
-                box_ious = [0.0] * pred_scaled.shape[0]  # No predictions
+                # Filter out low confidence predictions
+                mask = predicted_confidences > self._settings.conf_thres
+                predicted_boxes = predicted_boxes[mask]
+                predicted_confidences = predicted_confidences[mask].tolist()
+                predicted_classes = predicted_classes[mask].tolist()
 
-            pred_xywh = ops.xyxy2xywhn(pred_scaled, w=width, h=height)
+                # Scale predicted boxes to original image size
+                resized_shape = batch["resized_shape"][i]
+                ori_shape = batch["ori_shape"][i]
+                ratio_pad = batch["ratio_pad"][i]
+                pred_scaled = ops.scale_boxes(resized_shape, predicted_boxes, ori_shape, ratio_pad)
 
-            conf = predictions[:, 4].cpu().tolist()
-            pred_cls = predictions[:, 5].cpu().tolist()
+                # Compute IoUs
+                pbatch = self._prepare_batch(i, batch)
+                gt_boxes = pbatch["bboxes"].clone()
+                if gt_boxes.shape[0]:
+                    ious = metrics.box_iou(gt_boxes, pred_scaled)  # IoU evaluated in xyxy format
+                    box_ious = ious.max(dim=0)[0].cpu().tolist()
+                else:
+                    box_ious = [0.0] * pred_scaled.shape[0]  # No predictions
 
-            annotations = []
-            for pi in range(len(predictions)):
-                annotations.append(
-                    {
-                        "score": conf[pi],
-                        "category_id": self.data["range_to_3lc_class"][int(pred_cls[pi])],
-                        "bbox": pred_xywh[pi, :].cpu().tolist(),
-                        "iou": box_ious[pi],
-                    }
+                pred_xywh = ops.xyxy2xywhn(pred_scaled, w=width, h=height)
+
+                annotations = []
+                for pi in range(len(predicted_boxes)):
+                    annotations.append(
+                        {
+                            "score": predicted_confidences[pi],
+                            "category_id": self.data["range_to_3lc_class"][int(predicted_classes[pi])],
+                            "bbox": pred_xywh[pi, :].cpu().tolist(),
+                            "iou": box_ious[pi],
+                        }
+                    )
+
+                batch_predicted_boxes.append(
+                    construct_bbox_struct(
+                        annotations,
+                        image_width=width,
+                        image_height=height,
+                    )
                 )
 
-            assert len(annotations) <= self._settings.max_det, "Should have at most MAX_DET predictions per image."
+        return batch_predicted_boxes
 
-            predicted_boxes.append(
-                construct_bbox_struct(
-                    annotations,
-                    image_width=width,
-                    image_height=height,
-                )
+    def _unpack_predictions(
+        self, predictions: torch.Tensor | dict[str, torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Unpack predictions passed through by Ultralytics for one image.
+
+        This was changed in Ultralytics 8.3.154, so both cases are handled.
+
+        :param predictions: Predictions passed through by Ultralytics for one image.
+        :return: Tuple of predicted boxes, confidences and classes.
+        """
+        if version.Version(ultralytics.__version__) >= version.Version("8.3.154"):
+            boxes, confs, classes = (
+                predictions["bboxes"].clone(),
+                predictions["conf"].clone(),
+                predictions["cls"].clone(),
             )
+        else:
+            boxes = predictions[:, :4].clone()
+            confs = predictions[:, 4].clone()
+            classes = predictions[:, 5].clone()
 
-        return predicted_boxes
+        return boxes, confs, classes
 
     def _prepare_loss_fn(self, model):
         self.loss_fn = v8UnreducedDetectionLoss(
