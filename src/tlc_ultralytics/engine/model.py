@@ -20,7 +20,7 @@ from tlc_ultralytics.segment import (
     TLCSegmentationValidator,
 )
 from tlc_ultralytics.settings import Settings
-from tlc_ultralytics.utils import check_tlc_version, reduce_embeddings
+from tlc_ultralytics.utils import check_requirements, reduce_embeddings
 
 
 class YOLO(YOLOBase):
@@ -29,7 +29,7 @@ class YOLO(YOLOBase):
     def __init__(self, *args, **kwargs):
         """Initialize YOLO model with 3LC integration. Checks that the installed version of 3LC is compatible."""
 
-        check_tlc_version()
+        check_requirements()
 
         super().__init__(*args, **kwargs)
 

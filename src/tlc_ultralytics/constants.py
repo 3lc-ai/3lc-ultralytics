@@ -25,4 +25,8 @@ DEFAULT_COLLECT_RUN_DESCRIPTION = "Created with model.collect()"
 
 TLC_PREFIX = "3LC://"
 TLC_COLORSTR = colorstr("3lc: ")
-TLC_REQUIRED_VERSION = "2.13.1"
+
+REQUIREMENTS_TO_CHECK = [
+    ("3lc", "tlc"),
+    ("ultralytics", "ultralytics"),
+]
