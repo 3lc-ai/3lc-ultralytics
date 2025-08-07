@@ -228,6 +228,11 @@ def test_training(task) -> None:
         [m.to_pandas() for m in per_class_metrics_tables],
         ignore_index=True,
     )
+
+    foreign_table_url = per_class_metrics_tables[0].get_foreign_table_url()
+    assert not foreign_table_url.is_absolute(), "Expected foreign table url to be relative"
+    assert foreign_table_url.to_absolute(per_class_metrics_tables[0].url).exists()
+
     assert TRAINING_PHASE in per_class_metrics_df.columns, "Expected training phase column in per-class metrics"
     assert tlc.EPOCH in per_class_metrics_df.columns, "Expected epoch column in per-class metrics"
     assert tlc.FOREIGN_TABLE_ID in per_class_metrics_df.columns, "Expected foreign_table_id column in per-class metrics"
