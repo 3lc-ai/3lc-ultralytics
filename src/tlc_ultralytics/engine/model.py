@@ -6,7 +6,7 @@ import tlc
 import ultralytics
 from ultralytics.models import yolo
 from ultralytics.models.yolo.model import YOLO as YOLOBase
-from ultralytics.nn.tasks import ClassificationModel, DetectionModel, SegmentationModel
+from ultralytics.nn.tasks import ClassificationModel, DetectionModel, OBBModel, PoseModel, SegmentationModel
 from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.classify import (
@@ -71,6 +71,18 @@ class YOLO(YOLOBase):
                 "trainer": TLCSegmentationTrainer,
                 "validator": TLCSegmentationValidator,
                 "predictor": yolo.segment.SegmentationPredictor,
+            },
+            "pose": {
+                "model": PoseModel,
+                "trainer": yolo.pose.PoseTrainer,
+                "validator": yolo.pose.PoseValidator,
+                "predictor": yolo.pose.PosePredictor,
+            },
+            "obb": {
+                "model": OBBModel,
+                "trainer": yolo.obb.OBBTrainer,
+                "validator": yolo.obb.OBBValidator,
+                "predictor": yolo.obb.OBBPredictor,
             },
         }
 
