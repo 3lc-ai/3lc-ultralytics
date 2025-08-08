@@ -22,7 +22,8 @@ def format_yolo_kpts_instances(result: ultralytics.engine.results.Results) -> li
 
     kpts = result.keypoints.data.cpu().numpy()
     if not result.keypoints.has_visible:
-        raise ValueError("Expecting visibility")
+        # Not exactly the right check for this, but seems to work as a proxy for checking the data.
+        return []
 
     # kpts is shape num_instances, num_keypoints, 3
     num_instances = kpts.shape[0]
