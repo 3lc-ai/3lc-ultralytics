@@ -4,8 +4,6 @@ import weakref
 
 import tlc
 import torch
-import ultralytics
-from packaging import version
 from ultralytics.models.yolo.detect import DetectionValidator
 from ultralytics.utils import metrics, ops
 
@@ -67,11 +65,15 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
             **{k: tensor.mean(dim=1).cpu().numpy() for k, tensor in losses.items()},
         }
 
-    def _process_detection_predictions(self, preds, batch):
+    def _process_detection_predictions(self, batch_predictions, batch):
         batch_predicted_boxes = []
 
-        for i, predictions in enumerate(preds):
-            predicted_boxes, predicted_confidences, predicted_classes = self._unpack_predictions(predictions)
+        for i, predictions in enumerate(batch_predictions):
+            predicted_boxes, predicted_confidences, predicted_classes = (
+                predictions["bboxes"].clone(),
+                predictions["conf"].clone(),
+                predictions["cls"].clone(),
+            )
             height, width = batch["ori_shape"][i]
 
             # Handle case with no predictions
@@ -130,29 +132,6 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
                 )
 
         return batch_predicted_boxes
-
-    def _unpack_predictions(
-        self, predictions: torch.Tensor | dict[str, torch.Tensor]
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Unpack predictions passed through by Ultralytics for one image.
-
-        This was changed in Ultralytics 8.3.154, so both cases are handled.
-
-        :param predictions: Predictions passed through by Ultralytics for one image.
-        :return: Tuple of predicted boxes, confidences and classes.
-        """
-        if version.Version(ultralytics.__version__) >= version.Version("8.3.154"):
-            boxes, confs, classes = (
-                predictions["bboxes"].clone(),
-                predictions["conf"].clone(),
-                predictions["cls"].clone(),
-            )
-        else:
-            boxes = predictions[:, :4].clone()
-            confs = predictions[:, 4].clone()
-            classes = predictions[:, 5].clone()
-
-        return boxes, confs, classes
 
     def _prepare_loss_fn(self, model):
         self.loss_fn = v8UnreducedDetectionLoss(
