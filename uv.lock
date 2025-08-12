@@ -20,9 +20,6 @@ resolution-markers = [
     "(python_full_version < '3.10' and platform_machine != 'arm64' and sys_platform == 'darwin') or (python_full_version < '3.10' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version < '3.10' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
 ]
 
-[manifest]
-constraints = [{ name = "pacmap", specifier = "==0.7.3" }]
-
 [[package]]
 name = "3lc"
 version = "2.16"
@@ -180,7 +177,6 @@ source = { editable = "." }
 dependencies = [
     { name = "3lc" },
     { name = "pacmap" },
-    { name = "setuptools" },
     { name = "ultralytics" },
 ]
 
@@ -194,9 +190,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "3lc", editable = "../tlc-monorepo" },
-    { name = "pacmap", specifier = ">=0.7.0" },
-    { name = "setuptools" },
-    { name = "ultralytics", specifier = "==8.3.146" },
+    { name = "pacmap", specifier = ">=0.8.0" },
+    { name = "ultralytics", specifier = ">=8.3.146,<8.3.154" },
 ]
 
 [package.metadata.requires-dev]
@@ -2324,7 +2319,7 @@ wheels = [
 
 [[package]]
 name = "pacmap"
-version = "0.7.3"
+version = "0.8.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annoy" },
@@ -2333,9 +2328,9 @@ dependencies = [
     { name = "numpy" },
     { name = "scikit-learn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/dd/23/949330cd3ee04155f49938292e267b4f9b4183d7c075dd19876a558c2546/pacmap-0.7.3.tar.gz", hash = "sha256:450ed1fd572c07e0b2bf66ac4da2e95b5065495c84a3045a4354269bac94c473", size = 25244, upload-time = "2024-06-16T19:18:05.512Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/40/3686ff721dd60901f5c2c9a1c62e3573fdf84a0be37be047adbc03ef81f3/pacmap-0.8.0.tar.gz", hash = "sha256:1c0c10180e36b77f5e5344d838d020dd9557ac1ca77f0976c2e308643b019084", size = 29067, upload-time = "2025-02-15T19:15:57.576Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c3/e0/cdb3b2218d5d57879decfdea85ffe274e1fb776d9d812727ac1cb795ecb5/pacmap-0.7.3-py3-none-any.whl", hash = "sha256:43550ff1f7102ccd76046153ab354911a9844ca0219a10b84bd314b162358a8f", size = 18551, upload-time = "2024-06-16T19:18:03.992Z" },
+    { url = "https://files.pythonhosted.org/packages/73/15/5ff2b77b48be04d718e2684c4e707c588183a8c4bbfddf1bd558329281d5/pacmap-0.8.0-py3-none-any.whl", hash = "sha256:c15eff274fd4d4575ba5b42399dc3b71eba80f9131a461d715927e9ae6c812b4", size = 21359, upload-time = "2025-02-15T19:15:55.765Z" },
 ]
 
 [[package]]
@@ -3630,7 +3625,7 @@ wheels = [
 
 [[package]]
 name = "ultralytics"
-version = "8.3.146"
+version = "8.3.153"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "matplotlib", version = "3.9.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
@@ -3650,9 +3645,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "ultralytics-thop" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a2/59/42c242712f1ce59bc407991e4fec389d0a81f10def5e0f5304cfbabd4807/ultralytics-8.3.146.tar.gz", hash = "sha256:99b39e29460409f87248f37b544ef7388bbe6dfdbbb7833cdeed14ac447951d1", size = 894098, upload-time = "2025-05-27T23:10:58.716Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/30/66/dacf77a509918d8764db371f69261d2bfaef57cb697117d9acbba48c39d7/ultralytics-8.3.153.tar.gz", hash = "sha256:cabe254cb33b47f18f73022e1732827c8c0f3a8ad081f71f39888f5b4c93256a", size = 894982, upload-time = "2025-06-10T21:16:25.801Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bc/df/4452c9cb8ee7c28d69fdf13f37090a1cc8bb44404c62c58bdf5bd9d27640/ultralytics-8.3.146-py3-none-any.whl", hash = "sha256:077817e760c5217972b04c6817618eb6211ad854535a571a172f7423105049a8", size = 1039890, upload-time = "2025-05-27T23:10:56.261Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/ca/360d86d72aaacd867fd223acce4bf8a9ac8ea590f5a57819b4e1ad41ab6f/ultralytics-8.3.153-py3-none-any.whl", hash = "sha256:5b7f401439f2b4367041a4c4951c9cf706653ca9e6cf1ae5b3763dc4bb6825bc", size = 1040912, upload-time = "2025-06-10T21:16:23.387Z" },
 ]
 
 [[package]]
