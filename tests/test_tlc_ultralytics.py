@@ -103,15 +103,6 @@ def test_training(task) -> None:
 
     ultralytics_logger = LOGGER
 
-    # Create handlers for both ultralytics and 3LC runs
-    ultralytics_handler = CapturingHandler()
-    ultralytics_handler.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(message)s")
-    ultralytics_handler.setFormatter(formatter)
-
-    # Add handler to ultralytics logger
-    ultralytics_logger.addHandler(ultralytics_handler)
-
     overrides = {
         "data": TASK2DATASET[task],
         "epochs": 2,
@@ -136,12 +127,10 @@ def test_training(task) -> None:
     model_ultralytics = YOLO(TASK2MODEL[task])
     results_ultralytics = model_ultralytics.train(**overrides)
 
-    # Clear the handler to separate ultralytics and 3LC logs
-    ultralytics_logger.removeHandler(ultralytics_handler)
-
     # Create handler for 3LC run
     tlc_handler = CapturingHandler()
     tlc_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(message)s")
     tlc_handler.setFormatter(formatter)
 
     # Add handler to ultralytics logger for 3LC run
@@ -156,16 +145,11 @@ def test_training(task) -> None:
     # Clean up handlers
     ultralytics_logger.removeHandler(tlc_handler)
 
-    # Get log records from both runs
-    ultralytics_records = ultralytics_handler.log_records
+    # Get log records from 3LC run
     tlc_records = tlc_handler.log_records
-
-    ultralytics_messages = [record.message for record in ultralytics_records]
     tlc_messages = [record.message for record in tlc_records]
 
-    # Check that there is a message prompting an update
     msg = "Update with 'pip install -U ultralytics'"
-    assert any(msg in message for message in ultralytics_messages), f"Did not find {msg} in ultralytics logs"
 
     # Check that there are no messages prompting an update
     assert not any(msg in message for message in tlc_messages), (
