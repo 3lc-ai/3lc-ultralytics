@@ -149,7 +149,7 @@ def check_det_table(
             f"Bounding box list '{bounding_boxes_list_key}' in column '{bounding_boxes_column_key}' "
             f"does not contain a key '{label_key}'."
         )
-        assert tlc.get_value_map(table, label_column_name) is not None, (
+        assert table.get_value_map(label_column_name) is not None, (
             f"Unable to get value map for label value path {label_column_name}. Ensure that the table is compatible "
             "with the detection task or provide a `label_column_name` that matches the value path to the labels."
         )
