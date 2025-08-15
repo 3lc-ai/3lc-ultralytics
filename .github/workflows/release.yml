@@ -92,9 +92,10 @@ jobs:
             END { print content }
           ' CHANGELOG.md | sed '/^$/d')
           
-          # Escape newlines for GitHub Actions
-          CHANGELOG_ESCAPED=$(echo "$CHANGELOG_CONTENT" | sed ':a;N;$!ba;s/\n/\\n/g')
-          echo "changelog=$CHANGELOG_ESCAPED" >> $GITHUB_OUTPUT
+          # Store the raw changelog content (GitHub Actions handles newlines properly)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
           echo "Extracted changelog for version $VERSION"
 
       - name: Build package
