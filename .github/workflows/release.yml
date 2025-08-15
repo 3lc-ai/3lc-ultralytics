@@ -34,7 +34,7 @@ jobs:
 
       - name: Run linting
         run: |
-          uv run ruff check . --no-sources
+          uv run --no-sources ruff check .
 
       # - name: Run tests with lowest resolution for direct dependencies
       #   run: |
@@ -48,7 +48,7 @@ jobs:
         run: |
           export "${{ secrets.VARIABLE_NAME }}=${{ secrets.VARIABLE_VALUE }}"
           export "${{ secrets.RUNTIME_NAME }}=${{ secrets.RUNTIME_VALUE }}"
-          uv run --resolution highest --python 3.12 pytest tests/ -v -n auto --no-sources
+          uv run --resolution highest --python 3.12 --no-sources pytest tests/ -v -n auto
         env:
           TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
 
