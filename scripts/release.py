@@ -157,9 +157,10 @@ def main():
         run_command(["git", "commit", "-m", f"Bump version to {new_version}"])
         print("Committed version changes")
 
-        # Push changes to develop
-        run_command(["git", "push", "origin", "develop"])
-        print("Pushed changes to develop branch")
+        # Push changes to current branch
+        current_branch = run_command(["git", "branch", "--show-current"])
+        run_command(["git", "push", "origin", current_branch])
+        print(f"Pushed changes to {current_branch} branch")
 
         # Create and push tag
         create_git_tag(new_version, dry_run=args.dry_run)
