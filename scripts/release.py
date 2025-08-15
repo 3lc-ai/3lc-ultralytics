@@ -152,13 +152,14 @@ def main():
         print("Updated CHANGELOG.md")
 
     if not args.dry_run:
+        current_branch = run_command(["git", "branch", "--show-current"])
+        
         # Commit changes
         run_command(["git", "add", "pyproject.toml", "CHANGELOG.md"])
         run_command(["git", "commit", "-m", f"Bump version to {new_version}"])
         print("Committed version changes")
 
         # Push changes to current branch
-        current_branch = run_command(["git", "branch", "--show-current"])
         run_command(["git", "push", "origin", current_branch])
         print(f"Pushed changes to {current_branch} branch")
 
@@ -173,7 +174,7 @@ def main():
         print("4. Create a GitHub release")
     else:
         print("\n[DRY RUN] Would have:")
-        print("1. Added and committed these changes to develop branch")
+        print("1. Added and committed these changes to current branch")
         print("2. Pushed these changes to develop branch")
         print("3. Created and pushed tag")
         print(
