@@ -153,7 +153,7 @@ def main():
 
     if not args.dry_run:
         current_branch = run_command(["git", "branch", "--show-current"])
-        
+
         # Commit changes
         run_command(["git", "add", "pyproject.toml", "CHANGELOG.md"])
         run_command(["git", "commit", "-m", f"Bump version to {new_version}"])
