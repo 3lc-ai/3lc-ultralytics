@@ -6,8 +6,6 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
-## [0.0.0] - 2025-08-15
-
 ### Migration Guide
 
 The initial version introduces several breaking changes from the previous fork of `ultralytics`. The following steps should be taken to migrate:
