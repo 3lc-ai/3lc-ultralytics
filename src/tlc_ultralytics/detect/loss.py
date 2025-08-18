@@ -91,16 +91,7 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
         )
 
         target_scores_sum = max(target_scores.sum(), 1)
-
-        # Cls loss
-        # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
-        # loss[1] = self.bce(pred_scores, target_scores.to(dtype)).sum() / target_scores_sum  # BCE
         cls_loss = self.bce(pred_scores, target_scores.to(dtype)).sum(dim=2)
-
-        # PER-SAMPLE: self.bce(pred_scores, target_scores.to(dtype)).sum(dim=(1,2)) / target_scores.sum(dim=(1,2))
-        # TODO: Max between target scores and torch ones?
-        # PER-box: self.bce(pred_scores, target_scores.to(dtype)).sum(dim=2)[0] ??? Do we care about scaling these?
-        # I'd argue no, since we really just want to compare boxes with each other
 
         # Bbox loss
         box_loss_full = torch.zeros_like(cls_loss)
@@ -122,10 +113,6 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
             box_loss_full[fg_mask] = box_loss.to(cls_loss.dtype).squeeze()
             dfl_loss_full[fg_mask] = dfl_loss.to(cls_loss.dtype).squeeze()
 
-        # loss[0] *= self.hyp.box  # box gain
-        # loss[1] *= self.hyp.cls  # cls gain
-        # loss[2] *= self.hyp.dfl  # dfl gain
-
         losses = {
             "cls_loss": cls_loss,
             "box_loss": box_loss_full,
@@ -139,5 +126,3 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
             losses["loss"] = cls_loss * cls_weight + box_loss_full * box_weight + dfl_loss_full * dfl_weight
 
         return losses
-
-        # return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
