@@ -40,7 +40,7 @@ jobs:
         run: |
           export "${{ secrets.VARIABLE_NAME }}=${{ secrets.VARIABLE_VALUE }}"
           export "${{ secrets.RUNTIME_NAME }}=${{ secrets.RUNTIME_VALUE }}"
-          uv run --python 3.9 pytest tests/ -v -n auto --no-sources
+          uv run --python 3.9 --no-sources pytest tests/ -v -n auto
         env:
           TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
 
