@@ -54,6 +54,7 @@ jobs:
 
   build-and-publish:
     needs: test
+    environment: release
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -119,6 +120,6 @@ jobs:
           prerelease: false
           generate_release_notes: false 
 
-      # - name: Publish to PyPI
-      #   run: |
-      #     uv publish
+      - name: Publish to PyPI
+        run: |
+          uv publish
