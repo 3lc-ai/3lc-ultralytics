@@ -36,15 +36,15 @@ jobs:
         run: |
           uv run --no-sources ruff check .
 
-      # - name: Run tests with lowest resolution for direct dependencies
-      #   run: |
-      #     export "${{ secrets.VARIABLE_NAME }}=${{ secrets.VARIABLE_VALUE }}"
-      #     export "${{ secrets.RUNTIME_NAME }}=${{ secrets.RUNTIME_VALUE }}"
-      #     uv run --resolution lowest-direct --python 3.9 pytest tests/ -v -n auto --no-sources
-      #   env:
-      #     TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
+      - name: Run tests with Python 3.9
+        run: |
+          export "${{ secrets.VARIABLE_NAME }}=${{ secrets.VARIABLE_VALUE }}"
+          export "${{ secrets.RUNTIME_NAME }}=${{ secrets.RUNTIME_VALUE }}"
+          uv run --python 3.9 pytest tests/ -v -n auto --no-sources
+        env:
+          TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
 
-      - name: Run tests with highest resolution
+      - name: Run tests with Python 3.12 for highest resolution
         run: |
           export "${{ secrets.VARIABLE_NAME }}=${{ secrets.VARIABLE_VALUE }}"
           export "${{ secrets.RUNTIME_NAME }}=${{ secrets.RUNTIME_VALUE }}"
