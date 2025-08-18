@@ -6,7 +6,7 @@
 
 <div align="center">
 
-![PyPI](https://img.shields.io/pypi/v/3lc-ultralytics) [![Discord](https://img.shields.io/badge/discord-3LC-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwnwFtfafC)
+![PyPI](https://img.shields.io/pypi/v/3lc-ultralytics?logo=pypi&logoColor=white) [![Discord](https://img.shields.io/badge/discord-3LC-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwnwFtfafC)
 
 </div>
 
