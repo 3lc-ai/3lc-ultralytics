@@ -1,4 +1,4 @@
-# This file is based on the original file in ultralytics/utils/loss.py
+from __future__ import annotations
 
 import torch
 from ultralytics.utils.loss import BboxLoss, v8DetectionLoss
@@ -7,23 +7,33 @@ from ultralytics.utils.tal import bbox2dist, make_anchors
 
 
 class UnreducedBboxLoss(BboxLoss):
+    """BboxLoss that returns unreduced losses for per-sample computation."""
+
     def forward(
         self,
-        pred_dist,
-        pred_bboxes,
-        anchor_points,
-        target_bboxes,
-        target_scores,
-        target_scores_sum,
-        fg_mask,
-    ):
-        """IoU loss."""
+        pred_dist: torch.Tensor,
+        pred_bboxes: torch.Tensor,
+        anchor_points: torch.Tensor,
+        target_bboxes: torch.Tensor,
+        target_scores: torch.Tensor,
+        target_scores_sum: float,
+        fg_mask: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass computing IoU and DFL losses.
+        
+        :param pred_dist: Predicted distribution tensor
+        :param pred_bboxes: Predicted bounding boxes
+        :param anchor_points: Anchor points for the predictions
+        :param target_bboxes: Target bounding boxes
+        :param target_scores: Target scores
+        :param target_scores_sum: Sum of target scores
+        :param fg_mask: Foreground mask
+        :return: Tuple of (iou_loss, dfl_loss) tensors
+        """
         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
         iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
-        # loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
         loss_iou = (1.0 - iou) * weight
 
-        # DFL loss
         if self.dfl_loss:
             target_ltrb = bbox2dist(anchor_points, target_bboxes, self.dfl_loss.reg_max - 1)
             loss_dfl = (
@@ -33,10 +43,7 @@ class UnreducedBboxLoss(BboxLoss):
                 )
                 * weight
             )
-
-            # Keep track of fg_indices to know which boxes loss was calculated for
         else:
-            # loss_dfl = torch.tensor(0.0).to(pred_dist.device)
             loss_dfl = torch.zeros_like(loss_iou)
 
         assert loss_iou.shape == loss_dfl.shape, f"IoU Loss shape {loss_iou.shape} != DFL Loss shape {loss_dfl.shape}"
@@ -45,18 +52,29 @@ class UnreducedBboxLoss(BboxLoss):
 
 
 class v8UnreducedDetectionLoss(v8DetectionLoss):
-    def __init__(self, model, tal_topk=10, training=False):
+    """v8DetectionLoss that returns unreduced losses for per-sample computation."""
+
+    def __init__(self, model, tal_topk: int = 10, training: bool = False):
+        """Initialize the unreduced detection loss.
+        
+        :param model: The YOLO model
+        :param tal_topk: Top-k for TAL assignment
+        :param training: Whether in training mode
+        """
         super().__init__(model, tal_topk=tal_topk)
 
-        # Override with unreduced BboxLoss
         m = model.model[-1]  # Detect() module
         self.bbox_loss = UnreducedBboxLoss(m.reg_max)
         self.training = training
 
-    def __call__(self, preds, batch):
-        """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
-        # loss = torch.zeros(3, device=self.device)  # box, cls, dfl
-        feats = preds[1] if isinstance(preds, (list, tuple)) else preds  # 3lc: list when using detectionmodel
+    def __call__(self, preds, batch) -> dict[str, torch.Tensor]:
+        """Calculate unreduced losses for box, cls and dfl.
+        
+        :param preds: Model predictions
+        :param batch: Batch data
+        :return: Dictionary containing unreduced losses
+        """
+        feats = preds[1] if isinstance(preds, (list, tuple)) else preds
         pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
             (self.reg_max * 4, self.nc), 1
         )
@@ -66,7 +84,7 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
 
         dtype = pred_scores.dtype
         batch_size = pred_scores.shape[0]
-        imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]  # image size (h,w)
+        imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]
         anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
 
         # Targets
@@ -93,23 +111,13 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
         target_scores_sum = max(target_scores.sum(), 1)
 
         # Cls loss
-        # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
-        # loss[1] = self.bce(pred_scores, target_scores.to(dtype)).sum() / target_scores_sum  # BCE
         cls_loss = self.bce(pred_scores, target_scores.to(dtype)).sum(dim=2)
-
-        # PER-SAMPLE: self.bce(pred_scores, target_scores.to(dtype)).sum(dim=(1,2)) / target_scores.sum(dim=(1,2))
-        # TODO: Max between target scores and torch ones?
-        # PER-box: self.bce(pred_scores, target_scores.to(dtype)).sum(dim=2)[0] ??? Do we care about scaling these?
-        # I'd argue no, since we really just want to compare boxes with each other
 
         # Bbox loss
         box_loss_full = torch.zeros_like(cls_loss)
         dfl_loss_full = torch.zeros_like(cls_loss)
         if fg_mask.sum():
             target_bboxes /= stride_tensor
-            # loss[0], loss[2] = self.bbox_loss(
-            #     pred_distri, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask
-            # )
             box_loss, dfl_loss = self.bbox_loss(
                 pred_distri,
                 pred_bboxes,
@@ -121,10 +129,6 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
             )
             box_loss_full[fg_mask] = box_loss.to(cls_loss.dtype).squeeze()
             dfl_loss_full[fg_mask] = dfl_loss.to(cls_loss.dtype).squeeze()
-
-        # loss[0] *= self.hyp.box  # box gain
-        # loss[1] *= self.hyp.cls  # cls gain
-        # loss[2] *= self.hyp.dfl  # dfl gain
 
         losses = {
             "cls_loss": cls_loss,
@@ -139,5 +143,3 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
             losses["loss"] = cls_loss * cls_weight + box_loss_full * box_weight + dfl_loss_full * dfl_weight
 
         return losses
-
-        # return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
