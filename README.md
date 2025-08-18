@@ -11,11 +11,11 @@
 </div>
 
 <p align="center">
-<a href="#quick-start">Quick Start</a> • 
-<a href="#working-with-datasets">Working with Datasets</a> • 
-<a href="#task-specific-configuration">Task-Specific Configuration</a> • 
-<a href="#metrics-collection-only">Metrics Collection</a> • 
-<a href="#3lc-settings">3LC Settings</a> • 
+<a href="#quick-start">Quick Start</a> •
+<a href="#working-with-datasets">Working with Datasets</a> •
+<a href="#task-specific-configuration">Task-Specific Configuration</a> •
+<a href="#metrics-collection-only">Metrics Collection</a> •
+<a href="#3lc-settings">3LC Settings</a> •
 <a href="#frequently-asked-questions">FAQ</a>
 </p>
 
