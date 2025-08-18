@@ -20,7 +20,7 @@ class UnreducedBboxLoss(BboxLoss):
         fg_mask: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Forward pass computing IoU and DFL losses.
-        
+
         :param pred_dist: Predicted distribution tensor
         :param pred_bboxes: Predicted bounding boxes
         :param anchor_points: Anchor points for the predictions
@@ -56,7 +56,7 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
 
     def __init__(self, model, tal_topk: int = 10, training: bool = False):
         """Initialize the unreduced detection loss.
-        
+
         :param model: The YOLO model
         :param tal_topk: Top-k for TAL assignment
         :param training: Whether in training mode
@@ -69,7 +69,7 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
 
     def __call__(self, preds, batch) -> dict[str, torch.Tensor]:
         """Calculate unreduced losses for box, cls and dfl.
-        
+
         :param preds: Model predictions
         :param batch: Batch data
         :return: Dictionary containing unreduced losses
