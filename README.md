@@ -6,7 +6,7 @@
 
 <div align="center">
 
-[![Release](https://img.shields.io/github/v/release/3lc-ai/3lc-ultralytics)](https://github.com/3lc-ai/3lc-ultralytics/releases) [![Discord](https://img.shields.io/badge/discord-3LC-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwnwFtfafC)
+![PyPI](https://img.shields.io/pypi/v/3lc-ultralytics) [![Discord](https://img.shields.io/badge/discord-3LC-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwnwFtfafC)
 
 </div>
 
