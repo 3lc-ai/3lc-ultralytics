@@ -298,8 +298,8 @@ class TLCValidatorMixin(BaseValidator):
             {
                 tlc.FOREIGN_TABLE_ID: [0] * num_classes,
                 tlc.LABEL: list(range(num_classes)),
-                NUM_INSTANCES: np.append(self.nt_per_class, self.nt_per_class.sum()),
-                NUM_IMAGES: np.append(self.nt_per_image, self.seen),
+                NUM_INSTANCES: np.append(self.metrics.nt_per_class, self.metrics.nt_per_class.sum()),
+                NUM_IMAGES: np.append(self.metrics.nt_per_image, self.seen),
                 **self._generate_per_class_metrics(),
             }
         )

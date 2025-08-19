@@ -1,7 +1,6 @@
 import numpy as np
 import tlc
 import torch
-from tlc.client.data_format import InstanceSegmentationDict
 from ultralytics.models.yolo.segment.val import SegmentationValidator
 from ultralytics.utils import ops
 
@@ -35,7 +34,21 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
 
         return {tlc.PREDICTED_SEGMENTATIONS: segment_sample_type.schema}
 
-    def _compute_3lc_metrics(self, preds, batch) -> list[dict[str, InstanceSegmentationDict]]:
+    def postprocess(self, preds: list[torch.Tensor]) -> list[dict[str, torch.Tensor]]:
+        """Post-process predictions. Use native mask processing to get full-size masks with higher accuracy.
+        These are later used to compute COCO masks which are collected in the 3LC Run.
+
+        preds: Predictions passed to the validator postprocess method.
+        returns: Predictions with full-size masks, to be used by Ultralytics and 3LC metrics collection."""
+
+        prev_process = self.process
+        self.process = ops.process_mask_native
+        preds = SegmentationValidator.postprocess(self, preds)
+        self.process = prev_process
+
+        return preds
+
+    def _compute_3lc_metrics(self, preds, batch) -> dict[str, list[dict[str, any]]]:
         """Compute 3LC metrics for instance segmentation.
 
         :param preds: Predictions returned by YOLO segmentation model.
@@ -45,16 +58,11 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         predicted_batch_segmentations = []
 
         # Reimplements SegmentationValidator, but with control over mask processing
-        for si, (pred, proto) in enumerate(zip(preds[0], preds[1])):
-            pbatch = self._prepare_batch(si, batch)
+        for i, pred in enumerate(preds):
+            pbatch = self._prepare_batch(i, batch)
 
-            conf = pred[:, 4]
-            pred_cls = pred[:, 5]
-
-            # Filter out predictions first
+            conf = pred["conf"]
             keep_indices = conf >= self._settings.conf_thres
-
-            # Handle case where no predictions are kept
             if not torch.any(keep_indices):
                 height, width = pbatch["ori_shape"]
                 predicted_instances = {
@@ -69,38 +77,27 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
                 predicted_batch_segmentations.append(predicted_instances)
                 continue
 
-            pred_cls = pred_cls[keep_indices]
-            conf = conf[keep_indices]
-            pred = pred.detach().clone()[keep_indices]
+            pred_conf = conf[keep_indices].tolist()
+            pred_cls = pred["cls"][keep_indices].tolist()
+            predicted_labels = [self.data["range_to_3lc_class"][int(p)] for p in pred_cls]
 
-            # Native upsampling to bounding boxes
-            prev_process = self.process
-            self.process = ops.process_mask_native
-            predn, pred_masks = self._prepare_pred(pred, pbatch, proto)
-            self.process = prev_process
-
-            # Scale masks to image size and handle padding
-            pred_masks = torch.as_tensor(pred_masks, dtype=torch.uint8)
-
-            scaled_masks = ops.scale_image(
-                pred_masks.permute(1, 2, 0).contiguous().cpu().numpy(),
+            # Get masks in resized dimensions
+            coco_masks = torch.as_tensor(pred["masks"], dtype=torch.uint8)
+            coco_masks = ops.scale_image(
+                coco_masks.permute(1, 2, 0).contiguous().cpu().numpy(),
                 pbatch["ori_shape"],
-                ratio_pad=batch["ratio_pad"][si],
+                ratio_pad=pbatch["ratio_pad"],
             )
-
-            result_masks = np.asfortranarray(scaled_masks.astype(np.uint8))
-
-            # Map predicted labels in 0, 1, ... back to possibly non-contiguous 3LC classes
-            predicted_labels = [self.data["range_to_3lc_class"][int(p)] for p in pred_cls.tolist()]
+            pred_masks = np.transpose(coco_masks, (2, 0, 1))
 
             predicted_instances = {
                 tlc.IMAGE_HEIGHT: pbatch["ori_shape"][0],
                 tlc.IMAGE_WIDTH: pbatch["ori_shape"][1],
                 tlc.INSTANCE_PROPERTIES: {
                     tlc.LABEL: predicted_labels,
-                    tlc.CONFIDENCE: conf.tolist(),
+                    tlc.CONFIDENCE: pred_conf,
                 },
-                tlc.MASKS: result_masks,
+                tlc.MASKS: pred_masks,
             }
 
             predicted_batch_segmentations.append(predicted_instances)
