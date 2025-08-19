@@ -15,6 +15,7 @@ from tlc_ultralytics.classify import (
 )
 from tlc_ultralytics.constants import DEFAULT_COLLECT_RUN_DESCRIPTION
 from tlc_ultralytics.detect import TLCDetectionTrainer, TLCDetectionValidator
+from tlc_ultralytics.pose import TLCPoseTrainer, TLCPoseValidator
 from tlc_ultralytics.segment import (
     TLCSegmentationTrainer,
     TLCSegmentationValidator,
@@ -74,8 +75,8 @@ class YOLO(YOLOBase):
             },
             "pose": {
                 "model": PoseModel,
-                "trainer": yolo.pose.PoseTrainer,
-                "validator": yolo.pose.PoseValidator,
+                "trainer": TLCPoseTrainer,
+                "validator": TLCPoseValidator,
                 "predictor": yolo.pose.PosePredictor,
             },
             "obb": {
