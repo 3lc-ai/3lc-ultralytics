@@ -71,7 +71,7 @@ def check_pose_table(table: tlc.Table, image_column_name: str, label_column_name
 
         schema = row_schema[label_root]
         assert hasattr(schema, "values"), f"Pose column '{label_root}' has no values schema."
-        for key in (tlc.IMAGE_WIDTH, tlc.IMAGE_HEIGHT, "instances"):
+        for key in ("x_min", "y_min", "x_max", "y_max", "instances"):
             assert key in schema.values, f"Pose column '{label_root}' missing key '{key}'."
 
         instances_schema = schema.values["instances"]

@@ -51,63 +51,128 @@ class TLCYOLOPoseDataset(TLCDatasetMixin, YOLODataset):
         pose_root = self._label_column_name.split(".")[0]
         pose = row.get(pose_root, {}) or {}
 
-        height = int(pose.get(tlc.IMAGE_HEIGHT, row.get(tlc.IMAGE_HEIGHT, 0)))
-        width = int(pose.get(tlc.IMAGE_WIDTH, row.get(tlc.IMAGE_WIDTH, 0)))
-        if height == 0 or width == 0:
-            _ = f"{colorstr(self.prefix + ':')} Missing image bounds in pose data; defaulting to zeros."
-            height, width = 0, 0
+        # Read bounds (prefer explicit x_min/x_max/y_min/y_max)
+        x_min = float(pose.get("x_min", 0.0))
+        y_min = float(pose.get("y_min", 0.0))
+        x_max = float(pose.get("x_max", 0.0))
+        y_max = float(pose.get("y_max", 0.0))
+
+        width = max(x_max - x_min, 1.0)
+        height = max(y_max - y_min, 1.0)
+
+        if width <= 0 or height <= 0:
+            _ = f"{colorstr(self.prefix + ':')} Invalid image bounds in pose data; defaulting to 1x1."
+            width, height = 1.0, 1.0
+
+        # Desired fixed K from dataset config (default 17)
+        desired_k = 17
+        if isinstance(getattr(self, "data", None), dict):
+            kps = self.data.get("kpt_shape")
+            if isinstance(kps, (list, tuple)) and len(kps) >= 1:
+                try:
+                    desired_k = int(kps[0])
+                except Exception:
+                    desired_k = 17
 
         instances = pose.get("instances") or []
-        classes, boxes, keypoints = [], [], []
+
+        classes_list: list[int] = []
+        boxes_list: list[list[float]] = []
+        keypoints_list: list[np.ndarray] = []
 
         for inst in instances:
-            label_val = inst.get(tlc.LABEL)
-            if label_val is None:
-                label_val = 0
+            # Class (dummy 0 if missing)
+            label_val = inst.get(tlc.LABEL, 0)
             mapped = self._class_map.get(label_val, label_val)
-            classes.append(mapped)
+            classes_list.append(int(mapped))
 
-            bbox = inst.get("bbox", [0.0, 0.0, 0.0, 0.0])
-            boxes.append(bbox)
-
+            # Keypoints xys
             xys = inst.get("xys", [])
-            if isinstance(xys, list):
-                xys_arr = (
-                    np.array(xys, dtype=np.float32).reshape(-1, 2) if len(xys) else np.zeros((0, 2), dtype=np.float32)
-                )
+            if isinstance(xys, list) and len(xys) >= 2:
+                xys_arr = np.array(xys, dtype=np.float32).reshape(-1, 2)
             else:
                 xys_arr = np.zeros((0, 2), dtype=np.float32)
 
+            # Visibilities: prefer xys_additional_data['visibilities'] else ones
             add = inst.get("xys_additional_data") or {}
-            if "conf" in add:
-                conf = np.array(add["conf"], dtype=np.float32).reshape(-1, 1)
-                kpts = np.concatenate([xys_arr, conf], axis=1)
+            if isinstance(add.get("visibilities"), list):
+                vis = np.array(add["visibilities"], dtype=np.float32).reshape(-1, 1)
             else:
-                kpts = xys_arr
+                # fallback to conf if provided
+                if isinstance(add.get("conf"), list):
+                    vis = np.array(add["conf"], dtype=np.float32).reshape(-1, 1)
+                else:
+                    vis = np.ones((xys_arr.shape[0], 1), dtype=np.float32)
 
-            keypoints.append(kpts)
+            # Normalize x,y to [0,1] using full-image bounds
+            if xys_arr.size:
+                norm_xy = np.empty_like(xys_arr)
+                norm_xy[:, 0] = xys_arr[:, 0] / width
+                norm_xy[:, 1] = xys_arr[:, 1] / height
+                norm_xy = np.clip(norm_xy, 0.0, 1.0)
+            else:
+                norm_xy = xys_arr
 
-        cls_arr = np.array(classes, dtype=np.float32).reshape(-1, 1)
+            # Pad/truncate to desired_k, then stack to (K,3)
+            k = norm_xy.shape[0]
+            kp = np.zeros((desired_k, 3), dtype=np.float32)
+            if k:
+                copy_k = min(desired_k, k)
+                kp[:copy_k, :2] = norm_xy[:copy_k]
+                if vis.shape[0] >= copy_k:
+                    kp[:copy_k, 2:3] = vis[:copy_k]
+                else:
+                    # pad missing vis with ones
+                    pad_vis = np.ones((copy_k, 1), dtype=np.float32)
+                    pad_vis[: vis.shape[0]] = vis
+                    kp[:copy_k, 2:3] = pad_vis
+
+            keypoints_list.append(kp)
+
+            # Derive bbox from visible keypoints
+            if kp.shape[0]:
+                vis_mask = kp[:, 2] > 0
+                pts = kp[vis_mask, :2] if np.any(vis_mask) else kp[:, :2]
+                if pts.size:
+                    x0 = float(pts[:, 0].min())
+                    y0 = float(pts[:, 1].min())
+                    x1 = float(pts[:, 0].max())
+                    y1 = float(pts[:, 1].max())
+                    cx = (x0 + x1) / 2.0
+                    cy = (y0 + y1) / 2.0
+                    bw = max(x1 - x0, 1e-6)
+                    bh = max(y1 - y0, 1e-6)
+                    box = [cx, cy, bw, bh]
+                else:
+                    box = [0.5, 0.5, 1e-6, 1e-6]
+            else:
+                box = [0.5, 0.5, 1e-6, 1e-6]
+
+            boxes_list.append(box)
+
+        # Convert to arrays with expected shapes
+        cls_arr = np.array(classes_list, dtype=np.float32).reshape(-1, 1)
         bboxes_arr = (
-            np.array(boxes, dtype=np.float32).reshape(-1, 4) if len(boxes) else np.zeros((0, 4), dtype=np.float32)
+            np.array(boxes_list, dtype=np.float32).reshape(-1, 4) if boxes_list else np.zeros((0, 4), dtype=np.float32)
         )
 
-        if len(keypoints):
-            max_k = max(k.shape[0] for k in keypoints)
-            dim = keypoints[0].shape[1] if keypoints[0].ndim == 2 and keypoints[0].shape[0] > 0 else 2
-            kp_stack = np.zeros((len(keypoints), max_k, dim), dtype=np.float32)
-            for i, k in enumerate(keypoints):
-                kp_stack[i, : k.shape[0], : k.shape[1]] = k
+        # Stack to (N, K, 3) (N may be 0, keep K fixed)
+        if keypoints_list:
+            kp_stack = np.stack(keypoints_list, axis=0)
         else:
-            kp_stack = np.zeros((0, 0, 2), dtype=np.float32)
+            kp_stack = np.zeros((0, desired_k, 3), dtype=np.float32)
+
+        # Height/width integers for metadata (H,W)
+        shape_hw = (int(round(height)), int(round(width)))
 
         return {
             "im_file": im_file,
-            "shape": (height, width),
+            "shape": shape_hw,
             "cls": cls_arr,
             "bboxes": bboxes_arr,
             "segments": [],
-            "keypoints": kp_stack,  # (N, K, D) D in {2,3}
+            "keypoints": kp_stack,  # (N, K, 3)
+            "lines": pose["instances"][0]["lines"] if len(pose["instances"]) > 0 else [],
             "normalized": True,
             "bbox_format": "xywh",
             "example_id": example_id,

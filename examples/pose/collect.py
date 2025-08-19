@@ -8,4 +8,5 @@ table = tlc.Table.from_url("<TEST_DATA>/projects/Geometry/datasets/default-datas
 # collect_pose_metrics(model, table)
 model.collect(
     tables={"train": table},
+    rect=False,
 )

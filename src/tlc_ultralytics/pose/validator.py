@@ -18,7 +18,18 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
     _default_label_column_name = POSE_LABEL_COLUMN_NAME
 
     def check_dataset(self, *args, **kwargs):
-        return tlc_check_pose_dataset(*args, **kwargs)
+        # return tlc_check_pose_dataset(*args, **kwargs)
+        tables = args[1]
+        return {
+            **tables,
+            "names": {0: "person"},
+            "names_3lc": {"person": 0},
+            "nc": 1,
+            "range_to_3lc_class": {0: 0},
+            "3lc_class_to_range": {0: 0},
+            "channels": 3,  # TODO(Frederik): Read out channels from appropriate place and populate here
+            "kpt_shape": (17, 3),
+        }
 
     def build_dataset(self, table, mode: str = "val", batch=None):
         return TLCYOLOPoseDataset(
@@ -56,8 +67,10 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         schema = tlc.Schema(
             values={
                 "instances": tlc.Schema(values=values_dict, size0=tlc.DimensionNumericValue()),
-                tlc.IMAGE_WIDTH: tlc.Schema(value=tlc.Float32Value()),
-                tlc.IMAGE_HEIGHT: tlc.Schema(value=tlc.Float32Value()),
+                "x_min": tlc.Schema(value=tlc.Float32Value()),
+                "y_min": tlc.Schema(value=tlc.Float32Value()),
+                "x_max": tlc.Schema(value=tlc.Float32Value()),
+                "y_max": tlc.Schema(value=tlc.Float32Value()),
             }
         )
         return {"pose_predicted": schema}
@@ -70,8 +83,10 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             if len(pred["keypoints"]) == 0:
                 predicted.append(
                     {
-                        tlc.IMAGE_WIDTH: w,
-                        tlc.IMAGE_HEIGHT: h,
+                        "x_max": w,
+                        "y_max": h,
+                        "x_min": 0,
+                        "y_min": 0,
                         "instances": [],
                     }
                 )
@@ -85,15 +100,17 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                 conf = kpts[j, :, 2] if kpts.shape[2] >= 3 else np.ones(kpts.shape[1], dtype=np.float32)
                 inst = {
                     "xys": xy.tolist(),
-                    "lines": [],
+                    "lines": batch["lines"][0],
                     "xys_additional_data": {"conf": conf.astype(np.float32).tolist()},
                 }
                 instances.append(inst)
 
             predicted.append(
                 {
-                    tlc.IMAGE_WIDTH: w,
-                    tlc.IMAGE_HEIGHT: h,
+                    "x_max": w,
+                    "y_max": h,
+                    "x_min": 0,
+                    "y_min": 0,
                     "instances": instances,
                 }
             )
