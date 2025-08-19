@@ -44,6 +44,8 @@ class TLCYOLODataset:
         :param label_column_name: Name of the label column in the table
         :param **kwargs: Additional arguments passed to the dataset constructor
         """
+        from tlc_ultralytics.pose.dataset import TLCYOLOPoseDataset
+
         if task == "detect":
             return TLCYOLODetectionDataset(
                 table=table,
@@ -56,6 +58,16 @@ class TLCYOLODataset:
             )
         elif task == "segment":
             return TLCYOLOSegmentationDataset(
+                table=table,
+                data=data,
+                exclude_zero=exclude_zero,
+                class_map=class_map,
+                image_column_name=image_column_name,
+                label_column_name=label_column_name,
+                **kwargs,
+            )
+        elif task == "pose":
+            return TLCYOLOPoseDataset(
                 table=table,
                 data=data,
                 exclude_zero=exclude_zero,

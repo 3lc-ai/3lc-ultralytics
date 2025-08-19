@@ -163,7 +163,7 @@ class TLCYOLOPoseDataset(TLCDatasetMixin, YOLODataset):
             kp_stack = np.zeros((0, desired_k, 3), dtype=np.float32)
 
         # Height/width integers for metadata (H,W)
-        shape_hw = (int(round(height)), int(round(width)))
+        shape_hw = (round(height), round(width))
 
         return {
             "im_file": im_file,
