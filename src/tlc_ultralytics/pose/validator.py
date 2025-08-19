@@ -19,6 +19,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
 
     def check_dataset(self, *args, **kwargs):
         # return tlc_check_pose_dataset(*args, **kwargs)
+        # TODO: FIXME
         tables = args[1]
         return {
             **tables,
@@ -92,14 +93,39 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                 )
                 continue
 
+            # Parse ratio_pad robustly: ((gain_w, gain_h), (padw, padh)) or (gain, (padw, padh))
+            gw = gh = 1.0
+            padw = padh = 0.0
+            ratio_pad = batch.get("ratio_pad", None)
+            if ratio_pad is not None:
+                rp = ratio_pad[i]
+                if isinstance(rp, (tuple, list)) and len(rp) == 2:
+                    gain, pad = rp
+                    if isinstance(gain, (tuple, list)):
+                        if len(gain) >= 2:
+                            gw, gh = float(gain[0]), float(gain[1])
+                        elif len(gain) == 1:
+                            gw = gh = float(gain[0])
+                    else:
+                        gw = gh = float(gain)
+                    if isinstance(pad, (tuple, list)) and len(pad) >= 2:
+                        padw, padh = float(pad[0]), float(pad[1])
+
             kpts = pred["keypoints"].detach().cpu().numpy()  # (N, K, D)
             num_instances = kpts.shape[0]
             instances = []
             for j in range(num_instances):
-                xy = kpts[j, :, :2].reshape(-1)
+                xy = kpts[j, :, :2].copy()
+                # undo letterbox: (xy - pad) / gain (per-axis)
+                xy[:, 0] = (xy[:, 0] - padw) / (gw + 1e-9)
+                xy[:, 1] = (xy[:, 1] - padh) / (gh + 1e-9)
+                # clamp to image
+                xy[:, 0] = np.clip(xy[:, 0], 0, w - 1)
+                xy[:, 1] = np.clip(xy[:, 1], 0, h - 1)
+
                 conf = kpts[j, :, 2] if kpts.shape[2] >= 3 else np.ones(kpts.shape[1], dtype=np.float32)
                 inst = {
-                    "xys": xy.tolist(),
+                    "xys": xy.reshape(-1).astype(np.float32).tolist(),
                     "lines": batch["lines"][0],
                     "xys_additional_data": {"conf": conf.astype(np.float32).tolist()},
                 }
