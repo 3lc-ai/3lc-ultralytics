@@ -273,7 +273,7 @@ class TLCValidatorMixin(BaseValidator):
         self._final_validation = None
 
     def _write_per_class_metrics_tables(self) -> None:
-        if self.args.task not in ("detect", "segment"):
+        if self.args.task not in ("detect", "segment"):  # , "pose"
             # Per-class metrics currently only supported for detection and segmentation tasks
             return
 

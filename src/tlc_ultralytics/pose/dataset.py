@@ -7,9 +7,11 @@ import tlc
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.utils import colorstr
 
+from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
 
 
+# class TLCYOLOPoseDataset(BaseTLCYOLODataset):
 class TLCYOLOPoseDataset(TLCDatasetMixin, YOLODataset):
     """3LC YOLO dataset for pose (keypoints) models.
 

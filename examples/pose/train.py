@@ -15,15 +15,19 @@ import tlc
 from tlc_ultralytics import YOLO
 
 model = YOLO("yolo11n-pose.pt")
-# table = tlc.Table.from_url("<TEST_DATA>/projects/Geometry/datasets/default-dataset/tables/COCO Keypoints")
 
-train = tlc.Url.create_table_url("initial", "hands-val", "GEOMETRY")
-val = tlc.Url.create_table_url("initial", "hands-val", "GEOMETRY")
+train = tlc.Table.from_names("initial", "hands-val", "GEOMETRY")
+val = tlc.Table.from_names("initial", "hands-val", "GEOMETRY")
 
-model.train(
-    tables={
-        "train": tlc.Table.from_url(train),
-        "val": tlc.Table.from_url(val),
-    },
-    epochs=1,
-)
+# train = tlc.Table.from_url("<TEST_DATA>/projects/Geometry/datasets/coco8-pose-train/tables/initial")
+# val = tlc.Table.from_url("<TEST_DATA>/projects/Geometry/datasets/coco8-pose-val/tables/initial")
+
+if __name__ == "__main__":
+    model.train(
+        tables={
+            "train": train,
+            "val": val,
+        },
+        epochs=10,
+        workers=0,
+    )

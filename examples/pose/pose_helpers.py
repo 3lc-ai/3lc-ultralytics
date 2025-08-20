@@ -17,12 +17,12 @@ YOLO_HAND_LANDMARKS = {
     2: "THUMB_MMC",
     3: "THUMB_IP",
     4: "THUMB_TIP",
-    5: "INDEX_FINGERMCP",
+    5: "INDEX_FINGER_MCP",
     6: "INDEX_FINGER_PIP",
     7: "INDEX_FINGER_DIP",
     8: "INDEX_FINGER_TIP",
     9: "MIDDLE_FINGER_MCP",
-    10: "MIDDLE_FINGERPIP",
+    10: "MIDDLE_FINGER_PIP",
     11: "MIDDLE_FINGER_DIP",
     12: "MIDDLE_FINGER_TIP",
     13: "RING_FINGER_MCP",
@@ -56,7 +56,7 @@ YOLO_HAND_SKELETON = [
     (15, 16),
     (17, 18),
     (18, 19),
-    (19, 29),
+    (19, 20),
 ]
 
 

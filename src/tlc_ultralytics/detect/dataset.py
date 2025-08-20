@@ -74,6 +74,7 @@ class TLCYOLODataset:
                 class_map=class_map,
                 image_column_name=image_column_name,
                 label_column_name=label_column_name,
+                task="pose",
                 **kwargs,
             )
         else:
