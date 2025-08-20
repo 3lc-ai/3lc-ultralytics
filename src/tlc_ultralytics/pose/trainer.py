@@ -16,6 +16,7 @@ class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
 
     def get_dataset(self):
         tables = self._tables
+        random_table = next(iter(tables.values()))
         self.data = {
             **tables,
             "names": {0: "person"},
@@ -24,7 +25,8 @@ class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
             "range_to_3lc_class": {0: 0},
             "3lc_class_to_range": {0: 0},
             "channels": 3,  # TODO(Frederik): Read out channels from appropriate place and populate here
-            "kpt_shape": (17, 3),
+            "kpt_shape": random_table.kpt_shape if hasattr(random_table, "kpt_shape") else (17, 3),
+            "flip_idx": random_table.flip_idx if hasattr(random_table, "flip_idx") else None,
         }
 
         if "val" not in self.data:

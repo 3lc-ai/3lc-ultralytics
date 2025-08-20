@@ -30,7 +30,7 @@ class TLCYOLOPoseDataset(TLCDatasetMixin, YOLODataset):
         self._exclude_zero = exclude_zero
         self._class_map = class_map or {}
         self._image_column_name = image_column_name or tlc.IMAGE
-        self._label_column_name = label_column_name or "pose"
+        self._label_column_name = label_column_name or tlc.KEYPOINTS_2D
 
         super().__init__(table, data=data, **kwargs)
         self._post_init()
