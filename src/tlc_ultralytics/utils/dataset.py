@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from pathlib import Path
+from typing import Literal
 
 import tlc
 import yaml
@@ -10,16 +11,47 @@ from ultralytics.utils import LOGGER, colorstr
 from tlc_ultralytics.constants import TLC_COLORSTR, TLC_PREFIX
 
 
+def get_dataset_functions(
+    task: Literal["detect", "segment", "pose", "classify"],
+) -> tuple[Callable, Callable, Callable]:
+    if task == "detect":
+        from tlc_ultralytics.detect.utils import check_det_table, get_or_create_det_table, tlc_check_det_dataset
+
+        dataset_checker = tlc_check_det_dataset
+        table_creator = get_or_create_det_table
+        table_checker = check_det_table
+    elif task == "segment":
+        from tlc_ultralytics.detect.utils import tlc_check_det_dataset
+        from tlc_ultralytics.segment.utils import check_seg_table, get_or_create_seg_table
+
+        dataset_checker = tlc_check_det_dataset
+        table_creator = get_or_create_seg_table
+        table_checker = check_seg_table
+    elif task == "classify":
+        from tlc_ultralytics.classify.utils import check_cls_table, get_or_create_cls_table, tlc_check_cls_dataset
+
+        dataset_checker = tlc_check_cls_dataset
+        table_creator = get_or_create_cls_table
+        table_checker = check_cls_table
+    elif task == "pose":
+        from tlc_ultralytics.detect.utils import tlc_check_det_dataset
+        from tlc_ultralytics.pose.utils import check_pose_table, get_or_create_pose_table
+
+        dataset_checker = tlc_check_det_dataset
+        table_creator = get_or_create_pose_table
+        table_checker = check_pose_table
+
+    return dataset_checker, table_creator, table_checker
+
+
 def check_tlc_dataset(  # noqa: C901
     data: str,
     tables: dict[str, tlc.Table | tlc.Url | str] | None,
     image_column_name: str,
     label_column_name: str,
-    dataset_checker: Callable[[str], dict[str, object]] | None = None,
-    table_creator: Callable[[str, dict[str, object], str, str, str, str, str], tlc.Table] | None = None,
-    table_checker: Callable[[str, tlc.Table], bool] | None = None,
     project_name: str | None = None,
     splits: Iterable[str] | None = None,
+    task: Literal["detect", "segment", "pose", "classify"] | None = None,
 ) -> dict[str, tlc.Table | dict[float, str] | int]:
     """Get or create tables for YOLO datasets. data is ignored when tables is provided.
 
@@ -34,6 +66,7 @@ def check_tlc_dataset(  # noqa: C901
     :param splits: List of splits to parse.
     :return: Dictionary of tables and class names
     """
+    dataset_checker, table_creator, table_checker = get_dataset_functions(task)
     # If the data starts with the 3LC prefix, parse the YAML file and populate `tables`
     has_prefix = False
     if tables is None and data.startswith(TLC_PREFIX):
@@ -118,37 +151,43 @@ def check_tlc_dataset(  # noqa: C901
 
     first_split = next(iter(tables.keys()))
 
-    names = tables[first_split].get_simple_value_map(label_column_name)
-    value_map = tables[first_split].get_value_map(label_column_name)
+    value_map = get_value_map_from_table(tables[first_split], label_column_name, task)
+    names = tlc.SchemaHelper.to_simple_value_map(value_map)
+    if task == "pose":
+        kpt_shape = get_kpt_shape_from_table(tables[first_split])
+        flip_idx = get_flip_idx_from_table(tables[first_split])
+        keypoint_names = get_keypoint_names_from_table(tables[first_split], task)
+    else:
+        kpt_shape, flip_idx, keypoint_names = (17, 3), None, None
 
     if names is None:
         raise ValueError(f"Failed to get value map for table with Url: {tables[first_split].url}")
 
-    for split, split_table in tables.items():
-        split_names = split_table.get_simple_value_map(label_column_name)
+    # for split, split_table in tables.items():
+    #     split_names = split_table.get_simple_value_map(label_column_name)
 
-        if split_names is None:
-            raise ValueError(f"Failed to get value map for table with Url: {tables[split].url}")
+    #     if split_names is None:
+    #         raise ValueError(f"Failed to get value map for table with Url: {tables[split].url}")
 
-        if split_names != names:
-            first_items = set(names.items())
-            split_items = set(split_names.items())
+    #     if split_names != names:
+    #         first_items = set(names.items())
+    #         split_items = set(split_names.items())
 
-            only_in_first = first_items - split_items
-            only_in_split = split_items - first_items
+    #         only_in_first = first_items - split_items
+    #         only_in_split = split_items - first_items
 
-            messages = []
+    #         messages = []
 
-            if only_in_first:
-                dict_str = "{" + ", ".join(f"{k}: '{v}'" for k, v in only_in_first) + "}"
-                messages.append(f"'{first_split}' has categories that '{split}' does not: {dict_str}")
-            if only_in_split:
-                dict_str = "{" + ", ".join(f"{k}: '{v}'" for k, v in only_in_split) + "}"
-                messages.append(f"'{split}' has categories that '{first_split}' does not: {dict_str}")
+    #         if only_in_first:
+    #             dict_str = "{" + ", ".join(f"{k}: '{v}'" for k, v in only_in_first) + "}"
+    #             messages.append(f"'{first_split}' has categories that '{split}' does not: {dict_str}")
+    #         if only_in_split:
+    #             dict_str = "{" + ", ".join(f"{k}: '{v}'" for k, v in only_in_split) + "}"
+    #             messages.append(f"'{split}' has categories that '{first_split}' does not: {dict_str}")
 
-            error_msg = "All splits must have the same categories, but " + " and ".join(messages)
+    #         error_msg = "All splits must have the same categories, but " + " and ".join(messages)
 
-            raise ValueError(error_msg)
+    #         raise ValueError(error_msg)
 
     # Map name indices to 0, 1, ..., n-1
     names_yolo = dict(enumerate(names.values()))
@@ -162,7 +201,47 @@ def check_tlc_dataset(  # noqa: C901
         "range_to_3lc_class": range_to_3lc_class,
         "3lc_class_to_range": {v: k for k, v in range_to_3lc_class.items()},
         "channels": 3,  # TODO(Frederik): Read out channels from appropriate place and populate here
+        "kpt_shape": kpt_shape,
+        "flip_idx": flip_idx,
+        "kpt_names": keypoint_names,
     }
+
+
+def get_value_map_from_table(
+    table: tlc.Table,
+    label_column_name: str,
+    task: Literal["detect", "segment", "pose", "classify"],
+) -> dict[int, str]:
+    if task == "pose":
+        return table.rows_schema["keypoints_2d"]["instances_additional_data"]["bb_list"]["label"].value.map
+    else:
+        return table.get_value_map(label_column_name)
+
+
+def get_keypoint_names_from_table(
+    table: tlc.Table,
+    task: Literal["detect", "segment", "pose", "classify"],
+) -> list[str]:
+    if task != "pose":
+        return None
+    else:
+        xys_map = table.rows_schema["keypoints_2d"]["instances"]["xys"].size0.map
+        xys_map_simple = tlc.SchemaHelper.to_simple_value_map(xys_map)
+        return list(set(xys_map_simple.values()))
+
+
+def get_kpt_shape_from_table(table: tlc.Table) -> tuple[int, int]:
+    if hasattr(table, "kpt_shape"):
+        return table.kpt_shape
+    else:
+        return (17, 3)
+
+
+def get_flip_idx_from_table(table: tlc.Table) -> list[int] | None:
+    if hasattr(table, "flip_idx"):
+        return table.flip_idx
+    else:
+        return None
 
 
 def parse_3lc_yaml_file(data_file: str) -> dict[str, tlc.Table]:

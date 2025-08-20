@@ -8,7 +8,6 @@ from tlc.client.torch.metrics.metrics_collectors.bounding_box_metrics_collector 
     _TLCPredictedBoundingBox,
     _TLCPredictedBoundingBoxes,
 )
-from ultralytics.data.utils import check_det_dataset
 
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
 from tlc_ultralytics.utils import check_tlc_dataset
@@ -27,11 +26,9 @@ def tlc_check_det_dataset(
         tables,
         image_column_name,
         label_column_name,
-        dataset_checker=check_det_dataset,
-        table_creator=get_or_create_det_table,
-        table_checker=check_det_table,
         project_name=project_name,
         splits=splits,
+        task="detect",
     )
 
 
