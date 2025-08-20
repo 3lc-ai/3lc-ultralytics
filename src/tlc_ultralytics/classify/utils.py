@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 import tlc
-from ultralytics.data.utils import IMG_FORMATS, check_cls_dataset
+from ultralytics.data.utils import IMG_FORMATS
 from ultralytics.utils import ROOT, YAML
 
 from tlc_ultralytics.utils import check_tlc_dataset
@@ -33,11 +33,9 @@ def tlc_check_cls_dataset(
         tables,
         image_column_name,
         label_column_name,
-        dataset_checker=check_cls_dataset,
-        table_creator=get_or_create_cls_table,
-        table_checker=check_cls_table,
         project_name=project_name,
         splits=splits,
+        task="classify",
     )
 
 

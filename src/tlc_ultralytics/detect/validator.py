@@ -15,11 +15,11 @@ from tlc_ultralytics.detect.loss import v8UnreducedDetectionLoss
 from tlc_ultralytics.detect.utils import (
     build_tlc_yolo_dataset,
     construct_bbox_struct,
-    tlc_check_det_dataset,
     yolo_loss_schemas,
     yolo_predicted_bounding_box_schema,
 )
 from tlc_ultralytics.engine.validator import TLCValidatorMixin
+from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 
 class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
@@ -27,7 +27,7 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
     _default_label_column_name = DETECTION_LABEL_COLUMN_NAME
 
     def check_dataset(self, *args, **kwargs):
-        return tlc_check_det_dataset(*args, **kwargs)
+        return check_tlc_dataset(*args, task="detect", **kwargs)
 
     def build_dataset(self, table, mode="val", batch=None):
         return build_tlc_yolo_dataset(

@@ -152,6 +152,11 @@ class TLCYOLOPoseDataset(TLCDatasetMixin, YOLODataset):
 
             boxes_list.append(box)
 
+        # Boxes list override
+        boxes_list = [
+            [bb[tlc.X0], bb[tlc.Y0], bb[tlc.X1], bb[tlc.Y1]] for bb in pose["instances_additional_data"]["bb_list"]
+        ]
+
         # Convert to arrays with expected shapes
         cls_arr = np.array(classes_list, dtype=np.float32).reshape(-1, 1)
         bboxes_arr = (

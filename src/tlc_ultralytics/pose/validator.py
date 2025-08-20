@@ -6,46 +6,19 @@ import numpy as np
 import tlc
 import torch
 from ultralytics.models.yolo.pose.val import PoseValidator
-from ultralytics.utils.metrics import OKS_SIGMA
 
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME
 from tlc_ultralytics.engine.validator import TLCValidatorMixin
 from tlc_ultralytics.pose.dataset import TLCYOLOPoseDataset
-from tlc_ultralytics.pose.utils import tlc_check_pose_dataset
+from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 
 class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
     _default_image_column_name = IMAGE_COLUMN_NAME
     _default_label_column_name = POSE_LABEL_COLUMN_NAME
 
-    # def init_metrics(self, model: torch.nn.Module) -> None:
-    #     """
-    #     Initialize evaluation metrics for YOLO pose validation.
-
-    #     Args:
-    #         model (torch.nn.Module): Model to validate.
-    #     """
-    #     super(PoseValidator, self).init_metrics(model)
-    #     # Then override these
-    #     # self.kpt_shape = self.data["kpt_shape"]
-    #     # self.sigma = OKS_SIGMA
-
     def check_dataset(self, *args, **kwargs):
-        # return tlc_check_pose_dataset(*args, **kwargs)
-        # TODO: FIXME
-        tables = args[1]
-        random_table = next(iter(tables.values()))
-        return {
-            **tables,
-            "names": {0: "person"},
-            "names_3lc": {"person": 0},
-            "nc": 1,
-            "range_to_3lc_class": {0: 0},
-            "3lc_class_to_range": {0: 0},
-            "channels": 3,  # TODO(Frederik): Read out channels from appropriate place and populate here
-            "kpt_shape": random_table.kpt_shape if hasattr(random_table, "kpt_shape") else (17, 3),
-            "flip_idx": random_table.flip_idx if hasattr(random_table, "flip_idx") else None,
-        }
+        return check_tlc_dataset(*args, task="pose", **kwargs)
 
     def build_dataset(self, table, mode: str = "val", batch=None):
         return TLCYOLOPoseDataset(
@@ -73,9 +46,16 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         # self._table.rows_schema["keypoints_2d"]["instances"]["lines"].default_value
         predicted_pose_schema = tlc.Keypoints2DSchema(
             keypoint_shape=self.kpt_shape,
-            # keypoint_names=self.keypoint_names,
+            keypoint_names=self.data["kpt_names"],
             # lines_default_value=self.lines,
             per_point_schemas={tlc.CONFIDENCE: tlc.Schema(value=tlc.Float32Value(), size0=tlc.DimensionNumericValue())},
+            per_instance_schemas={
+                "bb_list": tlc.core.builtins.schemas.keypoints.BoundingBoxesSchema(
+                    writable=False,
+                    label_value_map=tlc.MapElement._construct_value_map(self.data["names"]),
+                    is_list=True,
+                )
+            },
             writable=False,
         )
 
@@ -136,6 +116,19 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                 }
                 instances.append(inst)
 
+            # Collect predicted bounding boxes
+            predicted_bbs = pred["bboxes"].cpu().numpy()
+            tlc_predicted_bbs = [
+                {
+                    tlc.X0: bb[0],
+                    tlc.Y0: bb[1],
+                    tlc.X1: bb[2],
+                    tlc.Y1: bb[3],
+                    tlc.LABEL: 0,
+                }
+                for bb in predicted_bbs
+            ]
+
             predicted.append(
                 {
                     "x_max": w,
@@ -143,6 +136,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                     "x_min": 0,
                     "y_min": 0,
                     "instances": instances,
+                    "instances_additional_data": {"bb_list": tlc_predicted_bbs},
                 }
             )
 

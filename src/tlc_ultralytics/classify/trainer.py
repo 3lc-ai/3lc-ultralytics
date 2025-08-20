@@ -6,7 +6,8 @@ import ultralytics
 from ultralytics.models import yolo
 
 from tlc_ultralytics.classify.dataset import TLCClassificationDataset
-from tlc_ultralytics.classify.utils import tlc_check_cls_dataset
+
+# from tlc_ultralytics.classify.utils import tlc_check_cls_dataset
 from tlc_ultralytics.classify.validator import TLCClassificationValidator
 from tlc_ultralytics.constants import (
     CLASSIFY_LABEL_COLUMN_NAME,
@@ -15,6 +16,7 @@ from tlc_ultralytics.constants import (
 from tlc_ultralytics.engine.trainer import TLCTrainerMixin
 from tlc_ultralytics.overrides import build_dataloader
 from tlc_ultralytics.utils import create_sampler
+from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 
 class TLCClassificationTrainer(TLCTrainerMixin, yolo.classify.ClassificationTrainer):
@@ -23,22 +25,24 @@ class TLCClassificationTrainer(TLCTrainerMixin, yolo.classify.ClassificationTrai
 
     def get_dataset(self):
         """Overrides the get_dataset method to get or create 3LC tables."""
-        self.data = tlc_check_cls_dataset(
+        self.data = check_tlc_dataset(
             self.args.data,
             self._tables,
             self._image_column_name,
             self._label_column_name,
             project_name=self._settings.project_name,
             splits=("train", "val"),
+            task="classify",
         )
         if "val" not in self.data:
-            data_test = tlc_check_cls_dataset(
+            data_test = check_tlc_dataset(
                 self.args.data,
                 self._tables,
                 self._image_column_name,
                 self._label_column_name,
                 project_name=self._settings.project_name,
                 splits=("test",),
+                task="classify",
             )
             self.data["test"] = data_test["test"]
 

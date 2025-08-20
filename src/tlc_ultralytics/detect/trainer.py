@@ -11,12 +11,12 @@ from tlc_ultralytics.constants import (
 )
 from tlc_ultralytics.detect.utils import (
     build_tlc_yolo_dataset,
-    tlc_check_det_dataset,
 )
 from tlc_ultralytics.detect.validator import TLCDetectionValidator
 from tlc_ultralytics.engine.trainer import TLCTrainerMixin
 from tlc_ultralytics.overrides import build_dataloader
 from tlc_ultralytics.utils import create_sampler
+from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 
 class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
@@ -27,24 +27,26 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
 
     def get_dataset(self):
         # Parse yaml and create tables
-        self.data = tlc_check_det_dataset(
+        self.data = check_tlc_dataset(
             self.args.data,
             self._tables,
             self._image_column_name,
             self._label_column_name,
             project_name=self._settings.project_name,
             splits=("train", "val"),
+            task="detect",
         )
 
         # Get test data if val not present
         if "val" not in self.data:
-            data_test = tlc_check_det_dataset(
+            data_test = check_tlc_dataset(
                 self.args.data,
                 self._tables,
                 self._image_column_name,
                 self._label_column_name,
                 project_name=self._settings.project_name,
                 splits=("test",),
+                task="detect",
             )
             self.data["test"] = data_test["test"]
 

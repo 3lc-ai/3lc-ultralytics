@@ -6,8 +6,10 @@ from ultralytics.models.yolo.pose.train import PoseTrainer
 
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME
 from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
-from tlc_ultralytics.pose.utils import tlc_check_pose_dataset
+
+# from tlc_ultralytics.pose.utils import tlc_check_pose_dataset
 from tlc_ultralytics.pose.validator import TLCPoseValidator
+from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 
 class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
@@ -15,28 +17,26 @@ class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
     _default_label_column_name = POSE_LABEL_COLUMN_NAME
 
     def get_dataset(self):
-        tables = self._tables
-        random_table = next(iter(tables.values()))
-        self.data = {
-            **tables,
-            "names": {0: "person"},
-            "names_3lc": {"person": 0},
-            "nc": 1,
-            "range_to_3lc_class": {0: 0},
-            "3lc_class_to_range": {0: 0},
-            "channels": 3,  # TODO(Frederik): Read out channels from appropriate place and populate here
-            "kpt_shape": random_table.kpt_shape if hasattr(random_table, "kpt_shape") else (17, 3),
-            "flip_idx": random_table.flip_idx if hasattr(random_table, "flip_idx") else None,
-        }
+        self.data = check_tlc_dataset(
+            self.args.data,
+            self._tables,
+            self._image_column_name,
+            self._label_column_name,
+            project_name=self._settings.project_name,
+            splits=("train", "val"),
+            task="pose",
+        )
 
+        # Get test data if val not present
         if "val" not in self.data:
-            data_test = tlc_check_pose_dataset(
+            data_test = check_tlc_dataset(
                 self.args.data,
                 self._tables,
                 self._image_column_name,
                 self._label_column_name,
                 project_name=self._settings.project_name,
                 splits=("test",),
+                task="pose",
             )
             self.data["test"] = data_test["test"]
 
