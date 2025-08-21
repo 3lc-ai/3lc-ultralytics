@@ -30,7 +30,7 @@
 
 3LC is free for non-commercial use.
 
-![3LC Dashboard Overview](https://github.com/3lc-ai/ultralytics/blob/tlc-integration/ultralytics/utils/tlc/_static/dashboard.png?raw=true)
+![3LC Dashboard Overview](https://github.com/3lc-ai/3lc-ultralytics/blob/develop/src/tlc_ultralytics/_static/dashboard.png?raw=true)
 
 ## Quick Start
 
