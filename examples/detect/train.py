@@ -4,7 +4,7 @@ if __name__ == "__main__":
     model = YOLO("yolo11m.pt")
 
     settings = Settings(
-        image_embeddings_dim=2, # Collect image embeddings and reduce to 2D
+        image_embeddings_dim=2,  # Collect image embeddings and reduce to 2D
     )
 
     model.train(
