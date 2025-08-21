@@ -6,7 +6,8 @@
 
 <div align="center">
 
-![PyPI](https://img.shields.io/pypi/v/3lc-ultralytics?logo=pypi&logoColor=white) [![Discord](https://img.shields.io/badge/discord-3LC-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwnwFtfafC)
+[![PyPI](https://img.shields.io/pypi/v/3lc-ultralytics?logo=pypi&logoColor=white)](https://pypi.org/project/3lc-ultralytics/)
+[![Discord](https://img.shields.io/badge/discord-3LC-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwnwFtfafC)
 
 </div>
 
@@ -20,7 +21,7 @@
 </p>
 
 <p align="center">
-Ultralytics YOLO classification, object detection and segmentation with 3LC integrated.
+<a href="https://docs.ultralytics.com/">Ultralytics YOLO</a> classification, object detection and segmentation with 3LC integrated.
 </p>
 
 ## About 3LC
@@ -29,7 +30,7 @@ Ultralytics YOLO classification, object detection and segmentation with 3LC inte
 
 3LC is free for non-commercial use.
 
-![3LC Dashboard Overview](https://github.com/3lc-ai/ultralytics/blob/tlc-integration/ultralytics/utils/tlc/_static/dashboard.png?raw=true)
+![3LC Dashboard Overview](https://github.com/3lc-ai/3lc-ultralytics/blob/develop/src/tlc_ultralytics/_static/dashboard.png?raw=true)
 
 ## Quick Start
 
@@ -40,6 +41,8 @@ Install the package and requirements into a virtual environment:
 ```bash
 pip install 3lc-ultralytics
 ```
+
+> This installs both [`3lc`](https://pypi.org/project/3lc/) and [`ultralytics`](https://pypi.org/project/ultralytics/), which are dependencies of `3lc-ultralytics`. Refer to the respective projects for how to set up a 3LC user and the Ultralytics License.
 
 ### Basic Training
 
@@ -64,14 +67,31 @@ Check out the [examples directory](examples/) for complete training and metrics 
 
 ## Working with Datasets
 
-The integration supports three ways of providing the data use. These are listed below:
+The integration supports three ways of providing the data to use. These are listed below:
 
 <details open>
 <summary><strong>Using 3LC Tables Directly (Recommended)</strong></summary>
 
 The recommended way of providing the data to use is to pass `tlc.Table`s or `tlc.Url`s to `tlc.Table`s directly.
 
-To learn how to create `tlc.Table`s for your dataset, check out the [examples directory](/examples/).
+To create a `tlc.Table` for one of your split your YOLO detection dataset, use `tlc.Table.from_yolo`:
+
+```python
+import tlc
+
+my_train_table = tlc.Table.from_yolo(
+    dataset_yaml_path="path/to/my/dataset.yaml",
+    split="train",
+    task="detect",
+    project_name="My Project",
+    dataset_name="train",
+    table_name="initial",
+)
+```
+
+Check out the [examples directory](/examples/) for more examples, for example how to make `tlc.Table`s for different tasks.
+
+Once the `tlc.Table`s have been created, the following code can be used to run training:
 
 ```python
 from tlc_ultralytics import YOLO
@@ -132,7 +152,7 @@ model = YOLO("yolo11n.pt")
 model.train(data="3LC://my_dataset.yaml")
 ```
 
-Note: `names` and `nc` are not needed since the `tlc.Table`s themselves contain the category names and indices.
+Note that `names` and `nc` are not needed since the `tlc.Table`s themselves contain the category names and indices.
 
 </details>
 
@@ -157,7 +177,7 @@ For instance segmentation, you can provide `image_column_name` and `label_column
 Some YOLO tasks can not yet be visualized in the 3LC Dashboard, but these are on the roadmap and will be made available in the future:
 
 - **Pose Estimation**: Not yet supported. Let us know on Discord if you would like this to be supported!
-- **OBB (Oriented Object Detection)**: Not yet supported. Let us know on Discord if you would like this to be supported!
+- **OBB (Oriented Bounding Boxes)**: Not yet supported. Let us know on Discord if you would like this to be supported!
 
 ## Metrics Collection Only
 
@@ -187,6 +207,9 @@ model.collect(
 ```
 
 See [examples/detect/collect.py](examples/detect/collect.py) for a complete metrics collection example.
+
+> WARNING ⚠️: When using `.collect()`, the model must be compatible with the provided `tlc.Table`.
+> For example, the categories (called `names` in Ultralytics) in the `tlc.Table`s must match those that the model was trained on.
 
 ## 3LC Settings
 

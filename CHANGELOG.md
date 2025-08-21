@@ -6,6 +6,14 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Added
+
+- A `README.wheel.md` file is added to provide a shorter description in the built wheel, which is displayed on PyPI.
+
+### Changed
+
+- The file `examples/README.md` is expanded with more details on how to create `tlc.Table`s and how to use them.
+
 ## [0.1.0] - 2025-08-19
 
 ### Migration Guide
