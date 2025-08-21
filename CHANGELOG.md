@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.1.1] - 2025-08-21
+
 ### Added
 
 - A `README.wheel.md` file is added to provide a shorter description in the built wheel, which is displayed on PyPI.
