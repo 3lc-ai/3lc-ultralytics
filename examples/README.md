@@ -2,7 +2,33 @@
 
 This directory contains examples for using the 3LC YOLO integration for different computer vision tasks. For the main documentation, see the [repository README](../README.md).
 
-## Example Files
+## Register your dataset - Creating `tlc.Table`s
+
+The first step when working with 3LC is to register your dataset as a 3LC Table. Typically, a `tlc.Table` is created for each split of your dataset. The way to do this is different for each task, and we will show these here. There are several ways of creating `tlc.Table`s, such as using a `tlc.TableWriter`, but most of the time the easiest is to use convenience methods that are available for common dataset formats. We will show the ones that are natively used in Ultralytics YOLO here.
+
+### Classification
+
+The dataset format used in YOLO for classification is the `ImageFolder` available in `torchvision`. Check out ... for more details. To create a `tlc.Table` for an ImageFolder dataset, the following code can be used:
+
+TODO(Frederik): improve
+
+```python
+import tlc
+
+table = tlc.Table.from_image_folder(...)
+```
+
+### Object Detection
+
+### Instance Segmentation
+
+## Training
+
+To run training with the 3LC integration, the 
+
+## Collection
+
+The examples are grouped by task, 
 
 ### Classification
 
@@ -43,10 +69,10 @@ The 3LC YOLO integration supports three main tasks:
 
 ## Next Steps
 
-After running the examples, you can:
+After running the examples, you can iteratively:
 
-1. **View results in the 3LC Dashboard**: Open the generated runs to explore metrics and visualizations
-1. **Modify your data**: Use the dashboard to identify and fix issues in your dataset
-1. **Retrain with improved data**: Use the updated tables for better model performance
+1. **View results in the 3LC Dashboard**: Open the generated runs to explore metrics and visualizations.
+1. **Modify your data**: Use the Dashboard to debug issues in your dataset, creating new edited `Table`s.
+1. **Retrain with improved data**: Use the edited `Table`s in a new training run for better model performance.
 
 For more advanced usage and configuration options, refer to the [main README](../README.md) and the [3LC Settings section](../README.md#3lc-settings).
