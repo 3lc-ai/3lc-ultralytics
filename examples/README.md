@@ -8,7 +8,7 @@ The first step when working with 3LC is to register your dataset as a 3LC Table.
 
 ### Classification
 
-The dataset format used in YOLO for classification is the `ImageFolder` structure available in `torchvision`. This organizes images into class-specific subdirectories, making it easy to create 3LC Tables. To create a `tlc.Table` for an ImageFolder dataset, first arrange your images into separate directories for which class they belong to (see torchvision ImageFolder API docs), and then use `tlc.Table.from_image_folder`.
+The dataset format used in YOLO for classification is the `ImageFolder` structure available in `torchvision`. This organizes images into class-specific subdirectories, making it easy to create 3LC Tables. To create a `tlc.Table` for an ImageFolder dataset, first arrange your images into separate directories for which class they belong to (see [`torchvision.ImageFolder`](https://docs.pytorch.org/vision/main/generated/torchvision.datasets.ImageFolder.html)), and then use `tlc.Table.from_image_folder`.
 
 ```python
 import tlc
