@@ -17,7 +17,6 @@ from ultralytics.models.yolo import YOLO
 from tlc_ultralytics import YOLO as TLCYOLO
 from tlc_ultralytics import Settings
 from tlc_ultralytics.classify.trainer import TLCClassificationTrainer
-from tlc_ultralytics.classify.utils import tlc_check_cls_dataset
 from tlc_ultralytics.constants import (
     DEFAULT_COLLECT_RUN_DESCRIPTION,
     MAP,
@@ -31,11 +30,10 @@ from tlc_ultralytics.constants import (
 )
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
 from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
-from tlc_ultralytics.detect.utils import tlc_check_det_dataset
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
 from tlc_ultralytics.engine.utils import _complete_label_column_name
 from tlc_ultralytics.segment.trainer import TLCSegmentationTrainer
-from tlc_ultralytics.segment.utils import check_seg_table, tlc_check_seg_dataset
+from tlc_ultralytics.segment.utils import check_seg_table
 from tlc_ultralytics.utils import check_tlc_dataset
 
 DUMMY_IMAGE_FILE = Path(__file__).parent.parent / "src" / "tlc_ultralytics" / "_static" / "dashboard.png"
@@ -693,29 +691,32 @@ def test_arbitrary_class_indices(task) -> None:  # noqa: C901
     predicted_label_column_name = TASK2PREDICTED_LABEL_COLUMN_NAME[task]
 
     if task == "detect":
-        data_dict = tlc_check_det_dataset(
+        data_dict = check_tlc_dataset(
             data=TASK2DATASET["detect"],
             tables=None,
             image_column_name="image",
             label_column_name=label_column_name,
             project_name=settings.project_name,
+            task="detect",
         )
     elif task == "classify":
-        data_dict = tlc_check_cls_dataset(
+        data_dict = check_tlc_dataset(
             data=TASK2DATASET["classify"],
             tables=None,
             image_column_name="image",
             label_column_name=label_column_name,
             project_name=settings.project_name,
+            task="classify",
         )
 
     elif task == "segment":
-        data_dict = tlc_check_seg_dataset(
+        data_dict = check_tlc_dataset(
             data=TASK2DATASET["segment"],
             tables=None,
             image_column_name="image",
             label_column_name=label_column_name,
             project_name=settings.project_name,
+            task="segment",
         )
 
     # Create edited tables where class indices are changed
@@ -869,6 +870,7 @@ def test_check_tlc_dataset_different_categories(train_classes, val_classes, desc
             },
             image_column_name="image",
             label_column_name="label",
+            task="classify",
         )
 
 
@@ -877,7 +879,7 @@ def test_check_tlc_dataset_bad_tables() -> None:
     tables = {"train": [1, 2, 3], "val": [4, 5, 6]}
 
     with pytest.raises(ValueError):
-        check_tlc_dataset(data="", tables=tables, image_column_name="a", label_column_name="b")
+        check_tlc_dataset(data="", tables=tables, image_column_name="a", label_column_name="b", task="detect")
 
 
 def test_check_tlc_dataset_bad_url() -> None:
@@ -885,7 +887,7 @@ def test_check_tlc_dataset_bad_url() -> None:
     tables = {"train": "some_url", "val": "some_other_url"}
 
     with pytest.raises(ValueError):
-        check_tlc_dataset(data="", tables=tables, image_column_name="a", label_column_name="b")
+        check_tlc_dataset(data="", tables=tables, image_column_name="a", label_column_name="b", task="detect")
 
 
 def test_small_segmentations() -> None:

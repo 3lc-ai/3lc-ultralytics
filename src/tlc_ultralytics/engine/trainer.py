@@ -47,11 +47,16 @@ class TLCTrainerMixin(BaseTrainer):
             project_name = (
                 self._settings.project_name if self._settings.project_name else self.data["train"].project_name
             )
+            try:
+                root_url = self._tables["train"].root
+            except Exception:
+                root_url = None
+
             self._run = tlc.init(
                 project_name=project_name,
                 description=description,
                 run_name=self._settings.run_name,
-                root_url=self._tables["train"].root,
+                # root_url=root_url,
             )
 
             LOGGER.info(

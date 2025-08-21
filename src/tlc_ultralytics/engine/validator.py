@@ -91,13 +91,18 @@ class TLCValidatorMixin(BaseValidator):
                 run_name = self._run.url.parts[-1]
                 LOGGER.info(f"{TLC_COLORSTR}Using active run named '{run_name}' in project {self._run.project_name}.")
             else:
+                try:
+                    root_url = self.data[first_split].root
+                except Exception:
+                    root_url = None
+
                 self._run = tlc.init(
                     project_name=project_name,
                     description=self._settings.run_description
                     if self._settings.run_description
                     else DEFAULT_COLLECT_RUN_DESCRIPTION,
                     run_name=self._settings.run_name,
-                    root_url=self.data[first_split].root,
+                    # root_url=root_url,
                 )
                 LOGGER.info(
                     f"{TLC_COLORSTR}Created run named '{self._run.url.parts[-1]}' in project {self._run.project_name}."

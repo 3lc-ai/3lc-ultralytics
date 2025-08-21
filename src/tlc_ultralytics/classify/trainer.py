@@ -6,8 +6,6 @@ import ultralytics
 from ultralytics.models import yolo
 
 from tlc_ultralytics.classify.dataset import TLCClassificationDataset
-
-# from tlc_ultralytics.classify.utils import tlc_check_cls_dataset
 from tlc_ultralytics.classify.validator import TLCClassificationValidator
 from tlc_ultralytics.constants import (
     CLASSIFY_LABEL_COLUMN_NAME,

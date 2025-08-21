@@ -6,8 +6,6 @@ from ultralytics.models.yolo.pose.train import PoseTrainer
 
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME
 from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
-
-# from tlc_ultralytics.pose.utils import tlc_check_pose_dataset
 from tlc_ultralytics.pose.validator import TLCPoseValidator
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
 

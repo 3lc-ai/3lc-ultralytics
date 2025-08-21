@@ -6,6 +6,7 @@ from typing import Literal
 
 import tlc
 import yaml
+from ultralytics.data.utils import check_cls_dataset, check_det_dataset
 from ultralytics.utils import LOGGER, colorstr
 
 from tlc_ultralytics.constants import TLC_COLORSTR, TLC_PREFIX
@@ -15,29 +16,27 @@ def get_dataset_functions(
     task: Literal["detect", "segment", "pose", "classify"],
 ) -> tuple[Callable, Callable, Callable]:
     if task == "detect":
-        from tlc_ultralytics.detect.utils import check_det_table, get_or_create_det_table, tlc_check_det_dataset
+        from tlc_ultralytics.detect.utils import check_det_table, get_or_create_det_table
 
-        dataset_checker = tlc_check_det_dataset
+        dataset_checker = check_det_dataset
         table_creator = get_or_create_det_table
         table_checker = check_det_table
     elif task == "segment":
-        from tlc_ultralytics.detect.utils import tlc_check_det_dataset
         from tlc_ultralytics.segment.utils import check_seg_table, get_or_create_seg_table
 
-        dataset_checker = tlc_check_det_dataset
+        dataset_checker = check_det_dataset
         table_creator = get_or_create_seg_table
         table_checker = check_seg_table
     elif task == "classify":
-        from tlc_ultralytics.classify.utils import check_cls_table, get_or_create_cls_table, tlc_check_cls_dataset
+        from tlc_ultralytics.classify.utils import check_cls_table, get_or_create_cls_table
 
-        dataset_checker = tlc_check_cls_dataset
+        dataset_checker = check_cls_dataset
         table_creator = get_or_create_cls_table
         table_checker = check_cls_table
     elif task == "pose":
-        from tlc_ultralytics.detect.utils import tlc_check_det_dataset
         from tlc_ultralytics.pose.utils import check_pose_table, get_or_create_pose_table
 
-        dataset_checker = tlc_check_det_dataset
+        dataset_checker = check_det_dataset
         table_creator = get_or_create_pose_table
         table_checker = check_pose_table
 
