@@ -92,7 +92,7 @@ train_table = tlc.Table.from_coco(
 )
 ```
 
-> NOTE: 3LC always stores instance segmentations as bitmasks internally. Only when the `tlc.Table` is accessed in Python, the polygon representation is computed from the masks.
+> NOTE: 3LC always stores instance segmentations as bitmasks internally. The polygon representation is computed from the masks only when the `tlc.Table` is accessed in Python.
 > There will therefore often be a difference between the polygons returned by a `tlc.Table` and those in the input dataset, both in terms of the vertex locations and number of vertices.
 > In practice, this leads to a small, but negligible, change in training results.
 
