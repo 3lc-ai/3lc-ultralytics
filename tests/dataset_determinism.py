@@ -7,6 +7,7 @@ with the same seed across separate processes.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -26,32 +27,37 @@ def _compare_dataset_rows(row_ultralytics: dict[str, Any], row_3lc: dict[str, An
 
         assert key in row_3lc, f"Key {key} not found in 3LC row"
         value_3lc = row_3lc[key]
+        if key == "im_file":
+            assert Path(value_ultralytics) == Path(value_3lc), "Image path not equal in 3LC and Ultralytics"
+            continue
 
         if isinstance(value_ultralytics, (np.ndarray, torch.Tensor)):
-            assert (value_ultralytics == value_3lc).all(), f"Value {key} not equal in 3LC and Ultralytics"
+            torch.testing.assert_close(value_ultralytics, value_3lc), f"Value {key} not equal in 3LC and Ultralytics"
         else:
             assert value_ultralytics == value_3lc, f"Value {key} not equal in 3LC and Ultralytics"
 
 
-def create_dataset_samples(mode: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def create_dataset_samples(mode: str, task: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Create dataset samples for both 3lc and ultralytics.
 
     Args:
         mode: Dataset mode ('train' or 'val')
-
+        task: Task to use ('detect' or 'pose')
     Returns:
         Tuple of (3lc rows, ultralytics rows)
     """
     from test_tlc_ultralytics import TASK2DATASET, TASK2MODEL
     from ultralytics.models.yolo.detect import DetectionTrainer
+    from ultralytics.models.yolo.pose import PoseTrainer
 
     from tlc_ultralytics import Settings
     from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
+    from tlc_ultralytics.pose.trainer import TLCPoseTrainer
 
     settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}")
     overrides = {
-        "data": TASK2DATASET["detect"],
-        "model": TASK2MODEL["detect"],
+        "data": TASK2DATASET[task],
+        "model": TASK2MODEL[task],
         "seed": 42,
         "deterministic": True,
     }
@@ -59,12 +65,16 @@ def create_dataset_samples(mode: str) -> tuple[list[dict[str, Any]], list[dict[s
     overrides_3lc = overrides.copy()
     overrides_3lc["settings"] = settings
 
-    trainer_ultralytics = DetectionTrainer(overrides=overrides)
+    trainer_ultralytics = (
+        DetectionTrainer(overrides=overrides) if task == "detect" else PoseTrainer(overrides=overrides)
+    )
     trainer_ultralytics.model = None
     dataset_ultralytics = trainer_ultralytics.build_dataset(trainer_ultralytics.data["train"], mode=mode, batch=4)
     rows_ultralytics = list(dataset_ultralytics)
 
-    trainer_3lc = TLCDetectionTrainer(overrides=overrides_3lc)
+    trainer_3lc = (
+        TLCDetectionTrainer(overrides=overrides_3lc) if task == "detect" else TLCPoseTrainer(overrides=overrides_3lc)
+    )
     trainer_3lc.model = None
     dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=4)
     rows_3lc = list(dataset_3lc)

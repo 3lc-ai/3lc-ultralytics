@@ -50,17 +50,29 @@ tlc.TableIndexingTable.instance().add_scan_url(
     }
 )
 
-TASK2DATASET = {"detect": "coco8.yaml", "classify": "imagenet10", "segment": "coco8-seg.yaml"}
-TASK2MODEL = {"detect": "yolo11n.pt", "classify": "yolo11n-cls.pt", "segment": "yolo11n-seg.pt"}
+TASK2DATASET = {
+    "detect": "coco8.yaml",
+    "classify": "imagenet10",
+    "segment": "coco8-seg.yaml",
+    "pose": "coco8-pose.yaml",
+}
+TASK2MODEL = {
+    "detect": "yolo11n.pt",
+    "classify": "yolo11n-cls.pt",
+    "segment": "yolo11n-seg.pt",
+    "pose": "yolo11n-pose.pt",
+}
 TASK2LABEL_COLUMN_NAME = {
     "detect": "bbs.bb_list.label",
     "classify": "label",
     "segment": "segmentations.instance_properties.label",
+    "pose": "keypoints_2d",
 }
 TASK2PREDICTED_LABEL_COLUMN_NAME = {
     "detect": "bbs_predicted.bb_list.label",
     "classify": "predicted",
     "segment": "segmentations_predicted.instance_properties.label",
+    "pose": "keypoints_2d_predicted",
 }
 
 try:
@@ -1138,11 +1150,12 @@ def test_complete_label_column_name() -> None:
 
 
 @pytest.mark.parametrize("mode", ["train", "val"])
-def test_dataset_determinism(mode) -> None:
+@pytest.mark.parametrize("task", ["detect", "pose"])
+def test_dataset_determinism(mode, task) -> None:
     """Test that datasets are deterministic with the same seed across separate processes."""
     from dataset_determinism import _compare_dataset_rows, create_dataset_samples
 
-    rows_3lc, rows_ultralytics = create_dataset_samples(mode)
+    rows_3lc, rows_ultralytics = create_dataset_samples(mode, task)
 
     assert len(rows_3lc) == len(rows_ultralytics), "Number of batches should be the same"
 
@@ -1163,7 +1176,7 @@ def test_dataset_determinism_with_random_tracking(mode) -> None:
     import tempfile
 
     with tempfile.NamedTemporaryFile(suffix=".json", dir=TMP, delete=True) as temp_file:
-        output_file = temp_file.name
+        output_file = Path(temp_file.name).as_posix()
         cmd = [
             sys.executable,
             "-c",
