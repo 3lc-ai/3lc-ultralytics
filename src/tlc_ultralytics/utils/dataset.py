@@ -162,31 +162,35 @@ def check_tlc_dataset(  # noqa: C901
     if names is None:
         raise ValueError(f"Failed to get value map for table with Url: {tables[first_split].url}")
 
-    # for split, split_table in tables.items():
-    #     split_names = split_table.get_simple_value_map(label_column_name)
+    for split, split_table in tables.items():
+        if split == first_split:
+            continue
 
-    #     if split_names is None:
-    #         raise ValueError(f"Failed to get value map for table with Url: {tables[split].url}")
+        split_value_map = get_value_map_from_table(split_table, label_column_name, task)
+        split_names = tlc.SchemaHelper.to_simple_value_map(split_value_map)
 
-    #     if split_names != names:
-    #         first_items = set(names.items())
-    #         split_items = set(split_names.items())
+        if split_names is None:
+            raise ValueError(f"Failed to get value map for table with Url: {tables[split].url}")
 
-    #         only_in_first = first_items - split_items
-    #         only_in_split = split_items - first_items
+        if split_names != names:
+            first_items = set(names.items())
+            split_items = set(split_names.items())
 
-    #         messages = []
+            only_in_first = first_items - split_items
+            only_in_split = split_items - first_items
 
-    #         if only_in_first:
-    #             dict_str = "{" + ", ".join(f"{k}: '{v}'" for k, v in only_in_first) + "}"
-    #             messages.append(f"'{first_split}' has categories that '{split}' does not: {dict_str}")
-    #         if only_in_split:
-    #             dict_str = "{" + ", ".join(f"{k}: '{v}'" for k, v in only_in_split) + "}"
-    #             messages.append(f"'{split}' has categories that '{first_split}' does not: {dict_str}")
+            messages = []
 
-    #         error_msg = "All splits must have the same categories, but " + " and ".join(messages)
+            if only_in_first:
+                dict_str = "{" + ", ".join(f"{k}: '{v}'" for k, v in only_in_first) + "}"
+                messages.append(f"'{first_split}' has categories that '{split}' does not: {dict_str}")
+            if only_in_split:
+                dict_str = "{" + ", ".join(f"{k}: '{v}'" for k, v in only_in_split) + "}"
+                messages.append(f"'{split}' has categories that '{first_split}' does not: {dict_str}")
 
-    #         raise ValueError(error_msg)
+            error_msg = "All splits must have the same categories, but " + " and ".join(messages)
+
+            raise ValueError(error_msg)
 
     # Map name indices to 0, 1, ..., n-1
     names_yolo = dict(enumerate(names.values()))
