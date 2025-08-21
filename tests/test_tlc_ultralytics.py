@@ -1164,7 +1164,8 @@ def test_dataset_determinism(mode, task) -> None:
 
 
 @pytest.mark.parametrize("mode", ["train", "val"])
-def test_dataset_determinism_with_random_tracking(mode) -> None:
+@pytest.mark.parametrize("task", ["detect", "pose"])
+def test_dataset_determinism_with_random_tracking(mode, task) -> None:
     """Test that datasets are deterministic and don't make unexpected random calls.
 
     This test spawns a subprocess, enables random tracking, and checks that no
@@ -1175,13 +1176,14 @@ def test_dataset_determinism_with_random_tracking(mode) -> None:
     import sys
     import tempfile
 
-    with tempfile.NamedTemporaryFile(suffix=".json", dir=TMP, delete=True) as temp_file:
-        output_file = Path(temp_file.name).as_posix()
+    TMP.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=str(TMP)) as temp_dir:
+        output_file = (Path(temp_dir) / "output.json").as_posix()
         cmd = [
             sys.executable,
             "-c",
             "from dataset_determinism import create_dataset_samples_with_tracking;"
-            f"create_dataset_samples_with_tracking('{mode}', '{output_file}')",
+            f"create_dataset_samples_with_tracking('{mode}', '{task}', '{output_file}')",
         ]
         subprocess.run(cmd, check=True, cwd=str(Path(__file__).parent))
 
@@ -1308,3 +1310,48 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
     table_val = tlc.Table.from_yolo(yolo_dataset_file, "val", if_exists="overwrite")
 
     return yolo_dataset_file, (table_train, table_val)
+
+
+def test_single_sample_equality() -> None:
+    import matplotlib.pyplot as plt
+    from dataset_determinism import _compare_dataset_rows
+    from test_tlc_ultralytics import TASK2DATASET, TASK2MODEL
+    from ultralytics.models.yolo.pose import PoseTrainer
+
+    from tlc_ultralytics import Settings
+    from tlc_ultralytics.pose.trainer import TLCPoseTrainer
+
+    task = "pose"
+    mode = "train"
+
+    settings = Settings(project_name="test_dataset_determinism_mode_train")
+    overrides = {
+        "data": TASK2DATASET[task],
+        "model": TASK2MODEL[task],
+        "seed": 42,
+        "deterministic": True,
+    }
+
+    overrides_3lc = overrides.copy()
+    overrides_3lc["settings"] = settings
+
+    trainer_ultralytics = PoseTrainer(overrides=overrides)
+
+    trainer_ultralytics.model = None
+    dataset_ultralytics = trainer_ultralytics.build_dataset(trainer_ultralytics.data["train"], mode=mode, batch=4)
+    sample_ultra = dataset_ultralytics[0]
+
+    trainer_3lc = TLCPoseTrainer(overrides=overrides_3lc)
+    trainer_3lc.model = None
+    dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=4)
+    sample_3lc = dataset_3lc[0]
+
+    plt.subplot(1, 2, 1)
+    plt.title("Ultralytics")
+    plt.imshow(sample_ultra["img"].numpy().transpose(1, 2, 0))
+    plt.subplot(1, 2, 2)
+    plt.title("3LC")
+    plt.imshow(sample_3lc["img"].numpy().transpose(1, 2, 0))
+    plt.show()
+
+    _compare_dataset_rows(sample_ultra, sample_3lc)

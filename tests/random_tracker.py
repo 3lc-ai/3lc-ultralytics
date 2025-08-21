@@ -24,6 +24,7 @@ original_randint = random.randint
 original_choice = random.choice
 original_shuffle = random.shuffle
 original_sample = random.sample
+original_random_uniform = random.uniform
 original_np_random = np.random.random
 original_np_randint = np.random.randint
 original_np_choice = np.random.choice
@@ -117,6 +118,15 @@ def tracked_sample(*args: Any, **kwargs: Any) -> list[Any]:
     return original_sample(*args, **kwargs)
 
 
+def tracked_random_uniform(*args: Any, **kwargs: Any) -> float:
+    call_counts["random.random_uniform"] += 1
+    stack = traceback.extract_stack()
+    formatted_stack = get_formatted_call_stack(stack)
+    if formatted_stack:
+        call_stacks["random.random_uniform"].append(formatted_stack)
+    return original_random_uniform(*args, **kwargs)
+
+
 # Wrapper functions for numpy.random
 def tracked_np_random(*args: Any, **kwargs: Any) -> np.ndarray:
     call_counts["np.random.random"] += 1
@@ -171,6 +181,7 @@ def enable_tracking() -> None:
     random.choice = tracked_choice
     random.shuffle = tracked_shuffle
     random.sample = tracked_sample
+    random.uniform = tracked_random_uniform
     np.random.random = cast(Any, tracked_np_random)
     np.random.randint = cast(Any, tracked_np_randint)
     np.random.choice = cast(Any, tracked_np_choice)
@@ -185,6 +196,7 @@ def disable_tracking() -> None:
     random.choice = original_choice
     random.shuffle = original_shuffle
     random.sample = original_sample
+    random.uniform = original_random_uniform
     np.random.random = original_np_random
     np.random.randint = original_np_randint
     np.random.choice = original_np_choice

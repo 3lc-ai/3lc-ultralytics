@@ -11,8 +11,7 @@ from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
 
 
-# class TLCYOLOPoseDataset(BaseTLCYOLODataset):
-class TLCYOLOPoseDataset(TLCDatasetMixin, YOLODataset):
+class TLCYOLOPoseDataset(BaseTLCYOLODataset):
     """3LC YOLO dataset for pose (keypoints) models.
 
     Builds YOLO-compatible per-image labels dict with keys: im_file, shape, cls, bboxes, keypoints.
@@ -28,20 +27,16 @@ class TLCYOLOPoseDataset(TLCDatasetMixin, YOLODataset):
         label_column_name=None,
         **kwargs,
     ):
-        self.table = table
-        self._exclude_zero = exclude_zero
-        self._class_map = class_map or {}
-        self._image_column_name = image_column_name or tlc.IMAGE
-        self._label_column_name = label_column_name or tlc.KEYPOINTS_2D
-
-        super().__init__(table, data=data, **kwargs)
+        super().__init__(
+            table,
+            data=data,
+            exclude_zero=exclude_zero,
+            class_map=class_map,
+            image_column_name=image_column_name or tlc.IMAGE,
+            label_column_name=label_column_name or tlc.KEYPOINTS_2D,
+            **kwargs,
+        )
         self._post_init()
-
-    def get_img_files(self, _):
-        im_files, labels = self._get_rows_from_table()
-        self.labels = labels
-        self.im_files = im_files
-        return self.im_files
 
     def get_labels(self):
         return self.labels

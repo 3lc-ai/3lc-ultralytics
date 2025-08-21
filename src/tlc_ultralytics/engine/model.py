@@ -79,12 +79,6 @@ class YOLO(YOLOBase):
                 "validator": TLCPoseValidator,
                 "predictor": yolo.pose.PosePredictor,
             },
-            "obb": {
-                "model": OBBModel,
-                "trainer": yolo.obb.OBBTrainer,
-                "validator": yolo.obb.OBBValidator,
-                "predictor": yolo.obb.OBBPredictor,
-            },
         }
 
     def collect(
