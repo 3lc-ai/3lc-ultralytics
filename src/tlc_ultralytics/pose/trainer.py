@@ -54,39 +54,3 @@ class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
             settings=self._settings,
             training=True,
         )
-
-    # def get_dataloader(self, dataset_path, batch_size=16, rank=0, mode="train"):
-    #     """Construct and return dataloader."""
-
-    #     sampler = create_sampler(dataset_path, mode, self._settings, distributed=rank != -1)
-
-    #     # Patch parent class module to use our build_dataloader
-    #     trainer_build_dataloader = ultralytics.models.yolo.detect.train.build_dataloader
-    #     ultralytics.models.yolo.detect.train.build_dataloader = partial(build_dataloader, sampler=sampler)
-
-    #     dataloader = super().get_dataloader(dataset_path, batch_size, rank, mode)
-
-    #     # Restore parent class module
-    #     ultralytics.models.yolo.detect.train.build_dataloader = trainer_build_dataloader
-
-    #     return dataloader
-
-    # def build_dataset(self, *args, **kwargs):
-    #     from ultralytics.models.yolo.detect.train import build_yolo_dataset as original_build_yolo_dataset
-
-    #     mode = kwargs.get("mode") or args[1]
-
-    #     exclude_zero = mode == "val" and self._settings.exclude_zero_weight_collection
-    #     ultralytics.models.yolo.detect.train.build_yolo_dataset = partial(
-    #         build_tlc_yolo_dataset,
-    #         exclude_zero=exclude_zero,
-    #         class_map=self.data["3lc_class_to_range"],
-    #         image_column_name=self._image_column_name,
-    #         label_column_name=self._label_column_name,
-    #     )
-
-    #     result = PoseTrainer.build_dataset(self, *args, **kwargs)
-
-    #     ultralytics.models.yolo.detect.train.build_yolo_dataset = original_build_yolo_dataset
-
-    #     return result

@@ -38,12 +38,6 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
         )
         self._post_init()
 
-    def get_labels(self):
-        return self.labels
-
-    def _index_to_example_id(self, index: int) -> int:
-        return self.labels[index]["example_id"]
-
     def _get_label_from_row(self, im_file: str, row: Any, example_id: int) -> dict[str, Any]:
         pose_root = self._label_column_name.split(".")[0]
         pose = row.get(pose_root, {}) or {}
@@ -74,7 +68,6 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
         instances = pose.get("instances") or []
 
         classes_list: list[int] = []
-        boxes_list: list[list[float]] = []
         keypoints_list: list[np.ndarray] = []
 
         for inst in instances:
@@ -92,14 +85,7 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
 
             # Visibilities: prefer xys_additional_data['visibilities'] else ones
             add = inst.get("xys_additional_data") or {}
-            if isinstance(add.get("visibilities"), list):
-                vis = np.array(add["visibilities"], dtype=np.float32).reshape(-1, 1)
-            else:
-                # fallback to conf if provided
-                if isinstance(add.get("conf"), list):
-                    vis = np.array(add["conf"], dtype=np.float32).reshape(-1, 1)
-                else:
-                    vis = np.ones((xys_arr.shape[0], 1), dtype=np.float32)
+            vis = np.array(add["visibilities"], dtype=np.float32).reshape(-1, 1)
 
             # Normalize x,y to [0,1] using full-image bounds
             if xys_arr.size:
@@ -125,27 +111,6 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
                     kp[:copy_k, 2:3] = pad_vis
 
             keypoints_list.append(kp)
-
-            # Derive bbox from visible keypoints
-            if kp.shape[0]:
-                vis_mask = kp[:, 2] > 0
-                pts = kp[vis_mask, :2] if np.any(vis_mask) else kp[:, :2]
-                if pts.size:
-                    x0 = float(pts[:, 0].min())
-                    y0 = float(pts[:, 1].min())
-                    x1 = float(pts[:, 0].max())
-                    y1 = float(pts[:, 1].max())
-                    cx = (x0 + x1) / 2.0
-                    cy = (y0 + y1) / 2.0
-                    bw = max(x1 - x0, 1e-6)
-                    bh = max(y1 - y0, 1e-6)
-                    box = [cx, cy, bw, bh]
-                else:
-                    box = [0.5, 0.5, 1e-6, 1e-6]
-            else:
-                box = [0.5, 0.5, 1e-6, 1e-6]
-
-            boxes_list.append(box)
 
         # Boxes list override
         boxes_list = [
