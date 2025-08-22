@@ -8,7 +8,7 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Changed
 
-- In order to support the latest versions of `ultralytics`, the (inclusive) lower bound is increased to `8.3.169`.
+- In order to support the latest versions of `ultralytics`, the (inclusive) lower bound is increased to `8.3.169` and the upper bound is set to `8.3.183`.
 
 ## [0.1.1] - 2025-08-21
 
