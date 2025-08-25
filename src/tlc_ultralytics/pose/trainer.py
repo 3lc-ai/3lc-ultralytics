@@ -54,3 +54,7 @@ class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
             settings=self._settings,
             training=True,
         )
+
+    def _process_metrics(self, metrics):
+        detection_metrics = super()._process_metrics(metrics)
+        return {metric_name.replace("(P)", "_pose"): value for metric_name, value in detection_metrics.items()}
