@@ -229,6 +229,8 @@ def get_keypoint_names_from_table(
         return None
     else:
         xys_map = table.rows_schema["keypoints_2d"]["instances"]["xys"].size0.map
+        if not xys_map:  # TODO fix Gudbrand
+            return ["top_left", "top_right", "bottom_right", "bottom_left"]
         xys_map_simple = tlc.SchemaHelper.to_simple_value_map(xys_map)
         return list(set(xys_map_simple.values()))
 
@@ -236,6 +238,13 @@ def get_keypoint_names_from_table(
 def get_kpt_shape_from_table(table: tlc.Table) -> tuple[int, int]:
     if hasattr(table, "kpt_shape"):
         return table.kpt_shape
+    elif True:  # TODO fix Gudbrand
+        num_kpts = int(table.rows_schema["keypoints_2d"]["instances"]["xys"].size0.max / 2)
+        if "xys_additional_data" in table.rows_schema["keypoints_2d"]["instances"].values:
+            num_channels = 3
+        else:
+            num_channels = 2
+        return (num_kpts, num_channels)
     else:
         return (17, 3)
 
@@ -243,6 +252,9 @@ def get_kpt_shape_from_table(table: tlc.Table) -> tuple[int, int]:
 def get_flip_idx_from_table(table: tlc.Table) -> list[int] | None:
     if hasattr(table, "flip_idx"):
         return table.flip_idx
+    elif True:
+        # flip_idx=[0, 1, 2, 3] length must be equal to kpt_shape[0]=8
+        return [0, 1, 2, 3]
     else:
         return None
 

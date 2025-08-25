@@ -84,8 +84,11 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
                 xys_arr = np.zeros((0, 2), dtype=np.float32)
 
             # Visibilities: prefer xys_additional_data['visibilities'] else ones
-            add = inst.get("xys_additional_data") or {}
-            vis = np.array(add["visibilities"], dtype=np.float32).reshape(-1, 1)
+            if "xys_additional_data" in inst:  # TODO fix Gudbrand
+                add = inst["xys_additional_data"]
+                vis = np.array(add["visibilities"], dtype=np.float32).reshape(-1, 1)
+            else:
+                vis = np.ones((xys_arr.shape[0], 1), dtype=np.float32)
 
             # Normalize x,y to [0,1] using full-image bounds
             if xys_arr.size:

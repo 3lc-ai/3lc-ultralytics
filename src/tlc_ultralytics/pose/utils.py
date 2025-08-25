@@ -54,3 +54,52 @@ def check_pose_table(table: tlc.Table, image_column_name: str, label_column_name
 
     except (AssertionError, KeyError) as e:
         raise ValueError(f"Table with url {table.url} is not compatible with YOLO pose. {e}") from None
+
+
+def yolo_pose_loss_schemas(training: bool = False) -> dict[str, tlc.Schema]:
+    """Create 3LC schemas for YOLO pose per-sample loss metrics.
+
+    :param training: Whether metrics are collected during training.
+    :returns: The YOLO pose loss schemas for each component.
+    """
+    schemas: dict[str, tlc.Schema] = {}
+    schemas["box_loss"] = tlc.Schema(
+        description="Box Loss",
+        writable=False,
+        value=tlc.Float32Value(),
+        display_importance=3004,
+    )
+    schemas["dfl_loss"] = tlc.Schema(
+        description="Distribution Focal Loss",
+        writable=False,
+        value=tlc.Float32Value(),
+        display_importance=3005,
+    )
+    schemas["cls_loss"] = tlc.Schema(
+        description="Classification Loss",
+        writable=False,
+        value=tlc.Float32Value(),
+        display_importance=3006,
+    )
+    schemas["pose_loss"] = tlc.Schema(
+        description="Keypoint location loss",
+        writable=False,
+        value=tlc.Float32Value(),
+        display_importance=3008,
+    )
+    schemas["kobj_loss"] = tlc.Schema(
+        description="Keypoint visibility/objectness loss",
+        writable=False,
+        value=tlc.Float32Value(),
+        display_importance=3009,
+    )
+    if training:
+        schemas["loss"] = tlc.Schema(
+            description=(
+                "Weighted sum of box, DFL, classification, keypoint location and visibility losses used in training"
+            ),
+            writable=False,
+            value=tlc.Float32Value(),
+            display_importance=3010,
+        )
+    return schemas

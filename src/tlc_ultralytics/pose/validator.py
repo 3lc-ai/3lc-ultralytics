@@ -10,6 +10,8 @@ from ultralytics.models.yolo.pose.val import PoseValidator
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME
 from tlc_ultralytics.engine.validator import TLCValidatorMixin
 from tlc_ultralytics.pose.dataset import TLCYOLOPoseDataset
+from tlc_ultralytics.pose.loss import v8UnreducedPoseLoss
+from tlc_ultralytics.pose.utils import yolo_pose_loss_schemas
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 
@@ -42,6 +44,10 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             label_column_name=self._label_column_name,
         )
 
+    def postprocess(self, preds):
+        self._curr_raw_preds = preds if self._settings.collect_loss else None
+        return super().postprocess(preds)
+
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         # self._table.rows_schema["keypoints_2d"]["instances"]["lines"].default_value
         predicted_pose_schema = tlc.Keypoints2DSchema(
@@ -59,7 +65,8 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             writable=False,
         )
 
-        return {"pose_predicted": predicted_pose_schema}
+        loss_schemas = yolo_pose_loss_schemas(training=self._training) if self._settings.collect_loss else {}
+        return {"pose_predicted": predicted_pose_schema, **loss_schemas}
 
     def _compute_3lc_metrics(self, preds, batch) -> dict[str, Any]:
         predicted = []
@@ -140,7 +147,17 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                 }
             )
 
-        return {"pose_predicted": predicted}
+        losses = self.loss_fn(self._curr_raw_preds, batch) if self._settings.collect_loss else {}
+        return {
+            "pose_predicted": predicted,
+            **{k: tensor.mean(dim=1).cpu().numpy() for k, tensor in losses.items()},
+        }
+
+    def _prepare_loss_fn(self, model):
+        self.loss_fn = v8UnreducedPoseLoss(
+            model.model if hasattr(model.model, "model") else model,
+            training=self._training,
+        )
 
     def _add_embeddings_hook(self, model) -> int:
         if hasattr(model.model, "model"):

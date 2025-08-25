@@ -56,7 +56,7 @@ class TLCTrainerMixin(BaseTrainer):
                 project_name=project_name,
                 description=description,
                 run_name=self._settings.run_name,
-                # root_url=root_url,
+                root_url=root_url,
             )
 
             LOGGER.info(
