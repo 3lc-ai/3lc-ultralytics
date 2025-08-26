@@ -471,12 +471,12 @@ def test_table_resolving() -> None:
     )
 
     # Create initial tables
-    train_table = trainer.data["train"]
+    train_table = trainer.data["train"].table
 
     # Create an edited version of the train table
     train_table_edited = tlc.NullOverlay(
         train_table.url.create_sibling("peter").create_unique(),
-        input_table_url=train_table,
+        input_table_url=train_table.url,
     )
 
     # A new trainer should now use the edited table since it gets latest
@@ -486,7 +486,10 @@ def test_table_resolving() -> None:
     assert new_trainer.data["train"].url == train_table_edited.url, "Table not resolved correctly"
 
     # A new trainer should not be able to take the tables directly
-    tables = {"train": train_table_edited.url, "val": new_trainer.data.get("val") or new_trainer.data["test"].url}
+    val_wrapper = new_trainer.data.get("val")
+    if val_wrapper is None:
+        val_wrapper = new_trainer.data["test"]
+    tables = {"train": train_table_edited.url, "val": val_wrapper.table.url}
     trainer_from_tables = TLCDetectionTrainer(
         overrides={
             "tables": tables,
@@ -510,7 +513,7 @@ def test_seg_table_checker() -> None:
 
     # The same data in a new table, but backed by a row cache, is also valid
     overlay_table_url = tlc.NullOverlay(
-        url=trainer.data["train"].url.create_sibling("overlay_table"), input_table_url=trainer.data["train"]
+        url=trainer.data["train"].url.create_sibling("overlay_table"), input_table_url=trainer.data["train"].url
     ).write_to_url()
     overlay_table = tlc.Table.from_url(overlay_table_url)
     check_seg_table(overlay_table, "image", "segmentations")
@@ -544,7 +547,7 @@ def test_sampling_weights() -> None:
     epochs = 1000
 
     # Create edited table where one sample has weight increased to 2
-    train_table = trainer.data["train"]
+    train_table = trainer.data["train"].table
     edited_table = tlc.EditedTable(
         url=train_table.url.create_sibling("jonas"),
         input_table_url=train_table,
@@ -585,7 +588,7 @@ def test_exclude_zero_weight_training() -> None:
     trainer.model = None
 
     # Create edited table where one sample has weight increased to 2
-    train_table = trainer.data["train"]
+    train_table = trainer.data["train"].table
     edited_table = tlc.EditedTable(
         url=train_table.url.create_sibling("jonas"),
         input_table_url=train_table,
@@ -620,7 +623,7 @@ def test_exclude_zero_weight_collection(task, trainer_class) -> None:
     trainer.model = Mock() if task == "classify" else None
 
     # Create edited table where several samples have weight 0
-    train_table = trainer.data["train"]
+    train_table = trainer.data["train"].table
     edited_table = tlc.EditedTable(
         url=train_table.url.create_sibling(f"erna_{task}"),
         input_table_url=train_table,
@@ -645,10 +648,13 @@ def test_train_no_weight_column_in_table(task) -> None:
 
     settings = Settings(project_name="test_train_no_weight_column_in_table")
     model.train(data=TASK2DATASET[task], settings=settings, epochs=1, device="cpu", workers=0)
-    table = model.trainer.data["train"]
+    table = model.trainer.data["train"].table
 
     no_weight_column_table = table.delete_column(table.weights_column_name)
-    tables = {"train": no_weight_column_table, "val": model.trainer.data.get("val") or model.trainer.data["test"]}
+    val_wrapper = model.trainer.data.get("val")
+    if val_wrapper is None:
+        val_wrapper = model.trainer.data["test"]
+    tables = {"train": no_weight_column_table, "val": val_wrapper.table}
 
     model.train(tables=tables, settings=settings, epochs=1, device="cpu", workers=0)
 

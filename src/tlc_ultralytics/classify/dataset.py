@@ -7,6 +7,7 @@ import tlc
 from ultralytics.data.dataset import ClassificationDataset
 
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
+from tlc_ultralytics.utils.dataset import _WrappedTable
 
 
 class _DummyImageFolder:
@@ -48,7 +49,7 @@ class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
     ):
         # Populate self.samples with image paths and labels
         # Each is a tuple of (image_path, label)
-        assert isinstance(table, tlc.Table)
+        assert isinstance(table, (tlc.Table, _WrappedTable))
         self.table = table
         self.root = table.url
         self.prefix = prefix

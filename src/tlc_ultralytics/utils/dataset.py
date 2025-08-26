@@ -27,6 +27,10 @@ class _WrappedTable:
     def __len__(self) -> int:
         return len(self.table)
 
+    @property
+    def url(self):
+        return self.table.url
+
 
 def check_tlc_dataset(  # noqa: C901
     data: str,
