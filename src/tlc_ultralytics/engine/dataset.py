@@ -7,6 +7,8 @@ import tlc
 from ultralytics.data.utils import verify_image
 from ultralytics.utils import LOGGER, NUM_THREADS, TQDM, colorstr
 
+from tlc_ultralytics.utils.dataset import _WrappedTable
+
 
 # Responsible for any generic 3LC dataset handling, such as scanning, caching and adding example ids to each sample
 # Assume there is an attribute self.table that is a tlc.Table
@@ -14,8 +16,8 @@ class TLCDatasetMixin:
     def _post_init(self):
         self.display_name = self.table.dataset_name
 
-        assert hasattr(self, "table") and isinstance(self.table, tlc.Table), (
-            "TLCDatasetMixin requires an attribute `table` which is a tlc.Table."
+        assert hasattr(self, "table") and isinstance(self.table, (tlc.Table, _WrappedTable)), (
+            "TLCDatasetMixin requires an attribute `table` which is a tlc.Table or _WrappedTable."
         )
 
     def __getitem__(self, index):

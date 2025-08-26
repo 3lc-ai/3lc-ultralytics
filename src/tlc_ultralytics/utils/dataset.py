@@ -2,12 +2,31 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from pathlib import Path
+from typing import Any
 
 import tlc
 import yaml
 from ultralytics.utils import LOGGER, colorstr
 
 from tlc_ultralytics.constants import TLC_COLORSTR, TLC_PREFIX
+
+
+class _WrappedTable:
+    def __init__(self, table: tlc.Table):
+        self.table = table
+
+    def __bool__(self):
+        return True
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.table, name)
+
+    def __getitem__(self, i: int) -> Any:
+        return self.table[i]
+
+    def __len__(self) -> int:
+        return len(self.table)
+
 
 
 def check_tlc_dataset(  # noqa: C901
@@ -153,6 +172,8 @@ def check_tlc_dataset(  # noqa: C901
     # Map name indices to 0, 1, ..., n-1
     names_yolo = dict(enumerate(names.values()))
     range_to_3lc_class = dict(enumerate(names))
+
+    tables = {key: _WrappedTable(table) for key, table in tables.items()}
 
     return {
         **tables,
