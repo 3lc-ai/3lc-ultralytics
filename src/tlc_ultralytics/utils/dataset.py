@@ -28,7 +28,6 @@ class _WrappedTable:
         return len(self.table)
 
 
-
 def check_tlc_dataset(  # noqa: C901
     data: str,
     tables: dict[str, tlc.Table | tlc.Url | str] | None,
