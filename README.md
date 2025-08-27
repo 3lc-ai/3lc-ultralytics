@@ -6,21 +6,22 @@
 
 <div align="center">
 
-[![Release](https://img.shields.io/github/v/release/3lc-ai/3lc-ultralytics)](https://github.com/3lc-ai/3lc-ultralytics/releases) [![Discord](https://img.shields.io/badge/discord-3LC-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwnwFtfafC)
+[![PyPI](https://img.shields.io/pypi/v/3lc-ultralytics?logo=pypi&logoColor=white)](https://pypi.org/project/3lc-ultralytics/)
+[![Discord](https://img.shields.io/badge/discord-3LC-5865F2?logo=discord&logoColor=white)](https://discord.gg/fwnwFtfafC)
 
 </div>
 
 <p align="center">
-<a href="#quick-start">Quick Start</a> • 
-<a href="#working-with-datasets">Working with Datasets</a> • 
-<a href="#task-specific-configuration">Task-Specific Configuration</a> • 
-<a href="#metrics-collection-only">Metrics Collection</a> • 
-<a href="#3lc-settings">3LC Settings</a> • 
+<a href="#quick-start">Quick Start</a> •
+<a href="#working-with-datasets">Working with Datasets</a> •
+<a href="#task-specific-configuration">Task-Specific Configuration</a> •
+<a href="#metrics-collection-only">Metrics Collection</a> •
+<a href="#3lc-settings">3LC Settings</a> •
 <a href="#frequently-asked-questions">FAQ</a>
 </p>
 
 <p align="center">
-Ultralytics YOLO classification, object detection and segmentation with 3LC integrated.
+<a href="https://docs.ultralytics.com/">Ultralytics YOLO</a> classification, object detection and segmentation with 3LC integrated.
 </p>
 
 ## About 3LC
@@ -29,7 +30,7 @@ Ultralytics YOLO classification, object detection and segmentation with 3LC inte
 
 3LC is free for non-commercial use.
 
-![3LC Dashboard Overview](https://github.com/3lc-ai/ultralytics/blob/tlc-integration/ultralytics/utils/tlc/_static/dashboard.png?raw=true)
+![3LC Dashboard Overview](https://github.com/3lc-ai/3lc-ultralytics/blob/develop/src/tlc_ultralytics/_static/dashboard.png?raw=true)
 
 ## Quick Start
 
@@ -38,14 +39,10 @@ Ultralytics YOLO classification, object detection and segmentation with 3LC inte
 Install the package and requirements into a virtual environment:
 
 ```bash
-pip install "git+https://github.com/3lc-ai/3lc-ultralytics@develop"
+pip install 3lc-ultralytics
 ```
 
-> ⚠️ NOTE: If you are using `uv`, instead use
->
-> ```bash
-> uv pip install "git+https://github.com/3lc-ai/3lc-ultralytics@develop" --no-sources
-> ```
+> This installs both [`3lc`](https://pypi.org/project/3lc/) and [`ultralytics`](https://pypi.org/project/ultralytics/), which are dependencies of `3lc-ultralytics`. Refer to the respective projects for how to set up a 3LC user and the Ultralytics License.
 
 ### Basic Training
 
@@ -70,14 +67,31 @@ Check out the [examples directory](examples/) for complete training and metrics 
 
 ## Working with Datasets
 
-The integration supports three ways of providing the data use. These are listed below:
+The integration supports three ways of providing the data to use. These are listed below:
 
 <details open>
 <summary><strong>Using 3LC Tables Directly (Recommended)</strong></summary>
 
 The recommended way of providing the data to use is to pass `tlc.Table`s or `tlc.Url`s to `tlc.Table`s directly.
 
-To learn how to create `tlc.Table`s for your dataset, check out the [examples directory](/examples/).
+To create a `tlc.Table` for one of your split your YOLO detection dataset, use `tlc.Table.from_yolo`:
+
+```python
+import tlc
+
+my_train_table = tlc.Table.from_yolo(
+    dataset_yaml_path="path/to/my/dataset.yaml",
+    split="train",
+    task="detect",
+    project_name="My Project",
+    dataset_name="train",
+    table_name="initial",
+)
+```
+
+Check out the [examples directory](/examples/) for more examples, for example how to make `tlc.Table`s for different tasks.
+
+Once the `tlc.Table`s have been created, the following code can be used to run training:
 
 ```python
 from tlc_ultralytics import YOLO
@@ -138,7 +152,7 @@ model = YOLO("yolo11n.pt")
 model.train(data="3LC://my_dataset.yaml")
 ```
 
-Note: `names` and `nc` are not needed since the `tlc.Table`s themselves contain the category names and indices.
+Note that `names` and `nc` are not needed since the `tlc.Table`s themselves contain the category names and indices.
 
 </details>
 
@@ -160,8 +174,10 @@ For instance segmentation, you can provide `image_column_name` and `label_column
 
 ### Unsupported Tasks
 
-- **Pose Estimation**: Not yet supported. Let us know on Discord if you would like us to add it.
-- **OBB (Oriented Object Detection)**: Not yet supported. Let us know on Discord if you would like us to add it.
+Some YOLO tasks can not yet be visualized in the 3LC Dashboard, but these are on the roadmap and will be made available in the future:
+
+- **Pose Estimation**: Not yet supported. Let us know on Discord if you would like this to be supported!
+- **OBB (Oriented Bounding Boxes)**: Not yet supported. Let us know on Discord if you would like this to be supported!
 
 ## Metrics Collection Only
 
@@ -191,6 +207,9 @@ model.collect(
 ```
 
 See [examples/detect/collect.py](examples/detect/collect.py) for a complete metrics collection example.
+
+> WARNING ⚠️: When using `.collect()`, the model must be compatible with the provided `tlc.Table`.
+> For example, the categories (called `names` in Ultralytics) in the `tlc.Table`s must match those that the model was trained on.
 
 ## 3LC Settings
 
@@ -260,65 +279,3 @@ This is not supported yet, but will be added in a future commit!
 ## Why is the 3LC integration pinned to just a few versions of `Ultralytics`?
 
 Ultralytics makes changes to the internals of the `ultralytics` codebase, which occasionally breaks the 3LC integration. It is therefore pinned to versions which are known to work with the integration.
-
-
-## Development and Testing
-
-### Docker Setup for Testing
-
-This project includes a Docker setup for running tests locally, which mirrors the CI/CD environment. This ensures that tests run consistently across different environments.
-
-#### Prerequisites
-
-- Docker installed on your machine
-- Git for cloning the repository
-
-#### Running Tests in Docker
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/3lc-ai/3lc-ultralytics.git
-   cd 3lc-ultralytics
-   ```
-
-2. Run the tests using the provided script:
-   ```bash
-   ./docker/run-tests-in-docker.sh
-   ```
-
-   This script will:
-   - Build a Docker image with all necessary dependencies
-   - Mount your local repository inside the Docker container
-   - Run the tests inside the container
-
-#### Using Pre-built Docker Images
-
-The CI workflow automatically builds and pushes Docker images to GitHub Container Registry (ghcr.io). You can pull and use these images directly:
-
-```bash
-docker pull ghcr.io/3lc-ai/3lc-ultralytics:latest
-
-# Make sure you have defined the tlc api key as the TLC_API_KEY environment variable.
-docker run -e "TLC_API_KEY=${TLC_API_KEY}" -v "$(pwd)":/app/3lc-ultralytics ghcr.io/3lc-ai/3lc-ultralytics:latest
-```
-
-#### Custom Commands
-
-The docker image is set up to have a "pre baked" virtual env matching the uv lock file. This venv is in /app/.venv
-activating it is easy by doing `source /app/.venv/bin/activate`. However, when running uv commands in the repository,
-you have to tell uv not to create its own venv. We achieve this by adding `--no-sources --active` to the uv commands.
-Also the venv is built for Python 3.9, but the repository defaults to 3.12, so all commands have to also specify python
-3.9 by using `-p 3.9`. So to run the tests the command is typically:
-```bash
-uv run -p 3.9 --no-sources --active pytest
-```
-
-If you want to run custom commands inside the Docker container:
-
-```bash
-# Using locally built image
-docker build -t 3lc-ultralytics-test -f docker/Dockerfile .
-docker run -it -v "$(pwd)":/app/3lc-ultralytics 3lc-ultralytics-test /bin/bash
-
-docker run -it -v "$(pwd)":/app/3lc-ultralytics ghcr.io/3lc-ai/3lc-ultralytics:latest /bin/bash
-```
