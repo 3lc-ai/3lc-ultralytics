@@ -11,7 +11,7 @@ Since this package integrates with two actively developed dependencies (`ultraly
 - Add caching mechanism for excluded example ids, removing repeated expensive scans ([#13](https://github.com/3lc-ai/3lc-ultralytics/pull/13)).
 - Catch detection `Table` value map incompatibilities earlier by trying to get the value map in the table checker ([#24](https://github.com/3lc-ai/3lc-ultralytics/pull/24)).
 - Check for compatible versions of `3lc` and `ultralytics` at runtime ([#22](https://github.com/3lc-ai/3lc-ultralytics/pull/22)).
-- Add check for type of `data` argument ([#29](https://github.com/3lc-ai/3lc-ultralytics/pull/29))
+- Add check for type of `data` argument ([#29](https://github.com/3lc-ai/3lc-ultralytics/pull/29)).
 
 ### Changed
 
