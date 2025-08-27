@@ -6,9 +6,17 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Added
+
+- Add caching mechanism for excluded example ids, removing repeated expensive scans ([#13](https://github.com/3lc-ai/3lc-ultralytics/pull/13)).
+- Catch detection `Table` value map incompatibilities earlier by trying to get the value map in the table checker ([#24](https://github.com/3lc-ai/3lc-ultralytics/pull/24)).
+- Check for compatible versions of `3lc` and `ultralytics` at runtime ([#22](https://github.com/3lc-ai/3lc-ultralytics/pull/22)).
+- Add check for type of `data` argument ([#29](https://github.com/3lc-ai/3lc-ultralytics/pull/29)).
+
 ### Changed
 
-- In order to support the latest versions of `ultralytics`, the (inclusive) lower bound is increased to `8.3.169` and the upper bound is set to `8.3.183`.
+- In order to support the latest versions of `ultralytics`, the (inclusive) lower bound is increased to `8.3.169` and the upper bound is set to `8.3.183` ([#23](https://github.com/3lc-ai/3lc-ultralytics/pull/23)).
+- Ensure foreign table schema is relativized ([#21](https://github.com/3lc-ai/3lc-ultralytics/pull/21)).
 
 ## [0.1.2] - 2025-08-27
 
