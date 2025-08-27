@@ -88,7 +88,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "3lc", specifier = ">=2.13.1,<=2.16.1" },
+    { name = "3lc", specifier = ">=2.13.1,!=2.16.1,<=2.16.2" },
     { name = "pacmap", specifier = ">=0.8.0" },
     { name = "ultralytics", specifier = ">=8.3.169,<8.3.183" },
 ]

@@ -10,6 +10,12 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 - In order to support the latest versions of `ultralytics`, the (inclusive) lower bound is increased to `8.3.169` and the upper bound is set to `8.3.183`.
 
+## [0.1.2] - 2025-08-27
+
+### Changed
+
+- Increase upper bound of the dependency `3lc` to include the latest version, `2.16.2`, and exclude `2.16.1`. This fixes an incompatibility between versions `3lc-ultralytics<=0.1.1` and `3lc==2.16.1` causing runs to fail.
+
 ## [0.1.1] - 2025-08-21
 
 ### Added

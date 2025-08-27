@@ -1,6 +1,6 @@
 [project]
 name = "3lc-ultralytics"
-version = "0.1.1"
+version = "0.1.2"
 description = "3LC integration with Ultralytics YOLO"
 readme = "README.wheel.md"
 authors = [
@@ -8,7 +8,7 @@ authors = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-    "3lc>=2.13.1,<=2.16.1",
+    "3lc>=2.13.1,!=2.16.1,<=2.16.2",
     "pacmap>=0.8.0",
     "ultralytics>=8.3.169,<8.3.183",
 ]
