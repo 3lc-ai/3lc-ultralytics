@@ -110,7 +110,6 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
                 ratio_pad = batch["ratio_pad"][i]
                 pred_scaled = ops.scale_boxes(resized_shape, predicted_boxes, ori_shape, ratio_pad)
 
-
                 pred_xywh = ops.xyxy2xywhn(pred_scaled, w=width, h=height)
 
                 annotations = []
