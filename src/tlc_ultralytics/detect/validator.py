@@ -65,17 +65,20 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
             **{k: tensor.mean(dim=1).cpu().numpy() for k, tensor in losses.items()},
         }
 
-    def _process_detection_predictions(self, preds, batch):
-        predicted_boxes = []
-        for i, predictions in enumerate(preds):
-            ori_shape = batch["ori_shape"][i]
-            resized_shape = batch["resized_shape"][i]
-            ratio_pad = batch["ratio_pad"][i]
-            height, width = ori_shape
+    def _process_detection_predictions(self, batch_predictions, batch):
+        batch_predicted_boxes = []
+
+        for i, predictions in enumerate(batch_predictions):
+            predicted_boxes, predicted_confidences, predicted_classes = (
+                predictions["bboxes"].clone(),
+                predictions["conf"].clone(),
+                predictions["cls"].clone(),
+            )
+            height, width = batch["ori_shape"][i]
 
             # Handle case with no predictions
             if len(predictions) == 0:
-                predicted_boxes.append(
+                batch_predicted_boxes.append(
                     construct_bbox_struct(
                         [],
                         image_width=width,
@@ -84,51 +87,51 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
                 )
                 continue
 
-            predictions = predictions.clone()
-            predictions = predictions[
-                predictions[:, 4] > self._settings.conf_thres
-            ]  # filter out low confidence predictions
-            # sort by confidence and remove excess boxes
-            predictions = predictions[predictions[:, 4].argsort(descending=True)[: self._settings.max_det]]
-
-            pred_box = predictions[:, :4].clone()
-            pred_scaled = ops.scale_boxes(resized_shape, pred_box, ori_shape, ratio_pad)
-
-            # Compute IoUs
-            pbatch = self._prepare_batch(i, batch)
-            if pbatch["bbox"].shape[0]:
-                ious = metrics.box_iou(pbatch["bbox"], pred_scaled)  # IoU evaluated in xyxy format
-                box_ious = ious.max(dim=0)[0].cpu().tolist()
+            # Handle case with predictions
             else:
-                box_ious = [0.0] * pred_scaled.shape[0]  # No predictions
+                # Filter out low confidence predictions
+                mask = predicted_confidences > self._settings.conf_thres
+                predicted_boxes = predicted_boxes[mask]
+                predicted_confidences = predicted_confidences[mask].tolist()
+                predicted_classes = predicted_classes[mask].tolist()
 
-            pred_xywh = ops.xyxy2xywhn(pred_scaled, w=width, h=height)
+                # Compute IoUs
+                pbatch = self._prepare_batch(i, batch)
+                gt_boxes = pbatch["bboxes"].clone()
+                if gt_boxes.shape[0]:
+                    ious = metrics.box_iou(gt_boxes, predicted_boxes)  # IoU evaluated in xyxy format
+                    box_ious = ious.max(dim=0)[0].cpu().tolist()
+                else:
+                    box_ious = [0.0] * predicted_boxes.shape[0]  # No predictions
 
-            conf = predictions[:, 4].cpu().tolist()
-            pred_cls = predictions[:, 5].cpu().tolist()
+                # Scale predicted boxes to original image size
+                resized_shape = batch["resized_shape"][i]
+                ori_shape = batch["ori_shape"][i]
+                ratio_pad = batch["ratio_pad"][i]
+                pred_scaled = ops.scale_boxes(resized_shape, predicted_boxes, ori_shape, ratio_pad)
 
-            annotations = []
-            for pi in range(len(predictions)):
-                annotations.append(
-                    {
-                        "score": conf[pi],
-                        "category_id": self.data["range_to_3lc_class"][int(pred_cls[pi])],
-                        "bbox": pred_xywh[pi, :].cpu().tolist(),
-                        "iou": box_ious[pi],
-                    }
+                pred_xywh = ops.xyxy2xywhn(pred_scaled, w=width, h=height)
+
+                annotations = []
+                for pi in range(len(predicted_boxes)):
+                    annotations.append(
+                        {
+                            "score": predicted_confidences[pi],
+                            "category_id": self.data["range_to_3lc_class"][int(predicted_classes[pi])],
+                            "bbox": pred_xywh[pi, :].cpu().tolist(),
+                            "iou": box_ious[pi],
+                        }
+                    )
+
+                batch_predicted_boxes.append(
+                    construct_bbox_struct(
+                        annotations,
+                        image_width=width,
+                        image_height=height,
+                    )
                 )
 
-            assert len(annotations) <= self._settings.max_det, "Should have at most MAX_DET predictions per image."
-
-            predicted_boxes.append(
-                construct_bbox_struct(
-                    annotations,
-                    image_width=width,
-                    image_height=height,
-                )
-            )
-
-        return predicted_boxes
+        return batch_predicted_boxes
 
     def _prepare_loss_fn(self, model):
         self.loss_fn = v8UnreducedDetectionLoss(
