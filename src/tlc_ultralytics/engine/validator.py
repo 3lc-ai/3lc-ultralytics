@@ -316,7 +316,9 @@ class TLCValidatorMixin(BaseValidator):
     def _per_class_metrics_schemas(self):
         metrics_schemas = {
             TRAINING_PHASE: training_phase_schema(),
-            tlc.FOREIGN_TABLE_ID: tlc.ForeignTableIdSchema(self.dataloader.dataset.table.url.to_str()),
+            tlc.FOREIGN_TABLE_ID: tlc.ForeignTableIdSchema(
+                self.dataloader.dataset.table.url.to_relative(self._run.url / "metrics").to_str(),
+            ),
             tlc.LABEL: tlc.CategoricalLabel("class", {**self.names, self.nc: "all"}).schema,
             NUM_IMAGES: tlc.Schema(
                 value=tlc.Int32Value(),
