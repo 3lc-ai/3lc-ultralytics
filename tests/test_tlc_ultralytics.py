@@ -1224,6 +1224,22 @@ def test_dataset_cache(task) -> None:
     assert cache_data["corrupt_example_ids"] == []
 
 
+def test_bad_arguments() -> None:
+    """Test that bad arguments are caught early and an error is raised gracefully"""
+    model = TLCYOLO(TASK2MODEL["detect"])
+
+    train_table = tlc.Table.from_dict(
+        {"col": []}, project_name="test_bad_arguments", dataset_name="train", table_name="initial"
+    )
+    val_table = tlc.Table.from_dict(
+        {"col": []}, project_name="test_bad_arguments", dataset_name="val", table_name="initial"
+    )
+
+    # Data is used instead of tables
+    with pytest.raises(ValueError):
+        model.train(data={"train": train_table, "val": val_table})
+
+
 # HELPERS
 
 

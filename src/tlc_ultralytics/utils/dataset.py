@@ -34,6 +34,12 @@ def check_tlc_dataset(  # noqa: C901
     :param splits: List of splits to parse.
     :return: Dictionary of tables and class names
     """
+
+    # Check that the data is a string
+    if not isinstance(data, str):
+        msg = "`data` must be a string. If you are using `tlc.Table` objects, provide `tables` instead."
+        raise ValueError(msg)
+
     # If the data starts with the 3LC prefix, parse the YAML file and populate `tables`
     has_prefix = False
     if tables is None and data.startswith(TLC_PREFIX):
