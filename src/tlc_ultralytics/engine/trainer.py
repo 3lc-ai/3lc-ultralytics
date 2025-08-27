@@ -25,6 +25,11 @@ class TLCTrainerMixin(BaseTrainer):
         assert "data" in overrides or "tables" in overrides, (
             "You must provide either a data path or tables to train with 3LC."
         )
+
+        if "data" in overrides and not isinstance(overrides["data"], str):
+            msg = "`data` must be a string. If you are using `tlc.Table` objects, provide `tables` instead."
+            raise ValueError(msg)
+
         self._tables = overrides.pop("tables", None)
 
         # Column names
