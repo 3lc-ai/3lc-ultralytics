@@ -202,6 +202,14 @@ def test_training(task) -> None:
     assert 0 in metrics_df[TRAINING_PHASE], "Expected metrics from during training"
     assert 1 in metrics_df[TRAINING_PHASE], "Expected metrics from after training"
 
+    if task == "segment":
+        # Get row of metrics_df with epoch = 1 and Training Phase = 1
+        row = metrics_df[(metrics_df["epoch"] == 1) & (metrics_df["example_id"] == 3)]["segmentations_predicted"][0]
+        prediction_category = row["instance_properties"]["label"][0]
+
+        category = model_3lc.trainer.data["names"][prediction_category]
+        assert category == "zebra", "Expected zebra as first prediction when epoch = 1 and example_id = 3"
+
     # model.predict() should work and be the same as vanilla ultralytics
     assert all(model_ultralytics.predict(imgsz=320)[0].boxes.cls == model_3lc.predict(imgsz=320)[0].boxes.cls), (
         "Predictions mismatch"
