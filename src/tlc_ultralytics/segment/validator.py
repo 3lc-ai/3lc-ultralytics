@@ -77,18 +77,19 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
                 predicted_batch_segmentations.append(predicted_instances)
                 continue
 
+            # Filter out low confidence predictions
             pred_conf = conf[keep_indices].tolist()
             pred_cls = pred["cls"][keep_indices].tolist()
             predicted_labels = [self.data["range_to_3lc_class"][int(p)] for p in pred_cls]
+            predicted_masks = pred["masks"].clone()[keep_indices]
 
             # Get masks in resized dimensions
-            coco_masks = torch.as_tensor(pred["masks"], dtype=torch.uint8)
+            coco_masks = torch.as_tensor(predicted_masks, dtype=torch.uint8)
             coco_masks = ops.scale_image(
                 coco_masks.permute(1, 2, 0).contiguous().cpu().numpy(),
                 pbatch["ori_shape"],
                 ratio_pad=pbatch["ratio_pad"],
             )
-            pred_masks = np.transpose(coco_masks, (2, 0, 1))
 
             predicted_instances = {
                 tlc.IMAGE_HEIGHT: pbatch["ori_shape"][0],
@@ -97,7 +98,7 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
                     tlc.LABEL: predicted_labels,
                     tlc.CONFIDENCE: pred_conf,
                 },
-                tlc.MASKS: pred_masks,
+                tlc.MASKS: coco_masks,
             }
 
             predicted_batch_segmentations.append(predicted_instances)
