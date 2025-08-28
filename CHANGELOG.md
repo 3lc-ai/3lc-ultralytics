@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.1.3] - 2025-08-28
+
 ### Added
 
 - Add caching mechanism for excluded example ids, removing repeated expensive scans ([#13](https://github.com/3lc-ai/3lc-ultralytics/pull/13)).
