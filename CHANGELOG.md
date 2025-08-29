@@ -8,11 +8,11 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Added
 
-- Add document on Active Labeling in the examples directory, and a corresponding FAQ entry in the main README.md.
+- Add document on Active Labeling in the examples directory, and a corresponding FAQ entry in the main README.md ([#31](https://github.com/3lc-ai/3lc-ultralytics/pull/31)).
 
 ### Changed
 
-- Skip unnecessary extra validation when the train and val sets are set to the same table.
+- Skip unnecessary extra validation when the train and val sets are set to the same table ([#31](https://github.com/3lc-ai/3lc-ultralytics/pull/31)).
 
 ## [0.1.3] - 2025-08-28
 
