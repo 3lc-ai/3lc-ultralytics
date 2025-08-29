@@ -6,6 +6,14 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Added
+
+- Add document on Active Labeling in the examples directory, and a corresponding FAQ entry in the main README.md.
+
+### Changed
+
+- Skip unnecessary extra validation when the train and val sets are set to the same table.
+
 ## [0.1.3] - 2025-08-28
 
 ### Added
