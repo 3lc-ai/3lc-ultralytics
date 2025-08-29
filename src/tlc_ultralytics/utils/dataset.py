@@ -16,7 +16,10 @@ def get_dataset_functions(
     task: Literal["detect", "segment", "pose", "classify"],
 ) -> tuple[Callable, Callable, Callable]:
     if task == "detect":
-        from tlc_ultralytics.detect.utils import check_det_table, get_or_create_det_table
+        from tlc_ultralytics.detect.utils import (
+            check_det_table,
+            get_or_create_det_table,
+        )
 
         dataset_checker = check_det_dataset
         table_creator = get_or_create_det_table
@@ -196,7 +199,7 @@ def check_tlc_dataset(  # noqa: C901
     names_yolo = dict(enumerate(names.values()))
     range_to_3lc_class = dict(enumerate(names))
 
-    return {
+    ret = {
         **tables,
         "names": names_yolo,
         "names_3lc": value_map,
@@ -205,9 +208,11 @@ def check_tlc_dataset(  # noqa: C901
         "3lc_class_to_range": {v: k for k, v in range_to_3lc_class.items()},
         "channels": 3,  # TODO(Frederik): Read out channels from appropriate place and populate here
         "kpt_shape": kpt_shape,
-        "flip_idx": flip_idx,
         "kpt_names": keypoint_names,
     }
+    if flip_idx is not None:
+        ret["flip_idx"] = flip_idx
+    return ret
 
 
 def get_value_map_from_table(
@@ -216,7 +221,7 @@ def get_value_map_from_table(
     task: Literal["detect", "segment", "pose", "classify"],
 ) -> dict[int, str]:
     if task == "pose":
-        return table.rows_schema["keypoints_2d"]["instances_additional_data"]["bb_list"]["label"].value.map
+        return table.rows_schema[tlc.KEYPOINTS_2D][tlc.INSTANCES_ADDITIONAL_DATA]["label"].value.map
     else:
         return table.get_value_map(label_column_name)
 
@@ -228,7 +233,7 @@ def get_keypoint_names_from_table(
     if task != "pose":
         return None
     else:
-        xys_map = table.rows_schema["keypoints_2d"]["instances"]["xys"].size0.map
+        xys_map = table.rows_schema[tlc.KEYPOINTS_2D][tlc.INSTANCES][tlc.XYS].size0.map
         if not xys_map:  # TODO fix Gudbrand
             return ["top_left", "top_right", "bottom_right", "bottom_left"]
         xys_map_simple = tlc.SchemaHelper.to_simple_value_map(xys_map)
@@ -239,8 +244,8 @@ def get_kpt_shape_from_table(table: tlc.Table) -> tuple[int, int]:
     if hasattr(table, "kpt_shape"):
         return table.kpt_shape
     elif True:  # TODO fix Gudbrand
-        num_kpts = int(table.rows_schema["keypoints_2d"]["instances"]["xys"].size0.max / 2)
-        if "xys_additional_data" in table.rows_schema["keypoints_2d"]["instances"].values:
+        num_kpts = int(table.rows_schema[tlc.KEYPOINTS_2D][tlc.INSTANCES][tlc.XYS].size0.max / 2)
+        if tlc.XYS_ADDITIONAL_DATA in table.rows_schema[tlc.KEYPOINTS_2D][tlc.INSTANCES].values:
             num_channels = 3
         else:
             num_channels = 2
@@ -252,9 +257,6 @@ def get_kpt_shape_from_table(table: tlc.Table) -> tuple[int, int]:
 def get_flip_idx_from_table(table: tlc.Table) -> list[int] | None:
     if hasattr(table, "flip_idx"):
         return table.flip_idx
-    elif True:
-        # flip_idx=[0, 1, 2, 3] length must be equal to kpt_shape[0]=8
-        return [0, 1, 2, 3]
     else:
         return None
 

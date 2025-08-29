@@ -1,1 +1,1 @@
-"C:/Project/datasets/hand-keypoints/data.yaml"
+C:/Project/datasets/hand-keypoints/data.yaml"

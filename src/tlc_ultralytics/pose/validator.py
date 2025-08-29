@@ -49,24 +49,25 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         return super().postprocess(preds)
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
-        # self._table.rows_schema["keypoints_2d"]["instances"]["lines"].default_value
+        try:
+            lines = self._table.rows_schema["keypoints_2d"]["instances"]["lines"].default_value
+        except KeyError:
+            lines = None
         predicted_pose_schema = tlc.Keypoints2DSchema(
             keypoint_shape=self.kpt_shape,
             keypoint_names=self.data["kpt_names"],
-            # lines_default_value=self.lines,
-            per_point_schemas={tlc.CONFIDENCE: tlc.Schema(value=tlc.Float32Value(), size0=tlc.DimensionNumericValue())},
+            lines_default_value=None,
+            per_point_schemas={tlc.CONFIDENCE: tlc.Schema(value=tlc.Float32Value())},
             per_instance_schemas={
-                "bb_list": tlc.core.builtins.schemas.keypoints.BoundingBoxesSchema(
-                    writable=False,
-                    label_value_map=tlc.MapElement._construct_value_map(self.data["names"]),
-                    is_list=True,
+                "label": tlc.Schema(
+                    value=tlc.Int32Value(value_map=tlc.MapElement._construct_value_map(self.data["names"]))
                 )
             },
             writable=False,
         )
 
         loss_schemas = yolo_pose_loss_schemas(training=self._training) if self._settings.collect_loss else {}
-        return {"pose_predicted": predicted_pose_schema, **loss_schemas}
+        return {tlc.KEYPOINTS_2D_PREDICTED: predicted_pose_schema, **loss_schemas}
 
     def _compute_3lc_metrics(self, preds, batch) -> dict[str, Any]:
         predicted = []
@@ -76,11 +77,12 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             if len(pred["keypoints"]) == 0:
                 predicted.append(
                     {
-                        "x_max": w,
-                        "y_max": h,
-                        "x_min": 0,
-                        "y_min": 0,
-                        "instances": [],
+                        tlc.X_MIN: 0,
+                        tlc.Y_MIN: 0,
+                        tlc.X_MAX: w,
+                        tlc.Y_MAX: h,
+                        tlc.INSTANCES: [],
+                        tlc.INSTANCES_ADDITIONAL_DATA: {"label": []},
                     }
                 )
                 continue
@@ -104,6 +106,8 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                         padw, padh = float(pad[0]), float(pad[1])
 
             kpts = pred["keypoints"].detach().cpu().numpy()  # (N, K, D)
+            bbs = pred["bboxes"].cpu().numpy()
+
             num_instances = kpts.shape[0]
             instances = []
             for j in range(num_instances):
@@ -116,40 +120,47 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                 xy[:, 1] = np.clip(xy[:, 1], 0, h - 1)
 
                 conf = kpts[j, :, 2] if kpts.shape[2] >= 3 else np.ones(kpts.shape[1], dtype=np.float32)
+                bb = bbs[j, :]
+                # undo letterbox: (xy - pad) / gain (per-axis)
+                bb[0] = (bb[0] - padw) / (gw + 1e-9)
+                bb[1] = (bb[1] - padh) / (gh + 1e-9)
+                bb[2] = (bb[2] - padw) / (gw + 1e-9)
+                bb[3] = (bb[3] - padh) / (gh + 1e-9)
+                # clamp to image
+                bb[0] = np.clip(bb[0], 0, w - 1)
+                bb[1] = np.clip(bb[1], 0, h - 1)
+                bb[2] = np.clip(bb[2], 0, w - 1)
+                bb[3] = np.clip(bb[3], 0, h - 1)
+
                 inst = {
-                    "xys": xy.reshape(-1).astype(np.float32).tolist(),
-                    "lines": batch["lines"][0],
-                    "xys_additional_data": {tlc.CONFIDENCE: conf.astype(np.float32).tolist()},
+                    tlc.XYS: xy.reshape(-1).astype(np.float32).tolist(),
+                    tlc.LINES: batch["lines"][0],
+                    tlc.XYS_ADDITIONAL_DATA: {tlc.CONFIDENCE: conf.astype(np.float32).tolist()},
+                    "bbs_2d": [
+                        {
+                            tlc.X_MIN: bb[0],
+                            tlc.Y_MIN: bb[1],
+                            tlc.X_MAX: bb[2],
+                            tlc.Y_MAX: bb[3],
+                        }
+                    ],
                 }
                 instances.append(inst)
 
-            # Collect predicted bounding boxes
-            predicted_bbs = pred["bboxes"].cpu().numpy()
-            tlc_predicted_bbs = [
-                {
-                    tlc.X0: bb[0],
-                    tlc.Y0: bb[1],
-                    tlc.X1: bb[2],
-                    tlc.Y1: bb[3],
-                    tlc.LABEL: 0,
-                }
-                for bb in predicted_bbs
-            ]
-
             predicted.append(
                 {
-                    "x_max": w,
-                    "y_max": h,
-                    "x_min": 0,
-                    "y_min": 0,
-                    "instances": instances,
-                    "instances_additional_data": {"bb_list": tlc_predicted_bbs},
+                    tlc.X_MAX: w,
+                    tlc.Y_MAX: h,
+                    tlc.X_MIN: 0,
+                    tlc.Y_MIN: 0,
+                    tlc.INSTANCES: instances,
+                    tlc.INSTANCES_ADDITIONAL_DATA: {"label": [0] * num_instances},
                 }
             )
 
         losses = self.loss_fn(self._curr_raw_preds, batch) if self._settings.collect_loss else {}
         return {
-            "pose_predicted": predicted,
+            tlc.KEYPOINTS_2D_PREDICTED: predicted,
             **{k: tensor.mean(dim=1).cpu().numpy() for k, tensor in losses.items()},
         }
 

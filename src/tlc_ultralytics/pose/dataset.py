@@ -69,23 +69,35 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
 
         classes_list: list[int] = []
         keypoints_list: list[np.ndarray] = []
-
+        bb_list = []
         for inst in instances:
             # Class (dummy 0 if missing)
             label_val = inst.get(tlc.LABEL, 0)
             mapped = self._class_map.get(label_val, label_val)
             classes_list.append(int(mapped))
 
+            # Bounding boxes
+            bbs = inst.get("bbs_2d", [])
+            bb = bbs[0]
+            bbs_arr = [bb[tlc.X_MIN], bb[tlc.Y_MIN], bb[tlc.X_MAX], bb[tlc.Y_MAX]]
+            bbs_arr[0] = bbs_arr[0] / width
+            bbs_arr[1] = bbs_arr[1] / height
+            bbs_arr[2] = bbs_arr[2] / width
+            bbs_arr[3] = bbs_arr[3] / height
+            # bbs_arr = np.clip(bbs_arr, 0.0, 1.0)
+            bb_list.append(bbs_arr)
+            # Normalize bbs
+
             # Keypoints xys
-            xys = inst.get("xys", [])
+            xys = inst.get("vertices_2d", [])
             if isinstance(xys, list) and len(xys) >= 2:
                 xys_arr = np.array(xys, dtype=np.float32).reshape(-1, 2)
             else:
                 xys_arr = np.zeros((0, 2), dtype=np.float32)
 
             # Visibilities: prefer xys_additional_data['visibilities'] else ones
-            if "xys_additional_data" in inst:  # TODO fix Gudbrand
-                add = inst["xys_additional_data"]
+            if "vertices_2d_additional_data" in inst:  # TODO fix Gudbrand
+                add = inst["vertices_2d_additional_data"]
                 vis = np.array(add["visibilities"], dtype=np.float32).reshape(-1, 1)
             else:
                 vis = np.ones((xys_arr.shape[0], 1), dtype=np.float32)
@@ -115,16 +127,9 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
 
             keypoints_list.append(kp)
 
-        # Boxes list override
-        boxes_list = [
-            [bb[tlc.X0], bb[tlc.Y0], bb[tlc.X1], bb[tlc.Y1]] for bb in pose["instances_additional_data"]["bb_list"]
-        ]
-
         # Convert to arrays with expected shapes
         cls_arr = np.array(classes_list, dtype=np.float32).reshape(-1, 1)
-        bboxes_arr = (
-            np.array(boxes_list, dtype=np.float32).reshape(-1, 4) if boxes_list else np.zeros((0, 4), dtype=np.float32)
-        )
+        bboxes_arr = np.array(bb_list, dtype=np.float32).reshape(-1, 4)
 
         # Stack to (N, K, 3) (N may be 0, keep K fixed)
         if keypoints_list:
