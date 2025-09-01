@@ -64,6 +64,7 @@ Check out the [examples directory](examples/) for complete training and metrics 
 - **Classification**: [examples/classify/train.py](examples/classify/train.py) and [examples/classify/collect.py](examples/classify/collect.py)
 - **Object Detection**: [examples/detect/train.py](examples/detect/train.py) and [examples/detect/collect.py](examples/detect/collect.py)
 - **Segmentation**: [examples/detect/train.py](examples/segment/train.py) and [examples/detect/collect.py](examples/segment/collect.py)
+- **Pose Estimation**: [examples/pose/train.py](examples/pose/train.py) and [examples/pose/collect.py](examples/pose/collect.py)
 
 ## Working with Datasets
 
@@ -172,11 +173,14 @@ Working with instance segmentation in the 3LC integration is similar to object d
 
 For instance segmentation, you can provide `image_column_name` and `label_column_name` when calling `model.train()`, `model.val()` and `model.collect()` if you are providing your own table which has different column names to those expected by 3LC. Note that the `label_column_name` should be the path to the segmentation label field within the table schema, with the default being `"segmentations.instance_properties.label"` which points to the category labels for each segmentation instance.
 
+### Pose Estimation
+
+When working with tables created with `tlc.Table.from_yolo()`, set `task="pose"`, to get the correct formats for pose estimation. If you are working with a custom table, some care must be taken to ensure the required data is present in the table, such as `kpt_shape`, `kpt_names`, `names`, `flip_idx` and information about keypoint connectivity, if any. A detailed example of using a custom table for pose estimation can be found in [TODO: addme].
+
 ### Unsupported Tasks
 
 Some YOLO tasks can not yet be visualized in the 3LC Dashboard, but these are on the roadmap and will be made available in the future:
 
-- **Pose Estimation**: Not yet supported. Let us know on Discord if you would like this to be supported!
 - **OBB (Oriented Bounding Boxes)**: Not yet supported. Let us know on Discord if you would like this to be supported!
 
 ## Metrics Collection Only

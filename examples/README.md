@@ -96,6 +96,23 @@ train_table = tlc.Table.from_coco(
 > There will therefore often be a difference between the polygons returned by a `tlc.Table` and those in the input dataset, both in terms of the vertex locations and number of vertices.
 > In practice, this leads to a small, but negligible, change in training results.
 
+### Pose Estimation
+
+For pose estimation, set `task="pose"` to inform 3LC that your label files contain pose estimation data.
+
+```python
+import tlc
+
+train_table = tlc.Table.from_yolo(
+    dataset_yaml_file="/path/to/dataset.yaml",
+    split="train",
+    project_name="my_pose_estimation_project_name",
+    dataset_name="train",
+    table_name="initial",
+    task="pose",
+)
+```
+
 ## Training
 
 To run training with the 3LC integration, follow this pattern: instantiate the `YOLO` class with your chosen weights, then call `.train()` on the model, passing the tables to use and any additional arguments which are forwarded to Ultralytics YOLO:
@@ -150,6 +167,11 @@ Below you'll find examples organized by task, showing both training workflows an
 - **[train.py](segment/train.py)**: Complete instance segmentation workflow on the Carparts dataset. Demonstrates working with polygon annotations and mask outputs.
 - **[collect.py](segment/collect.py)**: Metrics collection and analysis for instance segmentation on COCO128-seg. Shows segmentation-specific metrics and visualizations.
 
+### Pose Estimation Examples
+
+- **[train.py](pose/train.py)**: Complete pose estimation workflow on the COCO8 dataset. Demonstrates working with pose estimation data and metrics.
+- **[collect.py](pose/collect.py)**: Metrics collection and analysis for pose estimation on COCO8. Shows pose estimation-specific metrics and visualizations.
+
 ## Using the Examples
 
 1. **Install the integration**: Follow the installation instructions in the [main README](../README.md) to set up the required dependencies
@@ -167,6 +189,10 @@ python examples/detect/collect.py
 # Instance segmentation
 python examples/segment/train.py
 python examples/segment/collect.py
+
+# Pose Estimation
+python examples/pose/train.py
+python examples/pose/collect.py
 ```
 
 ## Next Steps
