@@ -95,20 +95,20 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
                 predicted_confidences = predicted_confidences[mask].tolist()
                 predicted_classes = predicted_classes[mask].tolist()
 
+                # Compute IoUs
+                pbatch = self._prepare_batch(i, batch)
+                gt_boxes = pbatch["bboxes"].clone()
+                if gt_boxes.shape[0]:
+                    ious = metrics.box_iou(gt_boxes, predicted_boxes)  # IoU evaluated in xyxy format
+                    box_ious = ious.max(dim=0)[0].cpu().tolist()
+                else:
+                    box_ious = [0.0] * predicted_boxes.shape[0]  # No predictions
+
                 # Scale predicted boxes to original image size
                 resized_shape = batch["resized_shape"][i]
                 ori_shape = batch["ori_shape"][i]
                 ratio_pad = batch["ratio_pad"][i]
                 pred_scaled = ops.scale_boxes(resized_shape, predicted_boxes, ori_shape, ratio_pad)
-
-                # Compute IoUs
-                pbatch = self._prepare_batch(i, batch)
-                gt_boxes = pbatch["bboxes"].clone()
-                if gt_boxes.shape[0]:
-                    ious = metrics.box_iou(gt_boxes, pred_scaled)  # IoU evaluated in xyxy format
-                    box_ious = ious.max(dim=0)[0].cpu().tolist()
-                else:
-                    box_ious = [0.0] * pred_scaled.shape[0]  # No predictions
 
                 pred_xywh = ops.xyxy2xywhn(pred_scaled, w=width, h=height)
 

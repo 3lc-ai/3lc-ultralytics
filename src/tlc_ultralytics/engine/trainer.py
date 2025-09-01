@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import tlc
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
@@ -25,6 +27,14 @@ class TLCTrainerMixin(BaseTrainer):
         assert "data" in overrides or "tables" in overrides, (
             "You must provide either a data path or tables to train with 3LC."
         )
+
+        if "data" in overrides and not isinstance(overrides["data"], (str, Path)):
+            msg = (
+                "`data` must be a string or pathlib.Path. "
+                "If you are using `tlc.Table` objects, provide `tables` instead."
+            )
+            raise ValueError(msg)
+
         self._tables = overrides.pop("tables", None)
 
         # Column names
