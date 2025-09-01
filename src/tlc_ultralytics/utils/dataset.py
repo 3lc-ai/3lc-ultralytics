@@ -6,6 +6,14 @@ from typing import Literal
 
 import tlc
 import yaml
+from tlc.core.builtins.constants import (
+    INSTANCES,
+    INSTANCES_ADDITIONAL_DATA,
+    KEYPOINTS_2D,
+    LABEL,
+    VERTICES_2D,
+    VERTICES_2D_ADDITIONAL_DATA,
+)
 from ultralytics.data.utils import check_cls_dataset, check_det_dataset
 from ultralytics.utils import LOGGER, colorstr
 
@@ -156,9 +164,9 @@ def check_tlc_dataset(  # noqa: C901
     value_map = get_value_map_from_table(tables[first_split], label_column_name, task)
     names = tlc.SchemaHelper.to_simple_value_map(value_map)
     if task == "pose":
-        kpt_shape = get_kpt_shape_from_table(tables[first_split])
+        kpt_shape = get_kpt_shape_from_table(tables[first_split], label_column_name)
         flip_idx = get_flip_idx_from_table(tables[first_split])
-        keypoint_names = get_keypoint_names_from_table(tables[first_split], task)
+        keypoint_names = get_keypoint_names_from_table(tables[first_split], label_column_name, task)
     else:
         kpt_shape, flip_idx, keypoint_names = (17, 3), None, None
 
@@ -210,7 +218,7 @@ def check_tlc_dataset(  # noqa: C901
         "kpt_shape": kpt_shape,
         "kpt_names": keypoint_names,
     }
-    if flip_idx is not None:
+    if task == "pose" and flip_idx is not None:
         ret["flip_idx"] = flip_idx
     return ret
 
@@ -221,37 +229,45 @@ def get_value_map_from_table(
     task: Literal["detect", "segment", "pose", "classify"],
 ) -> dict[int, str]:
     if task == "pose":
-        return table.rows_schema[tlc.KEYPOINTS_2D][tlc.INSTANCES_ADDITIONAL_DATA]["label"].value.map
+        try:
+            return table.rows_schema[label_column_name][INSTANCES_ADDITIONAL_DATA][LABEL].value.map
+        except Exception as e:
+            raise ValueError("Failed to get value map from table") from e
     else:
         return table.get_value_map(label_column_name)
 
 
 def get_keypoint_names_from_table(
     table: tlc.Table,
+    label_column_name: str,
     task: Literal["detect", "segment", "pose", "classify"],
 ) -> list[str]:
     if task != "pose":
         return None
     else:
-        xys_map = table.rows_schema[tlc.KEYPOINTS_2D][tlc.INSTANCES][tlc.XYS].size0.map
-        if not xys_map:  # TODO fix Gudbrand
-            return ["top_left", "top_right", "bottom_right", "bottom_left"]
-        xys_map_simple = tlc.SchemaHelper.to_simple_value_map(xys_map)
-        return list(set(xys_map_simple.values()))
+        try:
+            keypoints_map = table.rows_schema[label_column_name][INSTANCES][VERTICES_2D].size0.map
+            return [element.internal_name for element in keypoints_map.values()]
+        except Exception as e:
+            LOGGER.warning(f"Failed to get keypoint names from table: {e!s}")
+            return None
 
 
-def get_kpt_shape_from_table(table: tlc.Table) -> tuple[int, int]:
+def get_kpt_shape_from_table(table: tlc.Table, label_column_name: str) -> tuple[int, int]:
     if hasattr(table, "kpt_shape"):
         return table.kpt_shape
-    elif True:  # TODO fix Gudbrand
-        num_kpts = int(table.rows_schema[tlc.KEYPOINTS_2D][tlc.INSTANCES][tlc.XYS].size0.max / 2)
-        if tlc.XYS_ADDITIONAL_DATA in table.rows_schema[tlc.KEYPOINTS_2D][tlc.INSTANCES].values:
-            num_channels = 3
-        else:
-            num_channels = 2
-        return (num_kpts, num_channels)
     else:
-        return (17, 3)
+        try:
+            num_kpts = int(table.rows_schema[label_column_name][INSTANCES][VERTICES_2D].size0.max / 2)
+            if VERTICES_2D_ADDITIONAL_DATA in table.rows_schema[label_column_name][INSTANCES].values:
+                num_channels = 3
+            else:
+                num_channels = 2
+        except Exception as e:
+            LOGGER.warning(f"Failed to get kpt shape from table: {e!s} (using default shape (17, 3))")
+            num_kpts = 17
+            num_channels = 3
+        return (num_kpts, num_channels)
 
 
 def get_flip_idx_from_table(table: tlc.Table) -> list[int] | None:
