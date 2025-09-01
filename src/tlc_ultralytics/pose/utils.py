@@ -1,6 +1,17 @@
 from __future__ import annotations
 
 import tlc
+from tlc.core.builtins.constants import (
+    BBS_2D,
+    INSTANCES,
+    INSTANCES_ADDITIONAL_DATA,
+    LINES,
+    VERTICES_2D,
+    X_MAX,
+    X_MIN,
+    Y_MAX,
+    Y_MIN,
+)
 
 
 def get_or_create_pose_table(
@@ -44,12 +55,12 @@ def check_pose_table(table: tlc.Table, image_column_name: str, label_column_name
 
         schema = row_schema[label_root]
         assert hasattr(schema, "values"), f"Pose column '{label_root}' has no values schema."
-        for key in ("x_min", "y_min", "x_max", "y_max", "instances"):
+        for key in (X_MIN, Y_MIN, X_MAX, Y_MAX, INSTANCES, INSTANCES_ADDITIONAL_DATA):
             assert key in schema.values, f"Pose column '{label_root}' missing key '{key}'."
 
-        instances_schema = schema.values["instances"]
+        instances_schema = schema.values[INSTANCES]
         assert hasattr(instances_schema, "values"), "Instances schema must be composite."
-        for k in ("vertices_2d", "lines"):
+        for k in (VERTICES_2D, LINES, BBS_2D):
             assert k in instances_schema.values, f"Instances missing '{k}'."
 
     except (AssertionError, KeyError) as e:
