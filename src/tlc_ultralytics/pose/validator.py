@@ -50,20 +50,22 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         try:
-            lines = self._table.rows_schema["keypoints_2d"]["instances"]["lines"].default_value
+            lines = self._table.rows_schema["keypoints_2d"][tlc.INSTANCES][tlc.LINES].default_value
         except KeyError:
             lines = None
-        predicted_pose_schema = tlc.Keypoints2DSchema(
-            keypoint_shape=self.kpt_shape,
-            keypoint_names=self.data["kpt_names"],
-            lines_default_value=None,
-            per_point_schemas={tlc.CONFIDENCE: tlc.Schema(value=tlc.Float32Value())},
-            per_instance_schemas={
-                "label": tlc.Schema(
-                    value=tlc.Int32Value(value_map=tlc.MapElement._construct_value_map(self.data["names"]))
-                )
-            },
+
+        predicted_pose_schema = tlc.core.builtins.schemas.geometries.Geometry2DSchema(
             writable=False,
+            add_2d_points=True,
+            add_2d_bounding_boxes=True,
+            num_vertices=self.kpt_shape[0],
+            vertex_labels=self.data["kpt_names"],
+            add_lines=True,
+            per_point_schemas={tlc.CONFIDENCE: tlc.Float32ListSchema()},
+            per_instance_schemas={
+                tlc.LABEL: tlc.core.builtins.schemas.CategoricalLabelListSchema(class_names=self.data["names"]),
+                tlc.CONFIDENCE: tlc.Float32ListSchema(),
+            },
         )
 
         loss_schemas = yolo_pose_loss_schemas(training=self._training) if self._settings.collect_loss else {}
@@ -82,7 +84,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                         tlc.X_MAX: w,
                         tlc.Y_MAX: h,
                         tlc.INSTANCES: [],
-                        tlc.INSTANCES_ADDITIONAL_DATA: {"label": []},
+                        tlc.INSTANCES_ADDITIONAL_DATA: {"label": [], tlc.CONFIDENCE: []},
                     }
                 )
                 continue
@@ -133,10 +135,10 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                 bb[3] = np.clip(bb[3], 0, h - 1)
 
                 inst = {
-                    tlc.XYS: xy.reshape(-1).astype(np.float32).tolist(),
+                    tlc.VERTICES_2D: xy.reshape(-1).astype(np.float32).tolist(),
                     tlc.LINES: batch["lines"][0],
-                    tlc.XYS_ADDITIONAL_DATA: {tlc.CONFIDENCE: conf.astype(np.float32).tolist()},
-                    "bbs_2d": [
+                    tlc.VERTICES_2D_ADDITIONAL_DATA: {tlc.CONFIDENCE: conf.astype(np.float32).tolist()},
+                    tlc.BBS_2D: [
                         {
                             tlc.X_MIN: bb[0],
                             tlc.Y_MIN: bb[1],
@@ -154,7 +156,10 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                     tlc.X_MIN: 0,
                     tlc.Y_MIN: 0,
                     tlc.INSTANCES: instances,
-                    tlc.INSTANCES_ADDITIONAL_DATA: {"label": [0] * num_instances},
+                    tlc.INSTANCES_ADDITIONAL_DATA: {
+                        "label": pred["cls"].detach().cpu().numpy().tolist(),
+                        tlc.CONFIDENCE: pred["conf"].detach().cpu().numpy().tolist(),
+                    },
                 }
             )
 
