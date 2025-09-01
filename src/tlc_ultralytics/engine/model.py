@@ -6,7 +6,7 @@ import tlc
 import ultralytics
 from ultralytics.models import yolo
 from ultralytics.models.yolo.model import YOLO as YOLOBase
-from ultralytics.nn.tasks import ClassificationModel, DetectionModel, OBBModel, PoseModel, SegmentationModel
+from ultralytics.nn.tasks import ClassificationModel, DetectionModel, PoseModel, SegmentationModel
 from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.classify import (
