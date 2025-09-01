@@ -79,6 +79,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             num_vertices=self.kpt_shape[0],
             vertex_labels=self.data["kpt_names"],
             add_lines=True,
+            lines_default_value=lines,
             per_point_schemas={CONFIDENCE: Float32ListSchema()},
             per_instance_schemas={
                 LABEL: CategoricalLabelListSchema(classes=self.data["names"]),

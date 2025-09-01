@@ -12,8 +12,10 @@ import numpy as np
 import pandas as pd
 import pytest
 import tlc
+from dataset_determinism import _compare_dataset_rows
 from PIL import Image
 from ultralytics.models.yolo import YOLO
+from ultralytics.models.yolo.pose import PoseTrainer
 
 from tlc_ultralytics import YOLO as TLCYOLO
 from tlc_ultralytics import Settings
@@ -33,6 +35,7 @@ from tlc_ultralytics.detect.dataset import TLCYOLODataset
 from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
 from tlc_ultralytics.engine.utils import _complete_label_column_name
+from tlc_ultralytics.pose.trainer import TLCPoseTrainer
 from tlc_ultralytics.segment.trainer import TLCSegmentationTrainer
 from tlc_ultralytics.segment.utils import check_seg_table
 from tlc_ultralytics.utils import check_tlc_dataset
@@ -1383,14 +1386,6 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
 
 
 def test_single_sample_equality() -> None:
-    import matplotlib.pyplot as plt
-    from dataset_determinism import _compare_dataset_rows
-    from test_tlc_ultralytics import TASK2DATASET, TASK2MODEL
-    from ultralytics.models.yolo.pose import PoseTrainer
-
-    from tlc_ultralytics import Settings
-    from tlc_ultralytics.pose.trainer import TLCPoseTrainer
-
     task = "pose"
     mode = "train"
 
@@ -1415,13 +1410,5 @@ def test_single_sample_equality() -> None:
     trainer_3lc.model = None
     dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=4)
     sample_3lc = dataset_3lc[0]
-
-    # plt.subplot(1, 2, 1)
-    # plt.title("Ultralytics")
-    # plt.imshow(sample_ultra["img"].numpy().transpose(1, 2, 0))
-    # plt.subplot(1, 2, 2)
-    # plt.title("3LC")
-    # plt.imshow(sample_3lc["img"].numpy().transpose(1, 2, 0))
-    # plt.show()
 
     _compare_dataset_rows(sample_ultra, sample_3lc)

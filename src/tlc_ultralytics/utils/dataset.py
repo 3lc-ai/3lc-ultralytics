@@ -9,7 +9,6 @@ import yaml
 from tlc.core.builtins.constants import (
     INSTANCES,
     INSTANCES_ADDITIONAL_DATA,
-    KEYPOINTS_2D,
     LABEL,
     VERTICES_2D,
     VERTICES_2D_ADDITIONAL_DATA,
