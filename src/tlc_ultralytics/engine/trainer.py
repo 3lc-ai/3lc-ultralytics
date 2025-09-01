@@ -192,6 +192,15 @@ class TLCTrainerMixin(BaseTrainer):
                 self.validator.metrics.box.p_curve,  # (nc, 1000)
             ]
             names = ["F1_score", "Recall", "Precision"]
+            if self.args.task == "pose":
+                curves.extend(
+                    [
+                        self.validator.metrics.pose.f1_curve,
+                        self.validator.metrics.pose.r_curve,
+                        self.validator.metrics.pose.p_curve,
+                    ]
+                )
+                names.extend(["Pose_F1_score", "Pose_Recall", "Pose_Precision"])
             px = self.validator.metrics.box.px  # (1000,) (linspace(0, 1)
 
             values = {}
