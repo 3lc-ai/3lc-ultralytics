@@ -69,7 +69,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         try:
             lines = self._table.rows_schema[KEYPOINTS_2D][INSTANCES][LINES].default_value
-        except KeyError:
+        except (KeyError, AttributeError):
             lines = None
 
         predicted_pose_schema = Geometry2DSchema(

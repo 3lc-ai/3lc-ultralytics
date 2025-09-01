@@ -1,24 +1,15 @@
-import tlc
-
-from tlc_ultralytics import YOLO
-
-# model = YOLO("c:/Project/3lc-ultralytics/runs/pose/train35/weights/best.pt")
-# model = YOLO("c:/Project/3lc-ultralytics/runs/pose/train51/weights/best.pt")
-# train = tlc.Table.from_names("initial", "hands-train", "GEOMETRY")
-# val = tlc.Table.from_names("initial", "hands-val", "GEOMETRY")
-
-model = YOLO("yolo11n-pose.pt")
-train = tlc.Table.from_url("<TEST_DATA>/projects/Geometry/datasets/default-dataset/tables/coco8-pose-train")
-val = tlc.Table.from_url("<TEST_DATA>/projects/Geometry/datasets/default-dataset/tables/coco8-pose-val")
-
-# train = tlc.Table.from_names("initial", "coco8-pose-train", "GEOMETRY")
-# val = tlc.Table.from_names("initial", "coco8-pose-val", "GEOMETRY")
+from tlc_ultralytics import YOLO, Settings
 
 if __name__ == "__main__":
+    model = YOLO("yolo11n-pose.pt")
+
+    settings = Settings(
+        image_embeddings_dim=2,
+        collect_loss=True,
+    )
+
     model.collect(
-        tables={
-            "train": train,
-            "val": val,
-        },
+        data="coco8-pose.yaml",
+        settings=settings,
         workers=0,
     )
