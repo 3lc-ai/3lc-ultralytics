@@ -21,7 +21,7 @@ from tlc.core.builtins.constants import (
     Y_MAX,
     Y_MIN,
 )
-from tlc.core.builtins.schemas import CategoricalLabelListSchema, Float32ListSchema
+from tlc.core.builtins.schemas import CategoricalLabelListSchema, Float32ListSchema, Geometry2DSchema
 from ultralytics.models.yolo.pose.val import PoseValidator
 from ultralytics.utils import ops
 
@@ -72,7 +72,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         except KeyError:
             lines = None
 
-        predicted_pose_schema = tlc.core.builtins.schemas.geometries.Geometry2DSchema(
+        predicted_pose_schema = Geometry2DSchema(
             writable=False,
             add_2d_points=True,
             add_2d_bounding_boxes=True,
