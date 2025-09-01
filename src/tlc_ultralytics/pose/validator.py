@@ -5,7 +5,25 @@ from typing import Any
 import numpy as np
 import tlc
 import torch
+from tlc.core.builtins.constants import (
+    BBS_2D,
+    CONFIDENCE,
+    INSTANCES,
+    INSTANCES_ADDITIONAL_DATA,
+    KEYPOINTS_2D,
+    KEYPOINTS_2D_PREDICTED,
+    LABEL,
+    LINES,
+    VERTICES_2D,
+    VERTICES_2D_ADDITIONAL_DATA,
+    X_MAX,
+    X_MIN,
+    Y_MAX,
+    Y_MIN,
+)
+from tlc.core.builtins.schemas import CategoricalLabelListSchema, Float32ListSchema
 from ultralytics.models.yolo.pose.val import PoseValidator
+from ultralytics.utils import ops
 
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME
 from tlc_ultralytics.engine.validator import TLCValidatorMixin
@@ -50,7 +68,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         try:
-            lines = self._table.rows_schema["keypoints_2d"][tlc.INSTANCES][tlc.LINES].default_value
+            lines = self._table.rows_schema[KEYPOINTS_2D][INSTANCES][LINES].default_value
         except KeyError:
             lines = None
 
@@ -61,111 +79,96 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             num_vertices=self.kpt_shape[0],
             vertex_labels=self.data["kpt_names"],
             add_lines=True,
-            per_point_schemas={tlc.CONFIDENCE: tlc.Float32ListSchema()},
+            per_point_schemas={CONFIDENCE: Float32ListSchema()},
             per_instance_schemas={
-                tlc.LABEL: tlc.core.builtins.schemas.CategoricalLabelListSchema(class_names=self.data["names"]),
-                tlc.CONFIDENCE: tlc.Float32ListSchema(),
+                LABEL: CategoricalLabelListSchema(classes=self.data["names"]),
+                CONFIDENCE: Float32ListSchema(),
             },
         )
 
         loss_schemas = yolo_pose_loss_schemas(training=self._training) if self._settings.collect_loss else {}
-        return {tlc.KEYPOINTS_2D_PREDICTED: predicted_pose_schema, **loss_schemas}
+        return {KEYPOINTS_2D_PREDICTED: predicted_pose_schema, **loss_schemas}
 
     def _compute_3lc_metrics(self, preds, batch) -> dict[str, Any]:
         predicted = []
+
         for i, pred in enumerate(preds):
+            predicted_keypoints, predicted_confidences, predicted_classes, predicted_bboxes = (
+                pred["keypoints"].clone(),
+                pred["conf"].clone(),
+                pred["cls"].clone(),
+                pred["bboxes"].clone(),
+            )
             h, w = batch["ori_shape"][i]
 
-            if len(pred["keypoints"]) == 0:
+            if len(pred) == 0:
                 predicted.append(
                     {
-                        tlc.X_MIN: 0,
-                        tlc.Y_MIN: 0,
-                        tlc.X_MAX: w,
-                        tlc.Y_MAX: h,
-                        tlc.INSTANCES: [],
-                        tlc.INSTANCES_ADDITIONAL_DATA: {"label": [], tlc.CONFIDENCE: []},
+                        X_MIN: 0,
+                        Y_MIN: 0,
+                        X_MAX: w,
+                        Y_MAX: h,
+                        INSTANCES: [],
+                        INSTANCES_ADDITIONAL_DATA: {LABEL: [], CONFIDENCE: []},
                     }
                 )
                 continue
 
-            # Parse ratio_pad robustly: ((gain_w, gain_h), (padw, padh)) or (gain, (padw, padh))
-            gw = gh = 1.0
-            padw = padh = 0.0
-            ratio_pad = batch.get("ratio_pad", None)
-            if ratio_pad is not None:
-                rp = ratio_pad[i]
-                if isinstance(rp, (tuple, list)) and len(rp) == 2:
-                    gain, pad = rp
-                    if isinstance(gain, (tuple, list)):
-                        if len(gain) >= 2:
-                            gw, gh = float(gain[0]), float(gain[1])
-                        elif len(gain) == 1:
-                            gw = gh = float(gain[0])
-                    else:
-                        gw = gh = float(gain)
-                    if isinstance(pad, (tuple, list)) and len(pad) >= 2:
-                        padw, padh = float(pad[0]), float(pad[1])
+            # Filter out low confidence predictions
+            mask = predicted_confidences > self._settings.conf_thres
+            predicted_keypoints = predicted_keypoints[mask]
+            predicted_confidences = predicted_confidences[mask].tolist()
+            predicted_classes = predicted_classes[mask].tolist()
+            predicted_bboxes = predicted_bboxes[mask]
 
-            kpts = pred["keypoints"].detach().cpu().numpy()  # (N, K, D)
-            bbs = pred["bboxes"].cpu().numpy()
+            resized_shape = batch["resized_shape"][i]
+            ori_shape = batch["ori_shape"][i]
+            ratio_pad = batch["ratio_pad"][i]
+            scaled_bboxes = ops.scale_boxes(resized_shape, predicted_bboxes, ori_shape, ratio_pad)
+            scaled_keypoints = ops.scale_coords(resized_shape, predicted_keypoints, ori_shape, ratio_pad)
 
-            num_instances = kpts.shape[0]
             instances = []
-            for j in range(num_instances):
-                xy = kpts[j, :, :2].copy()
-                # undo letterbox: (xy - pad) / gain (per-axis)
-                xy[:, 0] = (xy[:, 0] - padw) / (gw + 1e-9)
-                xy[:, 1] = (xy[:, 1] - padh) / (gh + 1e-9)
-                # clamp to image
-                xy[:, 0] = np.clip(xy[:, 0], 0, w - 1)
-                xy[:, 1] = np.clip(xy[:, 1], 0, h - 1)
+            for j in range(len(predicted_keypoints)):
+                predicted_kpts = scaled_keypoints[j]
+                predicted_bbox = scaled_bboxes[j].cpu().numpy().astype(np.float32).tolist()
+                keypoints = predicted_kpts[:, 0:2].reshape(-1).cpu().numpy().astype(np.float32).tolist()
+                confidences = predicted_kpts[:, 2].cpu().numpy().astype(np.float32).tolist()
 
-                conf = kpts[j, :, 2] if kpts.shape[2] >= 3 else np.ones(kpts.shape[1], dtype=np.float32)
-                bb = bbs[j, :]
-                # undo letterbox: (xy - pad) / gain (per-axis)
-                bb[0] = (bb[0] - padw) / (gw + 1e-9)
-                bb[1] = (bb[1] - padh) / (gh + 1e-9)
-                bb[2] = (bb[2] - padw) / (gw + 1e-9)
-                bb[3] = (bb[3] - padh) / (gh + 1e-9)
-                # clamp to image
-                bb[0] = np.clip(bb[0], 0, w - 1)
-                bb[1] = np.clip(bb[1], 0, h - 1)
-                bb[2] = np.clip(bb[2], 0, w - 1)
-                bb[3] = np.clip(bb[3], 0, h - 1)
-
-                inst = {
-                    tlc.VERTICES_2D: xy.reshape(-1).astype(np.float32).tolist(),
-                    tlc.LINES: batch["lines"][0],
-                    tlc.VERTICES_2D_ADDITIONAL_DATA: {tlc.CONFIDENCE: conf.astype(np.float32).tolist()},
-                    tlc.BBS_2D: [
-                        {
-                            tlc.X_MIN: bb[0],
-                            tlc.Y_MIN: bb[1],
-                            tlc.X_MAX: bb[2],
-                            tlc.Y_MAX: bb[3],
-                        }
-                    ],
-                }
-                instances.append(inst)
+                instances.append(
+                    {
+                        VERTICES_2D: keypoints,
+                        LINES: batch[LINES][0],
+                        VERTICES_2D_ADDITIONAL_DATA: {
+                            CONFIDENCE: confidences,
+                        },
+                        BBS_2D: [
+                            {
+                                X_MIN: predicted_bbox[0],
+                                Y_MIN: predicted_bbox[1],
+                                X_MAX: predicted_bbox[2],
+                                Y_MAX: predicted_bbox[3],
+                            }
+                        ],
+                    }
+                )
 
             predicted.append(
                 {
-                    tlc.X_MAX: w,
-                    tlc.Y_MAX: h,
-                    tlc.X_MIN: 0,
-                    tlc.Y_MIN: 0,
-                    tlc.INSTANCES: instances,
-                    tlc.INSTANCES_ADDITIONAL_DATA: {
-                        "label": pred["cls"].detach().cpu().numpy().tolist(),
-                        tlc.CONFIDENCE: pred["conf"].detach().cpu().numpy().tolist(),
+                    X_MAX: w,
+                    Y_MAX: h,
+                    X_MIN: 0,
+                    Y_MIN: 0,
+                    INSTANCES: instances,
+                    INSTANCES_ADDITIONAL_DATA: {
+                        LABEL: predicted_classes,
+                        CONFIDENCE: predicted_confidences,
                     },
                 }
             )
 
         losses = self.loss_fn(self._curr_raw_preds, batch) if self._settings.collect_loss else {}
         return {
-            tlc.KEYPOINTS_2D_PREDICTED: predicted,
+            KEYPOINTS_2D_PREDICTED: predicted,
             **{k: tensor.mean(dim=1).cpu().numpy() for k, tensor in losses.items()},
         }
 

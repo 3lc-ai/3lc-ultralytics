@@ -87,49 +87,47 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
                 )
                 continue
 
-            # Handle case with predictions
+            # Filter out low confidence predictions
+            mask = predicted_confidences > self._settings.conf_thres
+            predicted_boxes = predicted_boxes[mask]
+            predicted_confidences = predicted_confidences[mask].tolist()
+            predicted_classes = predicted_classes[mask].tolist()
+
+            # Compute IoUs
+            pbatch = self._prepare_batch(i, batch)
+            gt_boxes = pbatch["bboxes"].clone()
+            if gt_boxes.shape[0]:
+                ious = metrics.box_iou(gt_boxes, predicted_boxes)  # IoU evaluated in xyxy format
+                box_ious = ious.max(dim=0)[0].cpu().tolist()
             else:
-                # Filter out low confidence predictions
-                mask = predicted_confidences > self._settings.conf_thres
-                predicted_boxes = predicted_boxes[mask]
-                predicted_confidences = predicted_confidences[mask].tolist()
-                predicted_classes = predicted_classes[mask].tolist()
+                box_ious = [0.0] * predicted_boxes.shape[0]  # No predictions
 
-                # Compute IoUs
-                pbatch = self._prepare_batch(i, batch)
-                gt_boxes = pbatch["bboxes"].clone()
-                if gt_boxes.shape[0]:
-                    ious = metrics.box_iou(gt_boxes, predicted_boxes)  # IoU evaluated in xyxy format
-                    box_ious = ious.max(dim=0)[0].cpu().tolist()
-                else:
-                    box_ious = [0.0] * predicted_boxes.shape[0]  # No predictions
+            # Scale predicted boxes to original image size
+            resized_shape = batch["resized_shape"][i]
+            ori_shape = batch["ori_shape"][i]
+            ratio_pad = batch["ratio_pad"][i]
+            pred_scaled = ops.scale_boxes(resized_shape, predicted_boxes, ori_shape, ratio_pad)
 
-                # Scale predicted boxes to original image size
-                resized_shape = batch["resized_shape"][i]
-                ori_shape = batch["ori_shape"][i]
-                ratio_pad = batch["ratio_pad"][i]
-                pred_scaled = ops.scale_boxes(resized_shape, predicted_boxes, ori_shape, ratio_pad)
+            pred_xywh = ops.xyxy2xywhn(pred_scaled, w=width, h=height)
 
-                pred_xywh = ops.xyxy2xywhn(pred_scaled, w=width, h=height)
-
-                annotations = []
-                for pi in range(len(predicted_boxes)):
-                    annotations.append(
-                        {
-                            "score": predicted_confidences[pi],
-                            "category_id": self.data["range_to_3lc_class"][int(predicted_classes[pi])],
-                            "bbox": pred_xywh[pi, :].cpu().tolist(),
-                            "iou": box_ious[pi],
-                        }
-                    )
-
-                batch_predicted_boxes.append(
-                    construct_bbox_struct(
-                        annotations,
-                        image_width=width,
-                        image_height=height,
-                    )
+            annotations = []
+            for pi in range(len(predicted_boxes)):
+                annotations.append(
+                    {
+                        "score": predicted_confidences[pi],
+                        "category_id": self.data["range_to_3lc_class"][int(predicted_classes[pi])],
+                        "bbox": pred_xywh[pi, :].cpu().tolist(),
+                        "iou": box_ious[pi],
+                    }
                 )
+
+            batch_predicted_boxes.append(
+                construct_bbox_struct(
+                    annotations,
+                    image_width=width,
+                    image_height=height,
+                )
+            )
 
         return batch_predicted_boxes
 
