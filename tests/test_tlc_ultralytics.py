@@ -1416,12 +1416,12 @@ def test_single_sample_equality() -> None:
     dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=4)
     sample_3lc = dataset_3lc[0]
 
-    plt.subplot(1, 2, 1)
-    plt.title("Ultralytics")
-    plt.imshow(sample_ultra["img"].numpy().transpose(1, 2, 0))
-    plt.subplot(1, 2, 2)
-    plt.title("3LC")
-    plt.imshow(sample_3lc["img"].numpy().transpose(1, 2, 0))
-    plt.show()
+    # plt.subplot(1, 2, 1)
+    # plt.title("Ultralytics")
+    # plt.imshow(sample_ultra["img"].numpy().transpose(1, 2, 0))
+    # plt.subplot(1, 2, 2)
+    # plt.title("3LC")
+    # plt.imshow(sample_3lc["img"].numpy().transpose(1, 2, 0))
+    # plt.show()
 
     _compare_dataset_rows(sample_ultra, sample_3lc)

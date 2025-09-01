@@ -3,12 +3,23 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-import tlc
-from ultralytics.data.dataset import YOLODataset
-from ultralytics.utils import colorstr
+from tlc.core.builtins.constants import (
+    BBS_2D,
+    IMAGE,
+    INSTANCES,
+    KEYPOINTS_2D,
+    LABEL,
+    LINES,
+    VERTICES_2D,
+    VERTICES_2D_ADDITIONAL_DATA,
+    VISIBILITIES,
+    X_MAX,
+    X_MIN,
+    Y_MAX,
+    Y_MIN,
+)
 
 from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
-from tlc_ultralytics.engine.dataset import TLCDatasetMixin
 
 
 class TLCYOLOPoseDataset(BaseTLCYOLODataset):
@@ -32,98 +43,76 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
             data=data,
             exclude_zero=exclude_zero,
             class_map=class_map,
-            image_column_name=image_column_name or tlc.IMAGE,
-            label_column_name=label_column_name or tlc.KEYPOINTS_2D,
+            image_column_name=image_column_name or IMAGE,
+            label_column_name=label_column_name or KEYPOINTS_2D,
             **kwargs,
         )
         self._post_init()
 
     def _get_label_from_row(self, im_file: str, row: Any, example_id: int) -> dict[str, Any]:
         pose_root = self._label_column_name.split(".")[0]
-        pose = row.get(pose_root, {}) or {}
 
-        # Read bounds (prefer explicit x_min/x_max/y_min/y_max)
-        x_min = float(pose.get("x_min", 0.0))
-        y_min = float(pose.get("y_min", 0.0))
-        x_max = float(pose.get("x_max", 0.0))
-        y_max = float(pose.get("y_max", 0.0))
+        label_column_value = row[pose_root]
 
-        width = max(x_max - x_min, 1.0)
-        height = max(y_max - y_min, 1.0)
+        x_min = label_column_value[X_MIN]
+        y_min = label_column_value[Y_MIN]
+        x_max = label_column_value[X_MAX]
+        y_max = label_column_value[Y_MAX]
 
-        if width <= 0 or height <= 0:
-            _ = f"{colorstr(self.prefix + ':')} Invalid image bounds in pose data; defaulting to 1x1."
-            width, height = 1.0, 1.0
+        image_width = x_max - x_min
+        image_height = y_max - y_min
 
         # Desired fixed K from dataset config (default 17)
-        desired_k = 17
-        if isinstance(getattr(self, "data", None), dict):
-            kps = self.data.get("kpt_shape")
-            if isinstance(kps, (list, tuple)) and len(kps) >= 1:
-                try:
-                    desired_k = int(kps[0])
-                except Exception:
-                    desired_k = 17
+        kpt_shape = self.data.get("kpt_shape")
 
-        instances = pose.get("instances") or []
+        instances = label_column_value[INSTANCES]
 
         classes_list: list[int] = []
         keypoints_list: list[np.ndarray] = []
         bb_list = []
-        for inst in instances:
+
+        for instance in instances:
             # Class (dummy 0 if missing)
-            label_val = inst.get(tlc.LABEL, 0)
+            label_val = instance.get(LABEL, 0)
             mapped = self._class_map.get(label_val, label_val)
             classes_list.append(int(mapped))
 
             # Bounding boxes
-            bbs = inst.get("bbs_2d", [])
-            bb = bbs[0]
-            bbs_arr = [bb[tlc.X_MIN], bb[tlc.Y_MIN], bb[tlc.X_MAX], bb[tlc.Y_MAX]]
-            bbs_arr[0] = bbs_arr[0] / width
-            bbs_arr[1] = bbs_arr[1] / height
-            bbs_arr[2] = bbs_arr[2] / width
-            bbs_arr[3] = bbs_arr[3] / height
-            # bbs_arr = np.clip(bbs_arr, 0.0, 1.0)
-            bb_list.append(bbs_arr)
-            # Normalize bbs
+            bb = instance[BBS_2D][0]  # Only one bounding box per instance
+            bb_width = bb[X_MAX] - bb[X_MIN]
+            bb_height = bb[Y_MAX] - bb[Y_MIN]
+            bb_xywhn = [bb[X_MIN] + bb_width / 2, bb[Y_MIN] + bb_height / 2, bb_width, bb_height]
+            bb_xywhn = [
+                bb_xywhn[0] / image_width,
+                bb_xywhn[1] / image_height,
+                bb_xywhn[2] / image_width,
+                bb_xywhn[3] / image_height,
+            ]
+            bb_list.append(bb_xywhn)
 
             # Keypoints xys
-            xys = inst.get("vertices_2d", [])
-            if isinstance(xys, list) and len(xys) >= 2:
+            xys = instance[VERTICES_2D]
+            if len(xys) >= 2:
                 xys_arr = np.array(xys, dtype=np.float32).reshape(-1, 2)
             else:
                 xys_arr = np.zeros((0, 2), dtype=np.float32)
 
-            # Visibilities: prefer xys_additional_data['visibilities'] else ones
-            if "vertices_2d_additional_data" in inst:  # TODO fix Gudbrand
-                add = inst["vertices_2d_additional_data"]
-                vis = np.array(add["visibilities"], dtype=np.float32).reshape(-1, 1)
-            else:
-                vis = np.ones((xys_arr.shape[0], 1), dtype=np.float32)
-
-            # Normalize x,y to [0,1] using full-image bounds
             if xys_arr.size:
                 norm_xy = np.empty_like(xys_arr)
-                norm_xy[:, 0] = xys_arr[:, 0] / width
-                norm_xy[:, 1] = xys_arr[:, 1] / height
+                norm_xy[:, 0] = xys_arr[:, 0] / image_width
+                norm_xy[:, 1] = xys_arr[:, 1] / image_height
                 norm_xy = np.clip(norm_xy, 0.0, 1.0)
             else:
                 norm_xy = xys_arr
 
-            # Pad/truncate to desired_k, then stack to (K,3)
-            k = norm_xy.shape[0]
-            kp = np.zeros((desired_k, 3), dtype=np.float32)
-            if k:
-                copy_k = min(desired_k, k)
-                kp[:copy_k, :2] = norm_xy[:copy_k]
-                if vis.shape[0] >= copy_k:
-                    kp[:copy_k, 2:3] = vis[:copy_k]
-                else:
-                    # pad missing vis with ones
-                    pad_vis = np.ones((copy_k, 1), dtype=np.float32)
-                    pad_vis[: vis.shape[0]] = vis
-                    kp[:copy_k, 2:3] = pad_vis
+            # Visibilities
+            if VERTICES_2D_ADDITIONAL_DATA in instance:
+                add = instance[VERTICES_2D_ADDITIONAL_DATA]
+                vis = np.array(add[VISIBILITIES], dtype=np.float32).reshape(-1, 1)
+            else:
+                vis = np.ones((xys_arr.shape[0], 1), dtype=np.float32)
+
+            kp = np.concatenate([norm_xy, vis], axis=1)
 
             keypoints_list.append(kp)
 
@@ -131,23 +120,20 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
         cls_arr = np.array(classes_list, dtype=np.float32).reshape(-1, 1)
         bboxes_arr = np.array(bb_list, dtype=np.float32).reshape(-1, 4)
 
-        # Stack to (N, K, 3) (N may be 0, keep K fixed)
+        # Stack to (N, K, 3)
         if keypoints_list:
             kp_stack = np.stack(keypoints_list, axis=0)
         else:
-            kp_stack = np.zeros((0, desired_k, 3), dtype=np.float32)
-
-        # Height/width integers for metadata (H,W)
-        shape_hw = (round(height), round(width))
+            kp_stack = np.zeros((0, kpt_shape[0], 3), dtype=np.float32)
 
         return {
             "im_file": im_file,
-            "shape": shape_hw,
+            "shape": (round(image_height), round(image_width)),
             "cls": cls_arr,
             "bboxes": bboxes_arr,
             "segments": [],
             "keypoints": kp_stack,  # (N, K, 3)
-            "lines": pose["instances"][0]["lines"] if len(pose["instances"]) > 0 else [],
+            "lines": label_column_value[INSTANCES][0][LINES] if len(label_column_value[INSTANCES]) > 0 else [],
             "normalized": True,
             "bbox_format": "xywh",
             "example_id": example_id,
