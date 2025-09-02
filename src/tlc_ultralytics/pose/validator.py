@@ -10,7 +10,6 @@ from tlc.core.builtins.constants import (
     CONFIDENCE,
     INSTANCES,
     INSTANCES_ADDITIONAL_DATA,
-    KEYPOINTS_2D,
     KEYPOINTS_2D_PREDICTED,
     LABEL,
     LINES,
