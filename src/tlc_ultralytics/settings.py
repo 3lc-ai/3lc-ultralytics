@@ -109,6 +109,12 @@ class Settings:
 
     Default: None"""
 
+    lines: list[int] | None = field(default=None)
+    """Lines for pose estimation. Default: None"""
+
+    kpt_names: list[str] | None = field(default=None)
+    """Keypoint names for pose estimation. Default: None"""
+
     @classmethod
     def from_env(cls) -> Settings:
         """Create a Settings instance from environment variables.

@@ -23,6 +23,7 @@ class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
             project_name=self._settings.project_name,
             splits=("train", "val"),
             task="pose",
+            settings=self._settings,
         )
 
         # Get test data if val not present
@@ -35,6 +36,7 @@ class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
                 project_name=self._settings.project_name,
                 splits=("test",),
                 task="pose",
+                settings=self._settings,
             )
             self.data["test"] = data_test["test"]
 

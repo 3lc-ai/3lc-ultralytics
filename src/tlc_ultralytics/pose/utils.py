@@ -13,6 +13,8 @@ from tlc.core.builtins.constants import (
     Y_MIN,
 )
 
+from tlc_ultralytics.settings import Settings
+
 
 def get_or_create_pose_table(
     key: str,
@@ -22,6 +24,7 @@ def get_or_create_pose_table(
     project_name: str,
     dataset_name: str,
     table_name: str,
+    settings: Settings | None = None,
 ) -> tlc.Table:
     return tlc.Table.from_yolo(
         dataset_yaml_file=data_dict["yaml_file"],
@@ -34,6 +37,8 @@ def get_or_create_pose_table(
         if_exists="reuse",
         add_weight_column=True,
         description="Created with 3LC YOLO integration",
+        keypoint_names=settings.kpt_names,
+        lines=settings.lines,
     )
 
 

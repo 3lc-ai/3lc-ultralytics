@@ -20,7 +20,7 @@ class TLCClassificationValidator(TLCValidatorMixin, yolo.classify.Classification
     _default_label_column_name = CLASSIFY_LABEL_COLUMN_NAME
 
     def check_dataset(self, *args, **kwargs):
-        return check_tlc_dataset(*args, task="classify", **kwargs)
+        return check_tlc_dataset(*args, task="classify", settings=self._settings, **kwargs)
 
     def build_dataset(self, table):
         return TLCClassificationDataset(

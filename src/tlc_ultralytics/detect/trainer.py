@@ -35,6 +35,7 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
             project_name=self._settings.project_name,
             splits=("train", "val"),
             task="detect",
+            settings=self._settings,
         )
 
         # Get test data if val not present
@@ -47,6 +48,7 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
                 project_name=self._settings.project_name,
                 splits=("test",),
                 task="detect",
+                settings=self._settings,
             )
             self.data["test"] = data_test["test"]
 

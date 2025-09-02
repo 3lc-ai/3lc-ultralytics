@@ -10,6 +10,7 @@ from tlc.core.builtins.constants import (
     INSTANCES,
     INSTANCES_ADDITIONAL_DATA,
     LABEL,
+    LINES,
     VERTICES_2D,
     VERTICES_2D_ADDITIONAL_DATA,
 )
@@ -17,6 +18,7 @@ from ultralytics.data.utils import check_cls_dataset, check_det_dataset
 from ultralytics.utils import LOGGER, colorstr
 
 from tlc_ultralytics.constants import TLC_COLORSTR, TLC_PREFIX
+from tlc_ultralytics.settings import Settings
 
 
 def get_dataset_functions(
@@ -61,6 +63,7 @@ def check_tlc_dataset(  # noqa: C901
     project_name: str | None = None,
     splits: Iterable[str] | None = None,
     task: Literal["detect", "segment", "pose", "classify"] | None = None,
+    settings: Settings | None = None,
 ) -> dict[str, tlc.Table | dict[float, str] | int]:
     """Get or create tables for YOLO datasets. data is ignored when tables is provided.
 
@@ -109,6 +112,7 @@ def check_tlc_dataset(  # noqa: C901
                         project_name=project_name,
                         dataset_name=dataset_name,
                         table_name=table_name,
+                        settings=settings,
                     )
 
                     # Get the latest version when inferring
@@ -166,8 +170,9 @@ def check_tlc_dataset(  # noqa: C901
         kpt_shape = get_kpt_shape_from_table(tables[first_split], label_column_name)
         flip_idx = get_flip_idx_from_table(tables[first_split])
         keypoint_names = get_keypoint_names_from_table(tables[first_split], label_column_name, task)
+        lines = get_lines_from_table(tables[first_split], label_column_name)
     else:
-        kpt_shape, flip_idx, keypoint_names = (17, 3), None, None
+        kpt_shape, flip_idx, keypoint_names, lines = (17, 3), None, None, None
 
     if names is None:
         raise ValueError(f"Failed to get value map for table with Url: {tables[first_split].url}")
@@ -219,6 +224,8 @@ def check_tlc_dataset(  # noqa: C901
     }
     if task == "pose" and flip_idx is not None:
         ret["flip_idx"] = flip_idx
+    if task == "pose" and lines is not None:
+        ret["lines"] = lines
     return ret
 
 
@@ -274,6 +281,18 @@ def get_flip_idx_from_table(table: tlc.Table) -> list[int] | None:
         return table.flip_idx
     else:
         return None
+
+
+def get_lines_from_table(table: tlc.Table, label_column_name: str) -> list[int] | None:
+    if hasattr(table, "lines") and table.lines is not None:
+        return table.lines
+    else:
+        try:
+            lines = table.rows_schema[label_column_name][INSTANCES][LINES].default_value
+            return lines
+        except Exception as e:
+            LOGGER.warning(f"Failed to get lines from table: {e!s}")
+            return None
 
 
 def parse_3lc_yaml_file(data_file: str) -> dict[str, tlc.Table]:

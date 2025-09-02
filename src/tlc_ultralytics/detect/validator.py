@@ -27,7 +27,7 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
     _default_label_column_name = DETECTION_LABEL_COLUMN_NAME
 
     def check_dataset(self, *args, **kwargs):
-        return check_tlc_dataset(*args, task="detect", **kwargs)
+        return check_tlc_dataset(*args, task="detect", settings=self._settings, **kwargs)
 
     def build_dataset(self, table, mode="val", batch=None):
         return build_tlc_yolo_dataset(

@@ -21,6 +21,7 @@ class TLCSegmentationTrainer(SegmentationTrainer, TLCDetectionTrainer):
             project_name=self._settings.project_name,
             splits=("train", "val"),
             task="segment",
+            settings=self._settings,
         )
 
         # Get test data if val not present
@@ -33,6 +34,7 @@ class TLCSegmentationTrainer(SegmentationTrainer, TLCDetectionTrainer):
                 project_name=self._settings.project_name,
                 splits=("test",),
                 task="segment",
+                settings=self._settings,
             )
             self.data["test"] = data_test["test"]
 

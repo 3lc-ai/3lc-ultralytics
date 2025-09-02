@@ -21,7 +21,7 @@ from tlc.core.builtins.constants import (
     Y_MAX,
     Y_MIN,
 )
-from tlc.core.builtins.schemas import CategoricalLabelListSchema, Float32ListSchema, Geometry2DSchema
+from tlc.core.builtins.schemas import CategoricalLabelListSchema, Float32ListSchema, Keypoints2DSchema
 from ultralytics.models.yolo.pose.val import PoseValidator
 from ultralytics.utils import ops
 
@@ -38,7 +38,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
     _default_label_column_name = POSE_LABEL_COLUMN_NAME
 
     def check_dataset(self, *args, **kwargs):
-        return check_tlc_dataset(*args, task="pose", **kwargs)
+        return check_tlc_dataset(*args, task="pose", settings=self._settings, **kwargs)
 
     def build_dataset(self, table, mode: str = "val", batch=None):
         return TLCYOLOPoseDataset(
@@ -67,24 +67,17 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         return super().postprocess(preds)
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
-        try:
-            lines = self._table.rows_schema[KEYPOINTS_2D][INSTANCES][LINES].default_value
-        except (KeyError, AttributeError):
-            lines = None
-
-        predicted_pose_schema = Geometry2DSchema(
-            writable=False,
-            add_2d_points=True,
-            add_2d_bounding_boxes=True,
-            num_vertices=self.kpt_shape[0],
-            vertex_labels=self.data["kpt_names"],
-            add_lines=True,
-            lines_default_value=lines,
+        predicted_pose_schema = Keypoints2DSchema(
+            kpt_shape=self.kpt_shape,
+            kpt_names=self.data["kpt_names"],
+            lines=self.data.get("lines"),
+            object_name=self.data["names"][0],
             per_point_schemas={CONFIDENCE: Float32ListSchema()},
             per_instance_schemas={
                 LABEL: CategoricalLabelListSchema(classes=self.data["names"]),
                 CONFIDENCE: Float32ListSchema(),
             },
+            writable=False,
         )
 
         loss_schemas = yolo_pose_loss_schemas(training=self._training) if self._settings.collect_loss else {}

@@ -17,7 +17,7 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
     _default_label_column_name = SEGMENTATION_LABEL_COLUMN_NAME
 
     def check_dataset(self, *args, **kwargs):
-        return check_tlc_dataset(*args, task="segment", **kwargs)
+        return check_tlc_dataset(*args, task="segment", settings=self._settings, **kwargs)
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         # TODO: Ensure class  mapping is the same as in input table

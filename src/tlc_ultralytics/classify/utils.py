@@ -4,6 +4,8 @@ import tlc
 from ultralytics.data.utils import IMG_FORMATS
 from ultralytics.utils import ROOT, YAML
 
+from tlc_ultralytics.settings import Settings
+
 
 def get_or_create_cls_table(
     key: str,
@@ -13,6 +15,7 @@ def get_or_create_cls_table(
     project_name: str,
     dataset_name: str,
     table_name: str,
+    settings: Settings | None = None,
 ) -> tlc.Table:
     """Get or create a classification table from a dataset dictionary.
 

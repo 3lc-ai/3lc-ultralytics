@@ -31,6 +31,7 @@ class TLCClassificationTrainer(TLCTrainerMixin, yolo.classify.ClassificationTrai
             project_name=self._settings.project_name,
             splits=("train", "val"),
             task="classify",
+            settings=self._settings,
         )
         if "val" not in self.data:
             data_test = check_tlc_dataset(
@@ -41,6 +42,7 @@ class TLCClassificationTrainer(TLCTrainerMixin, yolo.classify.ClassificationTrai
                 project_name=self._settings.project_name,
                 splits=("test",),
                 task="classify",
+                settings=self._settings,
             )
             self.data["test"] = data_test["test"]
 

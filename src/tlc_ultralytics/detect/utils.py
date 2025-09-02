@@ -7,6 +7,7 @@ from tlc.client.torch.metrics.metrics_collectors.bounding_box_metrics_collector 
 )
 
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
+from tlc_ultralytics.settings import Settings
 
 
 def get_or_create_det_table(
@@ -17,6 +18,7 @@ def get_or_create_det_table(
     project_name: str,
     dataset_name: str,
     table_name: str,
+    settings: Settings | None = None,
 ) -> tlc.Table:
     """Get or create a detection table from a dataset dictionary.
 
