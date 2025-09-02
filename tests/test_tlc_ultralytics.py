@@ -15,6 +15,7 @@ import tlc
 from dataset_determinism import _compare_dataset_rows
 from PIL import Image
 from ultralytics.models.yolo import YOLO
+from ultralytics.models.yolo.obb import OBBTrainer
 from ultralytics.models.yolo.pose import PoseTrainer
 
 from tlc_ultralytics import YOLO as TLCYOLO
@@ -35,6 +36,7 @@ from tlc_ultralytics.detect.dataset import TLCYOLODataset
 from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
 from tlc_ultralytics.engine.utils import _complete_label_column_name
+from tlc_ultralytics.obb.trainer import TLCOBBTrainer
 from tlc_ultralytics.pose.trainer import TLCPoseTrainer
 from tlc_ultralytics.segment.trainer import TLCSegmentationTrainer
 from tlc_ultralytics.segment.utils import check_seg_table
@@ -59,26 +61,36 @@ TASK2DATASET = {
     "classify": "imagenet10",
     "segment": "coco8-seg.yaml",
     "pose": "coco8-pose.yaml",
+    "obb": "dota8.yaml",
 }
 TASK2MODEL = {
     "detect": "yolo11n.pt",
     "classify": "yolo11n-cls.pt",
     "segment": "yolo11n-seg.pt",
     "pose": "yolo11n-pose.pt",
+    "obb": "yolo11n-obb.pt",
 }
 TASK2LABEL_COLUMN_NAME = {
     "detect": "bbs.bb_list.label",
     "classify": "label",
     "segment": "segmentations.instance_properties.label",
     "pose": "keypoints_2d",
+    "obb": "oriented_bbs_2d",
 }
 TASK2PREDICTED_LABEL_COLUMN_NAME = {
     "detect": "bbs_predicted.bb_list.label",
     "classify": "predicted",
     "segment": "segmentations_predicted.instance_properties.label",
     "pose": "keypoints_2d_predicted",
+    "obb": "oriented_bbs_2d_predicted",
 }
-TASK2TRAINER = {"detect": TLCDetectionTrainer, "classify": TLCClassificationTrainer, "segment": TLCSegmentationTrainer}
+TASK2TRAINER = {
+    "detect": TLCDetectionTrainer,
+    "classify": TLCClassificationTrainer,
+    "segment": TLCSegmentationTrainer,
+    "obb": TLCOBBTrainer,
+    "pose": TLCPoseTrainer,
+}
 
 try:
     import umap  # noqa: F401
@@ -1385,8 +1397,8 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
     return yolo_dataset_file, (table_train, table_val)
 
 
-def test_single_sample_equality() -> None:
-    task = "pose"
+@pytest.mark.parametrize("task", ["pose", "obb"])
+def test_single_sample_equality(task: str) -> None:
     mode = "train"
 
     settings = Settings(project_name="test_dataset_determinism_mode_train")
@@ -1400,15 +1412,23 @@ def test_single_sample_equality() -> None:
     overrides_3lc = overrides.copy()
     overrides_3lc["settings"] = settings
 
-    trainer_ultralytics = PoseTrainer(overrides=overrides)
+    trainer_ultralytics = PoseTrainer(overrides=overrides) if task == "pose" else OBBTrainer(overrides=overrides)
 
     trainer_ultralytics.model = None
     dataset_ultralytics = trainer_ultralytics.build_dataset(trainer_ultralytics.data["train"], mode=mode, batch=4)
-    sample_ultra = dataset_ultralytics[0]
+    label_ultralytics = dataset_ultralytics.labels[0]
+    sample_ultralytics = dataset_ultralytics[0]
 
-    trainer_3lc = TLCPoseTrainer(overrides=overrides_3lc)
+    trainer_3lc = TASK2TRAINER[task](overrides=overrides_3lc)
     trainer_3lc.model = None
     dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=4)
+    label_3lc = dataset_3lc.labels[0]
     sample_3lc = dataset_3lc[0]
 
-    _compare_dataset_rows(sample_ultra, sample_3lc)
+    # img = sample_ultralytics["img"].permute(1, 2, 0).cpu().numpy()
+    # cv2.imwrite("img_ultralytics.png", img)
+    # img = sample_3lc["img"].permute(1, 2, 0).cpu().numpy()
+    # cv2.imwrite("img_3lc.png", img)
+
+    _compare_dataset_rows(label_ultralytics, label_3lc)
+    _compare_dataset_rows(sample_ultralytics, sample_3lc)

@@ -1,0 +1,122 @@
+from __future__ import annotations
+
+from typing import Any
+
+import numpy as np
+from tlc.core.builtins.constants import (
+    BBS_2D,
+    CENTER_X,
+    CENTER_Y,
+    IMAGE,
+    INSTANCES,
+    INSTANCES_ADDITIONAL_DATA,
+    LABEL,
+    ORIENTED_BBS_2D,
+    ROTATION,
+    SIZE_X,
+    SIZE_Y,
+    X_MAX,
+    X_MIN,
+    Y_MAX,
+    Y_MIN,
+)
+
+from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
+
+
+def xcyxwhr_to_corner_points(xc, yc, w, h, r):
+    dx, dy = w / 2.0, h / 2.0
+    cos_r, sin_r = np.cos(r), np.sin(r)
+
+    # local corners (relative to center): (±dx, ±dy)
+    corners = np.array([[dx, dy], [dx, -dy], [-dx, -dy], [-dx, dy]], dtype=np.float32)
+
+    R = np.array([[cos_r, -sin_r], [sin_r, cos_r]], dtype=np.float32)
+
+    pts = corners @ R.T
+    pts[:, 0] += xc
+    pts[:, 1] += yc
+    return pts[[3, 2, 1, 0]]
+
+
+def corner_points_to_xywh(corner_points):
+    pts = np.asarray(corner_points, dtype=np.float32).reshape(-1, 2)
+    xmin, xmax = pts[:, 0].min(), pts[:, 0].max()
+    ymin, ymax = pts[:, 1].min(), pts[:, 1].max()
+    w, h = xmax - xmin, ymax - ymin
+    xc, yc = xmin + w / 2.0, ymin + h / 2.0
+    return xc, yc, w, h
+
+
+class TLCOBBDataset(BaseTLCYOLODataset):
+    """3LC YOLO dataset for OBB (oriented bounding boxes) models.
+
+    Builds YOLO-compatible per-image labels dict with keys: im_file, shape, cls, bboxes.
+    """
+
+    def __init__(
+        self,
+        table,
+        data=None,
+        exclude_zero=False,
+        class_map=None,
+        image_column_name=None,
+        label_column_name=None,
+        **kwargs,
+    ):
+        super().__init__(
+            table,
+            data=data,
+            exclude_zero=exclude_zero,
+            class_map=class_map,
+            image_column_name=image_column_name or IMAGE,
+            label_column_name=label_column_name or "oriented_bbs_2d",
+            **kwargs,
+        )
+        self._post_init()
+
+    def _get_label_from_row(self, im_file: str, row: Any, example_id: int) -> dict[str, Any]:
+        label_root = self._label_column_name.split(".")[0]
+        label_column_value = row[label_root]
+        x_min = label_column_value[X_MIN]
+        y_min = label_column_value[Y_MIN]
+        x_max = label_column_value[X_MAX]
+        y_max = label_column_value[Y_MAX]
+        image_width = x_max - x_min
+        image_height = y_max - y_min
+
+        # Get classes
+        cls_arr = np.array(
+            label_column_value[INSTANCES_ADDITIONAL_DATA][LABEL],
+            dtype=np.float32,
+        ).reshape(-1, 1)
+
+        # Get bboxes
+        boxes = []
+        segments = []
+        for instance in label_column_value[INSTANCES]:
+            xc = instance[ORIENTED_BBS_2D][0][CENTER_X] / image_width
+            yc = instance[ORIENTED_BBS_2D][0][CENTER_Y] / image_height
+            w = instance[ORIENTED_BBS_2D][0][SIZE_X] / image_width
+            h = instance[ORIENTED_BBS_2D][0][SIZE_Y] / image_height
+            r = instance[ORIENTED_BBS_2D][0][ROTATION]
+            corner_points = xcyxwhr_to_corner_points(xc, yc, w, h, r)
+            box = corner_points_to_xywh(corner_points)
+            segments.append(corner_points)
+            boxes.append(box)
+
+        bboxes_arr = np.array(boxes, ndmin=2, dtype=np.float32)
+        if len(boxes) == 0:
+            bboxes_arr = bboxes_arr.reshape(0, 4)
+
+        return {
+            "im_file": im_file,
+            "shape": (round(image_height), round(image_width)),
+            "cls": cls_arr,
+            "bboxes": bboxes_arr,
+            "keypoints": None,
+            "segments": segments,
+            "normalized": True,
+            "bbox_format": "xywh",
+            "example_id": example_id,
+        }

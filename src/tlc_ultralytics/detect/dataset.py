@@ -44,6 +44,7 @@ class TLCYOLODataset:
         :param label_column_name: Name of the label column in the table
         :param **kwargs: Additional arguments passed to the dataset constructor
         """
+        from tlc_ultralytics.obb.dataset import TLCOBBDataset
         from tlc_ultralytics.pose.dataset import TLCYOLOPoseDataset
 
         if task == "detect":
@@ -77,8 +78,21 @@ class TLCYOLODataset:
                 task="pose",
                 **kwargs,
             )
+        elif task == "obb":
+            return TLCOBBDataset(
+                table=table,
+                data=data,
+                exclude_zero=exclude_zero,
+                class_map=class_map,
+                image_column_name=image_column_name,
+                label_column_name=label_column_name,
+                task="obb",
+                **kwargs,
+            )
         else:
-            raise ValueError(f"Unsupported task: {task} for TLCYOLODataset. Only 'segment' and 'detect' are supported.")
+            raise ValueError(
+                f"Unsupported task: {task} for TLCYOLODataset. Only 'segment', 'detect', 'pose', and 'obb' are supported."
+            )
 
 
 class BaseTLCYOLODataset(TLCDatasetMixin, YOLODataset):

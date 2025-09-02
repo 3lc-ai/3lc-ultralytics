@@ -51,7 +51,14 @@ def get_dataset_functions(
         dataset_checker = check_det_dataset
         table_creator = get_or_create_pose_table
         table_checker = check_pose_table
+    elif task == "obb":
+        from tlc_ultralytics.obb.utils import check_obb_table, get_or_create_obb_table
 
+        dataset_checker = check_det_dataset
+        table_creator = get_or_create_obb_table
+        table_checker = check_obb_table
+    else:
+        raise ValueError(f"Invalid task: {task}")
     return dataset_checker, table_creator, table_checker
 
 
@@ -232,9 +239,14 @@ def check_tlc_dataset(  # noqa: C901
 def get_value_map_from_table(
     table: tlc.Table,
     label_column_name: str,
-    task: Literal["detect", "segment", "pose", "classify"],
+    task: Literal["detect", "segment", "pose", "classify", "obb"],
 ) -> dict[int, str]:
     if task == "pose":
+        try:
+            return table.rows_schema[label_column_name][INSTANCES_ADDITIONAL_DATA][LABEL].value.map
+        except Exception as e:
+            raise ValueError("Failed to get value map from table") from e
+    elif task == "obb":
         try:
             return table.rows_schema[label_column_name][INSTANCES_ADDITIONAL_DATA][LABEL].value.map
         except Exception as e:
