@@ -25,6 +25,15 @@ from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
 
 
 def xcyxwhr_to_corner_points(xc, yc, w, h, r):
+    # Ensure r is in the first quadrant [0, pi/2] by adding or subtracting pi/2 as needed
+    if r < 0 or r > np.pi / 2:
+        # Bring r into [0, pi/2] by adding or subtracting multiples of pi/2
+        r = r % np.pi
+        if r > np.pi / 2:
+            r -= np.pi / 2
+        elif r < 0:
+            r += np.pi / 2
+    assert 0 <= r <= np.pi / 2, f"Rotation r (in radians) must be in the first quadrant [0, pi/2]. Got {r}"
     dx, dy = w / 2.0, h / 2.0
     cos_r, sin_r = np.cos(r), np.sin(r)
 
@@ -36,7 +45,7 @@ def xcyxwhr_to_corner_points(xc, yc, w, h, r):
     pts = corners @ R.T
     pts[:, 0] += xc
     pts[:, 1] += yc
-    return pts[[3, 2, 1, 0]]
+    return pts  # [[3, 2, 1, 0]]
 
 
 def corner_points_to_xywh(corner_points):

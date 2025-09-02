@@ -1,7 +1,19 @@
+import numpy as np
 import tlc
 import torch
-from tlc.core.builtins.schemas import Geometry2DSchema
+from tlc.core.builtins.constants import (
+    CONFIDENCE,
+    INSTANCES,
+    INSTANCES_ADDITIONAL_DATA,
+    LABEL,
+    X_MAX,
+    X_MIN,
+    Y_MAX,
+    Y_MIN,
+)
+from tlc.core.builtins.schemas import CategoricalLabelListSchema, Float32ListSchema, Geometry2DSchema
 from ultralytics.models.yolo.obb.val import OBBValidator
+from ultralytics.utils import ops
 
 from tlc_ultralytics.constants import (
     IMAGE_COLUMN_NAME,
@@ -22,6 +34,10 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
         return {
             "oriented_bbs_2d_predicted": Geometry2DSchema(
                 include_2d_oriented_bounding_boxes=True,
+                per_instance_schemas={
+                    LABEL: CategoricalLabelListSchema(classes=self.data["names"]),
+                    CONFIDENCE: Float32ListSchema(),
+                },
             )
         }
 
@@ -46,12 +62,68 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
         :param batch: Batch of data presented to the YOLO segmentation model.
         :returns: Metrics dict with predicted instance data for each sample in a batch.
         """
-        predicted_bbs = []
+        predicted = []
 
         for i, pred in enumerate(preds):
-            conf = pred["conf"]
-            keep_indices = conf >= self._settings.conf_thres
-            if not torch.any(keep_indices):
+            predicted_bboxes, predicted_classes, predicted_confidences = (
+                pred["bboxes"].clone(),
+                pred["cls"].clone(),
+                pred["conf"].clone(),
+            )
+            h, w = batch["ori_shape"][i]
+
+            if len(pred) == 0:
+                predicted.append(
+                    {
+                        X_MIN: 0,
+                        Y_MIN: 0,
+                        X_MAX: w,
+                        Y_MAX: h,
+                        INSTANCES: [],
+                        INSTANCES_ADDITIONAL_DATA: {LABEL: [], CONFIDENCE: []},
+                    }
+                )
                 continue
 
-        return {"oriented_bbs_2d_predicted": predicted_bbs}
+            mask = predicted_confidences >= self._settings.conf_thres
+            if not torch.any(mask):
+                continue
+
+            predicted_bboxes = predicted_bboxes[mask]
+            predicted_classes = predicted_classes[mask].cpu().numpy().astype(np.int32).tolist()
+            predicted_confidences = predicted_confidences[mask].cpu().numpy().astype(np.float32).tolist()
+
+            resized_shape = batch["resized_shape"][i]
+            ori_shape = batch["ori_shape"][i]
+            ratio_pad = batch["ratio_pad"][i]
+            scaled_bboxes = ops.scale_boxes(resized_shape, predicted_bboxes, ori_shape, ratio_pad, xywh=True)
+
+            instances = []
+            for j in range(len(predicted_bboxes)):
+                predicted_bbox = scaled_bboxes[j].cpu().numpy().astype(np.float32).tolist()
+                instances.append(
+                    {
+                        "oriented_bbs_2d": [
+                            {
+                                "center_x": predicted_bbox[0],
+                                "center_y": predicted_bbox[1],
+                                "size_x": predicted_bbox[2],
+                                "size_y": predicted_bbox[3],
+                                "rotation": predicted_bbox[4],
+                            }
+                        ],
+                    }
+                )
+
+            predicted.append(
+                {
+                    X_MIN: 0,
+                    Y_MIN: 0,
+                    X_MAX: w,
+                    Y_MAX: h,
+                    INSTANCES: instances,
+                    INSTANCES_ADDITIONAL_DATA: {LABEL: predicted_classes, CONFIDENCE: predicted_confidences},
+                }
+            )
+
+        return {"oriented_bbs_2d_predicted": predicted}

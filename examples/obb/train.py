@@ -5,4 +5,4 @@ if __name__ == "__main__":
     model = YOLO("yolo11n-obb.pt")  # load a pretrained model (recommended for training)
 
     # Train the model
-    results = model.train(data="dota8.yaml", epochs=1, imgsz=640, workers=0)
+    results = model.collect(data="dota8.yaml", splits=("train",), imgsz=640, workers=0)
