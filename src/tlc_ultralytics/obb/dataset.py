@@ -38,9 +38,9 @@ def xcyxwhr_to_corner_points(xc, yc, w, h, r):
     cos_r, sin_r = np.cos(r), np.sin(r)
 
     # local corners (relative to center): (±dx, ±dy)
-    corners = np.array([[dx, dy], [dx, -dy], [-dx, -dy], [-dx, dy]], dtype=np.float32)
+    corners = np.array([[dx, dy], [dx, -dy], [-dx, -dy], [-dx, dy]], dtype=np.float64)
 
-    R = np.array([[cos_r, -sin_r], [sin_r, cos_r]], dtype=np.float32)
+    R = np.array([[cos_r, -sin_r], [sin_r, cos_r]], dtype=np.float64)
 
     pts = corners @ R.T
     pts[:, 0] += xc
@@ -49,12 +49,12 @@ def xcyxwhr_to_corner_points(xc, yc, w, h, r):
 
 
 def corner_points_to_xywh(corner_points):
-    pts = np.asarray(corner_points, dtype=np.float32).reshape(-1, 2)
+    pts = np.asarray(corner_points, dtype=np.float64).reshape(-1, 2)
     xmin, xmax = pts[:, 0].min(), pts[:, 0].max()
     ymin, ymax = pts[:, 1].min(), pts[:, 1].max()
     w, h = xmax - xmin, ymax - ymin
     xc, yc = xmin + w / 2.0, ymin + h / 2.0
-    return xc, yc, w, h
+    return np.array([xc, yc, w, h], dtype=np.float32)
 
 
 class TLCOBBDataset(BaseTLCYOLODataset):

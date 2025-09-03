@@ -92,6 +92,12 @@ TASK2TRAINER = {
     "pose": TLCPoseTrainer,
 }
 
+TASK2ULTRALYTICS_TRAINER = {
+    "classify": PoseTrainer,
+    "obb": OBBTrainer,
+    "pose": PoseTrainer,
+}
+
 try:
     import umap  # noqa: F401
 
@@ -1398,9 +1404,8 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
 
 
 @pytest.mark.parametrize("task", ["pose", "obb"])
-def test_single_sample_equality(task: str) -> None:
-    mode = "train"
-
+@pytest.mark.parametrize("mode", ["train", "val"])
+def test_single_sample_equality(task: str, mode: str) -> None:
     settings = Settings(project_name="test_dataset_determinism_mode_train")
     overrides = {
         "data": TASK2DATASET[task],
@@ -1412,8 +1417,7 @@ def test_single_sample_equality(task: str) -> None:
     overrides_3lc = overrides.copy()
     overrides_3lc["settings"] = settings
 
-    trainer_ultralytics = PoseTrainer(overrides=overrides) if task == "pose" else OBBTrainer(overrides=overrides)
-
+    trainer_ultralytics = TASK2ULTRALYTICS_TRAINER[task](overrides=overrides)
     trainer_ultralytics.model = None
     dataset_ultralytics = trainer_ultralytics.build_dataset(trainer_ultralytics.data["train"], mode=mode, batch=4)
     label_ultralytics = dataset_ultralytics.labels[0]
@@ -1425,10 +1429,50 @@ def test_single_sample_equality(task: str) -> None:
     label_3lc = dataset_3lc.labels[0]
     sample_3lc = dataset_3lc[0]
 
-    # img = sample_ultralytics["img"].permute(1, 2, 0).cpu().numpy()
-    # cv2.imwrite("img_ultralytics.png", img)
-    # img = sample_3lc["img"].permute(1, 2, 0).cpu().numpy()
-    # cv2.imwrite("img_3lc.png", img)
+    # label keys:
+    # dict_keys(['im_file', 'shape', 'cls', 'bboxes', 'segments', 'keypoints', 'normalized', 'bbox_format'])
+    # dict_keys(['im_file', 'shape', 'cls', 'bboxes', 'keypoints', 'segments', 'normalized', 'bbox_format', 'example_id'])
+    # Sample keys:
+    # dict_keys(['im_file', 'ori_shape', 'resized_shape', 'img', 'cls', 'bboxes', 'batch_idx'])
+    # dict_keys(['im_file', 'ori_shape', 'resized_shape', 'img', 'cls', 'bboxes', 'batch_idx', 'example_id'])
+
+    plot = True
+    if plot:
+        import matplotlib.pyplot as plt
+
+        img_from_sample_ultralytics = sample_ultralytics["img"].permute(1, 2, 0).cpu().numpy()
+        img_from_sample_3lc = sample_3lc["img"].permute(1, 2, 0).cpu().numpy()
+
+        plt.subplot(1, 2, 1)
+        plt.imshow(img_from_sample_ultralytics)
+        plt.subplot(1, 2, 2)
+        plt.imshow(img_from_sample_3lc)
+        plt.show()
 
     _compare_dataset_rows(label_ultralytics, label_3lc)
     _compare_dataset_rows(sample_ultralytics, sample_3lc)
+
+
+def test_obb_conversion() -> None:
+    from ultralytics.utils import ops
+
+    from tlc_ultralytics.obb.dataset import corner_points_to_xywh, xcyxwhr_to_corner_points
+
+    # OBB in input format [xy1, xy2, xy3, xy4]
+    obb = np.array([[0.813477, 0.523437, 0.814453, 0.504882, 0.87207, 0.504882, 0.87207, 0.524414]], dtype=np.float32)
+
+    # Find axis-aligned containing bounding box (xywh)
+    obb_converted_3lc = corner_points_to_xywh(obb)
+    obb_converted_ultra = ops.segments2boxes([obb.reshape(-1, 2)])[0]
+
+    # Convert to xywhr format using ulytralytics
+    obb_xywhr = ops.xyxyxyxy2xywhr(obb)
+
+    # Convert back to input format
+    obb_xyxyxyxy_ultra = ops.xywhr2xyxyxyxy(obb_xywhr)[0]
+    obb_xyxyxyxy_3lc = xcyxwhr_to_corner_points(
+        obb_xywhr[0][0], obb_xywhr[0][1], obb_xywhr[0][2], obb_xywhr[0][3], obb_xywhr[0][4]
+    )
+
+    assert np.array_equal(obb_converted_ultra, obb_converted_3lc)
+    assert np.array_equal(obb_xyxyxyxy_ultra, obb_xyxyxyxy_3lc)
