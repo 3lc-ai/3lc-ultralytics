@@ -111,7 +111,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             mask = predicted_confidences > self._settings.conf_thres
             predicted_keypoints = predicted_keypoints[mask]
             predicted_confidences = predicted_confidences[mask].tolist()
-            predicted_classes = predicted_classes[mask].tolist()
+            predicted_classes = predicted_classes[mask].cpu().numpy().astype(np.int32).tolist()
             predicted_bboxes = predicted_bboxes[mask]
 
             resized_shape = batch["resized_shape"][i]
