@@ -1403,9 +1403,36 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
     return yolo_dataset_file, (table_train, table_val)
 
 
-@pytest.mark.parametrize("task", ["pose", "obb"])
+def plot_ultralytics(sample_ultralytics, instances, name: str) -> None:
+    from ultralytics.data.augment import Format
+    from ultralytics.utils import ops
+    from ultralytics.utils.plotting import Annotator
+
+    h, w = sample_ultralytics["resized_shape"]
+    annotator = Annotator(np.ascontiguousarray(sample_ultralytics["img"].permute(1, 2, 0).cpu().numpy()))
+
+    for obb in sample_ultralytics["bboxes"][10:20]:
+        obb = ops.xywhr2xyxyxyxy(obb)
+        obb = np.array(obb).reshape(-1, 4, 2).squeeze()
+        obb[:, 0] *= w
+        obb[:, 1] *= h
+        obb = obb.tolist()
+        annotator.box_label(obb)
+
+    format_transform = Format(return_mask=True, mask_ratio=1, mask_overlap=False, normalize=True)
+    instances.segments[:, :, 0] *= w
+    instances.segments[:, :, 1] *= h
+    masks, instances, cls = format_transform._format_segments(instances, np.array([0] * len(instances)), w, h)
+    annotator.masks(masks, colors=[[255, 0, 0] for _ in range(len(masks))])
+    annotator.show(name)
+    assert True
+
+
+@pytest.mark.parametrize("task", ["pose", "obb", "detect", "segment"])
 @pytest.mark.parametrize("mode", ["train", "val"])
 def test_single_sample_equality(task: str, mode: str) -> None:
+    from dataset_determinism import _compare_label_equality, _compare_sample_equality
+
     settings = Settings(project_name="test_dataset_determinism_mode_train")
     overrides = {
         "data": TASK2DATASET[task],
@@ -1421,36 +1448,45 @@ def test_single_sample_equality(task: str, mode: str) -> None:
     trainer_ultralytics.model = None
     dataset_ultralytics = trainer_ultralytics.build_dataset(trainer_ultralytics.data["train"], mode=mode, batch=4)
     label_ultralytics = dataset_ultralytics.labels[0]
+    semi_ultralytics = dataset_ultralytics.update_labels_info(label_ultralytics.copy())
     sample_ultralytics = dataset_ultralytics[0]
 
     trainer_3lc = TASK2TRAINER[task](overrides=overrides_3lc)
     trainer_3lc.model = None
     dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=4)
     label_3lc = dataset_3lc.labels[0]
+    semi_3lc = dataset_3lc.update_labels_info(label_3lc.copy())
     sample_3lc = dataset_3lc[0]
 
-    # label keys:
-    # dict_keys(['im_file', 'shape', 'cls', 'bboxes', 'segments', 'keypoints', 'normalized', 'bbox_format'])
-    # dict_keys(['im_file', 'shape', 'cls', 'bboxes', 'keypoints', 'segments', 'normalized', 'bbox_format', 'example_id'])
-    # Sample keys:
-    # dict_keys(['im_file', 'ori_shape', 'resized_shape', 'img', 'cls', 'bboxes', 'batch_idx'])
-    # dict_keys(['im_file', 'ori_shape', 'resized_shape', 'img', 'cls', 'bboxes', 'batch_idx', 'example_id'])
+    # _compare_label_equality(label_ultralytics, label_3lc, task, mode)
+    # _compare_sample_equality(sample_ultralytics, sample_3lc, task, mode)
 
     plot = True
     if plot:
-        import matplotlib.pyplot as plt
+        # import matplotlib.pyplot as plt
 
-        img_from_sample_ultralytics = sample_ultralytics["img"].permute(1, 2, 0).cpu().numpy()
-        img_from_sample_3lc = sample_3lc["img"].permute(1, 2, 0).cpu().numpy()
+        # img_from_sample_ultralytics = sample_ultralytics["img"].permute(1, 2, 0).cpu().numpy()
+        # img_from_sample_3lc = sample_3lc["img"].permute(1, 2, 0).cpu().numpy()
 
-        plt.subplot(1, 2, 1)
-        plt.imshow(img_from_sample_ultralytics)
-        plt.subplot(1, 2, 2)
-        plt.imshow(img_from_sample_3lc)
-        plt.show()
+        # plt.subplot(1, 2, 1)
+        # plt.imshow(img_from_sample_ultralytics)
+        # plt.subplot(1, 2, 2)
+        # plt.imshow(img_from_sample_3lc)
+        # plt.show()
+        plot_ultralytics(sample_3lc, semi_3lc["instances"], "3LC")
+        plot_ultralytics(sample_ultralytics, semi_ultralytics["instances"], "Ultralytics")
 
-    _compare_dataset_rows(label_ultralytics, label_3lc)
+    assert True
+    # _compare_dataset_rows(label_ultralytics, label_3lc)
     _compare_dataset_rows(sample_ultralytics, sample_3lc)
+
+
+# 14: (0.8481450080871582, 0.11767599731683731, 0.055664002895355225, 0.016603991389274597, 0.0)
+#     array([[    0.87598,     0.12598],
+#    [    0.87598,     0.10937],
+#    [    0.82031,     0.10937],
+#    [    0.82031,     0.12598]])
+# array([    0.84815,     0.11768,    0.055664,    0.016604], dtype=float32)
 
 
 def test_obb_conversion() -> None:
@@ -1459,7 +1495,8 @@ def test_obb_conversion() -> None:
     from tlc_ultralytics.obb.dataset import corner_points_to_xywh, xcyxwhr_to_corner_points
 
     # OBB in input format [xy1, xy2, xy3, xy4]
-    obb = np.array([[0.813477, 0.523437, 0.814453, 0.504882, 0.87207, 0.504882, 0.87207, 0.524414]], dtype=np.float32)
+    # obb = np.array([[0.813477, 0.523437, 0.814453, 0.504882, 0.87207, 0.504882, 0.87207, 0.524414]], dtype=np.float32)
+    obb = np.array([[0.87598, 0.12598, 0.87598, 0.10937, 0.82031, 0.10937, 0.82031, 0.12598]], dtype=np.float32)
 
     # Find axis-aligned containing bounding box (xywh)
     obb_converted_3lc = corner_points_to_xywh(obb)

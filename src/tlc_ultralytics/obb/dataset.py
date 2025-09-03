@@ -57,6 +57,25 @@ def corner_points_to_xywh(corner_points):
     return np.array([xc, yc, w, h], dtype=np.float32)
 
 
+def regularize_rboxes(rboxes):
+    """
+    Regularize rotated bounding boxes to range [0, pi/2].
+
+    Args:
+        rboxes (np.array): Input rotated boxes with shape (N, 5) in xywhr format.
+
+    Returns:
+        (np.array): Regularized rotated boxes.
+    """
+    x, y, w, h, t = rboxes.tolist()
+    # Swap edge if t >= pi/2 while not being symmetrically opposite
+    swap = t % np.pi >= np.pi / 2
+    w_ = np.where(swap, h, w)
+    h_ = np.where(swap, w, h)
+    t = t % (np.pi / 2)
+    return np.array([x, y, w_, h_, t], dtype=np.float32).reshape(1, 5)
+
+
 class TLCOBBDataset(BaseTLCYOLODataset):
     """3LC YOLO dataset for OBB (oriented bounding boxes) models.
 
@@ -103,13 +122,20 @@ class TLCOBBDataset(BaseTLCYOLODataset):
         # Get bboxes
         boxes = []
         segments = []
-        for instance in label_column_value[INSTANCES]:
+        # 14: (0.8481450080871582, 0.11767599731683731, 0.055664002895355225, 0.016603991389274597, 0.0)
+        #     array([[    0.87598,     0.12598],
+        #    [    0.87598,     0.10937],
+        #    [    0.82031,     0.10937],
+        #    [    0.82031,     0.12598]])
+        # array([    0.84815,     0.11768,    0.055664,    0.016604], dtype=float32)
+        for i, instance in enumerate(label_column_value[INSTANCES]):
             xc = instance[ORIENTED_BBS_2D][0][CENTER_X] / image_width
             yc = instance[ORIENTED_BBS_2D][0][CENTER_Y] / image_height
             w = instance[ORIENTED_BBS_2D][0][SIZE_X] / image_width
             h = instance[ORIENTED_BBS_2D][0][SIZE_Y] / image_height
             r = instance[ORIENTED_BBS_2D][0][ROTATION]
-            corner_points = xcyxwhr_to_corner_points(xc, yc, w, h, r)
+            rbox = regularize_rboxes(np.array([xc, yc, w, h, r], dtype=np.float32))
+            corner_points = xcyxwhr_to_corner_points(rbox[0, 0], rbox[0, 1], rbox[0, 2], rbox[0, 3], rbox[0, 4])
             box = corner_points_to_xywh(corner_points)
             segments.append(corner_points)
             boxes.append(box)

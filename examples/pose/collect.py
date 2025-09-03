@@ -22,8 +22,9 @@ if __name__ == "__main__":
         collect_loss=True,
         kpt_names=COCO_PERSON_KEYPOINT_NAMES,
         lines=COCO_PERSON_SKELETON,
-        run_name="3lc-yolo-pose-collect-example",
+        run_name="3lc-yolo-pose-collect-example-yolo11n",
         project_name="3lc-yolo-examples",
+        image_embeddings_reducer="umap",
     )
 
     model.collect(

@@ -15,14 +15,14 @@ COCO_PERSON_SKELETON = [
 # fmt: on
 
 if __name__ == "__main__":
-    model = YOLO("yolo11n-pose.pt")
+    model = YOLO("yolo11l-pose.pt")
     settings = Settings(
         image_embeddings_dim=2,
         sampling_weights=False,
         collect_loss=True,
         kpt_names=COCO_PERSON_KEYPOINT_NAMES,
         lines=COCO_PERSON_SKELETON,
-        run_name="3lc-yolo-pose-train-example",
+        run_name="3lc-yolo-pose-train-example-yolo11l",
         project_name="3lc-yolo-examples",
     )
 
