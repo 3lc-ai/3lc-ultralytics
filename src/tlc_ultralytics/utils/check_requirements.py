@@ -9,10 +9,11 @@ from tlc_ultralytics.constants import REQUIREMENTS_TO_CHECK
 
 
 def check_requirements(requirements_to_check: list[tuple[str, str]] = REQUIREMENTS_TO_CHECK) -> None:
-    """Check the versions of the required packages matches the version specifiers in pyproject.toml.
+    """Check the versions of the required packages are installed, and warn if the versions are not 
+    known to be compatible.
 
     :param requirements_to_check: List of tuples of (package name, import name) of packages to check.
-    :raises ImportError: If the requirements are not met.
+    :raises ImportError: If the requirements are not installed.
     """
     tlc_ultralytics_requirements = importlib.metadata.metadata("3lc-ultralytics").json["requires_dist"]
 
@@ -35,7 +36,7 @@ def check_requirements(requirements_to_check: list[tuple[str, str]] = REQUIREMEN
         )
 
         if required_version_specifier is None:
-            LOGGER.warning(f"No version specifier found for '{package_name}', skipping version check.")
+            LOGGER.info(f"No version specifier found for '{package_name}', skipping version check.")
 
         if installed_version not in SpecifierSet(required_version_specifier):
             LOGGER.warning(
