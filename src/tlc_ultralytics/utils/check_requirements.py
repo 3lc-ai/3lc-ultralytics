@@ -9,7 +9,7 @@ from tlc_ultralytics.constants import REQUIREMENTS_TO_CHECK
 
 
 def check_requirements(requirements_to_check: list[tuple[str, str]] = REQUIREMENTS_TO_CHECK) -> None:
-    """Check the versions of the required packages are installed, and warn if the versions are not 
+    """Check the versions of the required packages are installed, and warn if the versions are not
     known to be compatible.
 
     :param requirements_to_check: List of tuples of (package name, import name) of packages to check.
