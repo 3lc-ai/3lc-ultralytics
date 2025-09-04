@@ -126,6 +126,11 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
         else:
             kp_stack = np.zeros((0, kpt_shape[0], 3), dtype=np.float32)
 
+        try:
+            lines = label_column_value[INSTANCES][0][LINES]
+        except KeyError:
+            lines = []
+
         return {
             "im_file": im_file,
             "shape": (round(image_height), round(image_width)),
@@ -133,7 +138,7 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
             "bboxes": bboxes_arr,
             "segments": [],
             "keypoints": kp_stack,  # (N, K, 3)
-            "lines": label_column_value[INSTANCES][0][LINES] if len(label_column_value[INSTANCES]) > 0 else [],
+            "lines": lines,
             "normalized": True,
             "bbox_format": "xywh",
             "example_id": example_id,

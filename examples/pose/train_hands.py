@@ -67,6 +67,6 @@ if __name__ == "__main__":
     model.train(
         data=DATA_YAML,
         settings=settings,
-        epochs=10,
-        workers=4,
+        epochs=50,
+        workers=8,
     )

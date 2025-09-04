@@ -320,7 +320,7 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
         return {
             "im_file": im_file,
             "shape": (height, width),  # format: (height, width)
-            "cls": np.array(classes).reshape(-1, 1),
+            "cls": np.array(classes).astype(np.float32).reshape(-1, 1),
             "bboxes": bboxes,
             "segments": segments,
             "keypoints": None,

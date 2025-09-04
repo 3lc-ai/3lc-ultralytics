@@ -14,50 +14,6 @@ import numpy as np
 import torch
 
 
-def _compare_label_equality(label_ultralytics: dict[str, Any], label_3lc: dict[str, Any], task: str, mode: str) -> None:
-    keys = {
-        "im_file",
-        "cls",
-        "bboxes",
-        "keypoints",
-        "segments",
-        "normalized",
-        "bbox_format",
-    }
-    if mode == "train":
-        keys.add("shape")
-
-    assert set(label_ultralytics.keys()) == keys
-
-    keys = {
-        "im_file",
-        "cls",
-        "bboxes",
-        "keypoints",
-        "segments",
-        "normalized",
-        "bbox_format",
-        "example_id",
-    }
-    if mode == "train":
-        keys.add("shape")
-    assert set(label_3lc.keys()) == keys
-
-
-def _compare_sample_equality(
-    sample_ultralytics: dict[str, Any], sample_3lc: dict[str, Any], task: str, mode: str
-) -> None:
-    tlc_keys = {"im_file", "ori_shape", "resized_shape", "img", "cls", "bboxes", "batch_idx", "ratio_pad", "example_id"}
-    # if mode == "train":
-    #     keys.add("example_id")
-    assert set(sample_3lc.keys()) == tlc_keys
-
-    ul_keys = {"im_file", "ori_shape", "resized_shape", "img", "cls", "bboxes", "batch_idx", "ratio_pad"}
-    # if mode == "train":
-    #     keys.add("example_id")
-    assert set(sample_ultralytics.keys()) == ul_keys
-
-
 def _compare_dataset_rows(row_ultralytics: dict[str, Any], row_3lc: dict[str, Any]) -> None:
     """Compare dataset rows from ultralytics and 3lc.
 
@@ -80,9 +36,6 @@ def _compare_dataset_rows(row_ultralytics: dict[str, Any], row_3lc: dict[str, An
                 torch.testing.assert_close(value_ultralytics, value_3lc, atol=0.013, rtol=0.125),
                 f"Value {key} not equal in 3LC and Ultralytics",
             )
-        elif isinstance(value_ultralytics, list):
-            for item_ultralytics, item_3lc in zip(value_ultralytics, value_3lc):
-                torch.testing.assert_close(np.array(item_ultralytics), np.array(item_3lc), atol=0.02, rtol=0.43)
         else:
             assert value_ultralytics == value_3lc, f"Value {key} not equal in 3LC and Ultralytics"
 

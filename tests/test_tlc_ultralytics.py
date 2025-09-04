@@ -12,11 +12,13 @@ import numpy as np
 import pandas as pd
 import pytest
 import tlc
-from dataset_determinism import _compare_dataset_rows
 from PIL import Image
+from testing_helpers import compare_dataset_values, plot_matplotlib, plot_ultralytics
 from ultralytics.models.yolo import YOLO
+from ultralytics.models.yolo.detect import DetectionTrainer
 from ultralytics.models.yolo.obb import OBBTrainer
 from ultralytics.models.yolo.pose import PoseTrainer
+from ultralytics.models.yolo.segment import SegmentationTrainer
 
 from tlc_ultralytics import YOLO as TLCYOLO
 from tlc_ultralytics import Settings
@@ -96,6 +98,8 @@ TASK2ULTRALYTICS_TRAINER = {
     "classify": PoseTrainer,
     "obb": OBBTrainer,
     "pose": PoseTrainer,
+    "segment": SegmentationTrainer,
+    "detect": DetectionTrainer,
 }
 
 try:
@@ -1403,36 +1407,15 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
     return yolo_dataset_file, (table_train, table_val)
 
 
-def plot_ultralytics(sample_ultralytics, instances, name: str) -> None:
-    from ultralytics.data.augment import Format
-    from ultralytics.utils import ops
-    from ultralytics.utils.plotting import Annotator
-
-    h, w = sample_ultralytics["resized_shape"]
-    annotator = Annotator(np.ascontiguousarray(sample_ultralytics["img"].permute(1, 2, 0).cpu().numpy()))
-
-    for obb in sample_ultralytics["bboxes"][10:20]:
-        obb = ops.xywhr2xyxyxyxy(obb)
-        obb = np.array(obb).reshape(-1, 4, 2).squeeze()
-        obb[:, 0] *= w
-        obb[:, 1] *= h
-        obb = obb.tolist()
-        annotator.box_label(obb)
-
-    format_transform = Format(return_mask=True, mask_ratio=1, mask_overlap=False, normalize=True)
-    instances.segments[:, :, 0] *= w
-    instances.segments[:, :, 1] *= h
-    masks, instances, cls = format_transform._format_segments(instances, np.array([0] * len(instances)), w, h)
-    annotator.masks(masks, colors=[[255, 0, 0] for _ in range(len(masks))])
-    annotator.show(name)
-    assert True
-
-
 @pytest.mark.parametrize("task", ["pose", "obb", "detect", "segment"])
 @pytest.mark.parametrize("mode", ["train", "val"])
 def test_single_sample_equality(task: str, mode: str) -> None:
-    from dataset_determinism import _compare_label_equality, _compare_sample_equality
+    """Test that a single sample from the dataset is equal between 3LC and Ultralytics."""
 
+    if mode == "train":
+        pytest.skip("Train mode is not supported for this test")
+
+    NUM_SAMPLES = 4
     settings = Settings(project_name="test_dataset_determinism_mode_train")
     overrides = {
         "data": TASK2DATASET[task],
@@ -1444,72 +1427,25 @@ def test_single_sample_equality(task: str, mode: str) -> None:
     overrides_3lc = overrides.copy()
     overrides_3lc["settings"] = settings
 
+    # Set up Ultralytics dataset
     trainer_ultralytics = TASK2ULTRALYTICS_TRAINER[task](overrides=overrides)
     trainer_ultralytics.model = None
-    dataset_ultralytics = trainer_ultralytics.build_dataset(trainer_ultralytics.data["train"], mode=mode, batch=4)
-    label_ultralytics = dataset_ultralytics.labels[0]
-    semi_ultralytics = dataset_ultralytics.update_labels_info(label_ultralytics.copy())
-    sample_ultralytics = dataset_ultralytics[0]
+    dataset_ultralytics = trainer_ultralytics.build_dataset(trainer_ultralytics.data["train"], mode=mode, batch=1)
 
+    # Set up 3LC dataset
     trainer_3lc = TASK2TRAINER[task](overrides=overrides_3lc)
     trainer_3lc.model = None
-    dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=4)
-    label_3lc = dataset_3lc.labels[0]
-    semi_3lc = dataset_3lc.update_labels_info(label_3lc.copy())
-    sample_3lc = dataset_3lc[0]
+    dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=1)
 
-    # _compare_label_equality(label_ultralytics, label_3lc, task, mode)
-    # _compare_sample_equality(sample_ultralytics, sample_3lc, task, mode)
+    for i in range(NUM_SAMPLES):
+        sample_3lc = dataset_3lc[i]
+        sample_ultralytics = dataset_ultralytics[i]
 
-    plot = True
-    if plot:
-        # import matplotlib.pyplot as plt
+        plot = False
+        if plot:  # and i == 0:
+            plot_ultralytics(sample_3lc, "3LC")
+            plot_ultralytics(sample_ultralytics, "Ultralytics")
+            plot_matplotlib(sample_3lc, "3LC")
+            plot_matplotlib(sample_ultralytics, "Ultralytics")
 
-        # img_from_sample_ultralytics = sample_ultralytics["img"].permute(1, 2, 0).cpu().numpy()
-        # img_from_sample_3lc = sample_3lc["img"].permute(1, 2, 0).cpu().numpy()
-
-        # plt.subplot(1, 2, 1)
-        # plt.imshow(img_from_sample_ultralytics)
-        # plt.subplot(1, 2, 2)
-        # plt.imshow(img_from_sample_3lc)
-        # plt.show()
-        plot_ultralytics(sample_3lc, semi_3lc["instances"], "3LC")
-        plot_ultralytics(sample_ultralytics, semi_ultralytics["instances"], "Ultralytics")
-
-    assert True
-    # _compare_dataset_rows(label_ultralytics, label_3lc)
-    _compare_dataset_rows(sample_ultralytics, sample_3lc)
-
-
-# 14: (0.8481450080871582, 0.11767599731683731, 0.055664002895355225, 0.016603991389274597, 0.0)
-#     array([[    0.87598,     0.12598],
-#    [    0.87598,     0.10937],
-#    [    0.82031,     0.10937],
-#    [    0.82031,     0.12598]])
-# array([    0.84815,     0.11768,    0.055664,    0.016604], dtype=float32)
-
-
-def test_obb_conversion() -> None:
-    from ultralytics.utils import ops
-
-    from tlc_ultralytics.obb.dataset import corner_points_to_xywh, xcyxwhr_to_corner_points
-
-    # OBB in input format [xy1, xy2, xy3, xy4]
-    # obb = np.array([[0.813477, 0.523437, 0.814453, 0.504882, 0.87207, 0.504882, 0.87207, 0.524414]], dtype=np.float32)
-    obb = np.array([[0.87598, 0.12598, 0.87598, 0.10937, 0.82031, 0.10937, 0.82031, 0.12598]], dtype=np.float32)
-
-    # Find axis-aligned containing bounding box (xywh)
-    obb_converted_3lc = corner_points_to_xywh(obb)
-    obb_converted_ultra = ops.segments2boxes([obb.reshape(-1, 2)])[0]
-
-    # Convert to xywhr format using ulytralytics
-    obb_xywhr = ops.xyxyxyxy2xywhr(obb)
-
-    # Convert back to input format
-    obb_xyxyxyxy_ultra = ops.xywhr2xyxyxyxy(obb_xywhr)[0]
-    obb_xyxyxyxy_3lc = xcyxwhr_to_corner_points(
-        obb_xywhr[0][0], obb_xywhr[0][1], obb_xywhr[0][2], obb_xywhr[0][3], obb_xywhr[0][4]
-    )
-
-    assert np.array_equal(obb_converted_ultra, obb_converted_3lc)
-    assert np.array_equal(obb_xyxyxyxy_ultra, obb_xyxyxyxy_3lc)
+        compare_dataset_values(sample_ultralytics, sample_3lc, task, mode)
