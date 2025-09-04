@@ -177,12 +177,6 @@ For instance segmentation, you can provide `image_column_name` and `label_column
 
 When working with tables created with `tlc.Table.from_yolo()`, set `task="pose"`, to get the correct formats for pose estimation. If you are working with a custom table, some care must be taken to ensure the required data is present in the table, such as `kpt_shape`, `kpt_names`, `names`, `flip_idx` and information about keypoint connectivity, if any. A detailed example of using a custom table for pose estimation can be found in [TODO: addme].
 
-### Unsupported Tasks
-
-Some YOLO tasks can not yet be visualized in the 3LC Dashboard, but these are on the roadmap and will be made available in the future:
-
-- **OBB (Oriented Bounding Boxes)**: Not yet supported. Let us know on Discord if you would like this to be supported!
-
 ## Metrics Collection Only
 
 It is possible to create runs where only metrics collection, and no training, is performed. This is useful when you already have a trained model and would like to collect metrics, or if you would like to collect metrics on a different dataset to the one you trained and validated on.

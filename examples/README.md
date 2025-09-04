@@ -113,6 +113,23 @@ train_table = tlc.Table.from_yolo(
 )
 ```
 
+### Oriented Bounding Boxes
+
+For oriented bounding boxes, set `task="obb"` to inform 3LC that your label files contain oriented bounding boxes.
+
+```python
+import tlc
+
+train_table = tlc.Table.from_yolo(
+    dataset_yaml_file="/path/to/dataset.yaml",
+    split="train",
+    project_name="my_obb_project_name",
+    dataset_name="train",
+    table_name="initial",
+    task="obb",
+)
+```
+
 ## Training
 
 To run training with the 3LC integration, follow this pattern: instantiate the `YOLO` class with your chosen weights, then call `.train()` on the model, passing the tables to use and any additional arguments which are forwarded to Ultralytics YOLO:
@@ -171,6 +188,11 @@ Below you'll find examples organized by task, showing both training workflows an
 
 - **[train.py](pose/train.py)**: Complete pose estimation workflow on the COCO8 dataset. Demonstrates working with pose estimation data and metrics.
 - **[collect.py](pose/collect.py)**: Metrics collection and analysis for pose estimation on COCO8. Shows pose estimation-specific metrics and visualizations.
+
+### Oriented Bounding Boxes Examples
+
+- **[train.py](obb/train.py)**: Complete oriented bounding boxes workflow on the COCO8 dataset. Demonstrates working with oriented bounding boxes data and metrics.
+- **[collect.py](obb/collect.py)**: Metrics collection and analysis for oriented bounding boxes on DOTA8. Shows oriented bounding boxes-specific metrics and visualizations.
 
 ## Using the Examples
 
