@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import cv2
 import numpy as np
 from tlc.core.builtins.constants import (
     BBS_2D,
@@ -121,21 +122,15 @@ class TLCOBBDataset(BaseTLCYOLODataset):
 
         # Get bboxes
         boxes = []
+
         segments = []
-        # 14: (0.8481450080871582, 0.11767599731683731, 0.055664002895355225, 0.016603991389274597, 0.0)
-        #     array([[    0.87598,     0.12598],
-        #    [    0.87598,     0.10937],
-        #    [    0.82031,     0.10937],
-        #    [    0.82031,     0.12598]])
-        # array([    0.84815,     0.11768,    0.055664,    0.016604], dtype=float32)
-        for i, instance in enumerate(label_column_value[INSTANCES]):
+        for instance in label_column_value[INSTANCES]:
             xc = instance[ORIENTED_BBS_2D][0][CENTER_X] / image_width
             yc = instance[ORIENTED_BBS_2D][0][CENTER_Y] / image_height
             w = instance[ORIENTED_BBS_2D][0][SIZE_X] / image_width
             h = instance[ORIENTED_BBS_2D][0][SIZE_Y] / image_height
             r = instance[ORIENTED_BBS_2D][0][ROTATION]
-            rbox = regularize_rboxes(np.array([xc, yc, w, h, r], dtype=np.float32))
-            corner_points = xcyxwhr_to_corner_points(rbox[0, 0], rbox[0, 1], rbox[0, 2], rbox[0, 3], rbox[0, 4])
+            corner_points = cv2.boxPoints(((xc, yc), (w, h), r))
             box = corner_points_to_xywh(corner_points)
             segments.append(corner_points)
             boxes.append(box)
