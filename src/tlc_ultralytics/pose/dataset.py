@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from tlc.core import GeometryHelper
 from tlc.core.builtins.constants import (
     BBS_2D,
     IMAGE,
@@ -126,10 +127,8 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
         else:
             kp_stack = np.zeros((0, kpt_shape[0], 3), dtype=np.float32)
 
-        try:
-            lines = label_column_value[INSTANCES][0][LINES]
-        except KeyError:
-            lines = []
+        lines = GeometryHelper.get_lines_from_table(self.table, self._label_column_name)
+        triangles = GeometryHelper.get_triangles_from_table(self.table, self._label_column_name)
 
         return {
             "im_file": im_file,
@@ -139,6 +138,7 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
             "segments": [],
             "keypoints": kp_stack,  # (N, K, 3)
             "lines": lines,
+            "triangles": triangles,
             "normalized": True,
             "bbox_format": "xywh",
             "example_id": example_id,

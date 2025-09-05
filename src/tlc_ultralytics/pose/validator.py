@@ -13,6 +13,10 @@ from tlc.core.builtins.constants import (
     KEYPOINTS_2D_PREDICTED,
     LABEL,
     LINES,
+    TRIANGLE_ROLE,
+    TRIANGLES,
+    TRIANGLES_ADDITIONAL_DATA,
+    VERTEX_ROLE,
     VERTICES_2D,
     VERTICES_2D_ADDITIONAL_DATA,
     X_MAX,
@@ -66,12 +70,19 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         return super().postprocess(preds)
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
+        triangle_names = self.data.get("triangle_names")
+        if triangle_names:
+            per_triangle_schemas = {TRIANGLE_ROLE: CategoricalLabelListSchema(classes=triangle_names)}
+        else:
+            per_triangle_schemas = {}
         predicted_pose_schema = Keypoints2DSchema(
             kpt_shape=self.kpt_shape,
             kpt_names=self.data["kpt_names"],
             lines=self.data.get("lines"),
+            triangles=self.data.get("triangles"),
             object_name=self.data["names"][0],
             per_point_schemas={CONFIDENCE: Float32ListSchema()},
+            per_triangle_schemas=per_triangle_schemas,
             per_instance_schemas={
                 LABEL: CategoricalLabelListSchema(classes=self.data["names"]),
                 CONFIDENCE: Float32ListSchema(),
@@ -127,23 +138,28 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                 keypoints = predicted_kpts[:, 0:2].reshape(-1).cpu().numpy().astype(np.float32).tolist()
                 confidences = predicted_kpts[:, 2].cpu().numpy().astype(np.float32).tolist()
 
-                instances.append(
-                    {
-                        VERTICES_2D: keypoints,
-                        LINES: batch[LINES][0],
-                        VERTICES_2D_ADDITIONAL_DATA: {
-                            CONFIDENCE: confidences,
-                        },
-                        BBS_2D: [
-                            {
-                                X_MIN: predicted_bbox[0],
-                                Y_MIN: predicted_bbox[1],
-                                X_MAX: predicted_bbox[2],
-                                Y_MAX: predicted_bbox[3],
-                            }
-                        ],
-                    }
-                )
+                instance = {
+                    VERTICES_2D: keypoints,
+                    VERTICES_2D_ADDITIONAL_DATA: {
+                        CONFIDENCE: confidences,
+                        VERTEX_ROLE: list(range(len(self.data["kpt_names"]))),
+                    },
+                    BBS_2D: [
+                        {
+                            X_MIN: predicted_bbox[0],
+                            Y_MIN: predicted_bbox[1],
+                            X_MAX: predicted_bbox[2],
+                            Y_MAX: predicted_bbox[3],
+                        }
+                    ],
+                }
+                if batch[LINES][0] is not None:
+                    instance[LINES] = batch[LINES][0]
+                if batch[TRIANGLES][0] is not None:
+                    instance[TRIANGLES] = batch[TRIANGLES][0]
+                    instance[TRIANGLES_ADDITIONAL_DATA] = {TRIANGLE_ROLE: list(range(len(self.data["triangle_names"])))}
+
+                instances.append(instance)
 
             predicted.append(
                 {
