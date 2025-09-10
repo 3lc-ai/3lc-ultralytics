@@ -12,11 +12,6 @@ from tlc.core.builtins.constants import (
     INSTANCES_ADDITIONAL_DATA,
     KEYPOINTS_2D_PREDICTED,
     LABEL,
-    LINES,
-    TRIANGLE_ROLE,
-    TRIANGLES,
-    TRIANGLES_ADDITIONAL_DATA,
-    VERTEX_ROLE,
     VERTICES_2D,
     VERTICES_2D_ADDITIONAL_DATA,
     X_MAX,
@@ -24,7 +19,7 @@ from tlc.core.builtins.constants import (
     Y_MAX,
     Y_MIN,
 )
-from tlc.core.builtins.schemas import CategoricalLabelListSchema, Float32ListSchema, Keypoints2DSchema
+from tlc.core.builtins.schemas import Keypoints2DSchema
 from ultralytics.models.yolo.pose.val import PoseValidator
 from ultralytics.utils import ops
 
@@ -70,23 +65,17 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         return super().postprocess(preds)
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
-        triangle_names = self.data.get("triangle_names")
-        if triangle_names:
-            per_triangle_schemas = {TRIANGLE_ROLE: CategoricalLabelListSchema(classes=triangle_names)}
-        else:
-            per_triangle_schemas = {}
         predicted_pose_schema = Keypoints2DSchema(
-            kpt_shape=self.kpt_shape,
-            kpt_names=self.data["kpt_names"],
-            lines=self.data.get("lines"),
-            triangles=self.data.get("triangles"),
             object_name=self.data["names"][0],
-            per_point_schemas={CONFIDENCE: Float32ListSchema()},
-            per_triangle_schemas=per_triangle_schemas,
-            per_instance_schemas={
-                LABEL: CategoricalLabelListSchema(classes=self.data["names"]),
-                CONFIDENCE: Float32ListSchema(),
-            },
+            num_keypoints=self.kpt_shape[0],
+            flip_indices=self.data.get("flip_indices"),
+            point_attributes=self.data["keypoint_attributes"],
+            lines=self.data.get("lines"),
+            line_attributes=self.data.get("line_attributes"),
+            triangles=self.data.get("triangles"),
+            triangle_attributes=self.data.get("triangle_attributes"),
+            include_per_object_confidences=True,
+            include_per_point_confidences=True,
             writable=False,
         )
 
@@ -108,8 +97,6 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             if len(pred) == 0:
                 predicted.append(
                     {
-                        X_MIN: 0,
-                        Y_MIN: 0,
                         X_MAX: w,
                         Y_MAX: h,
                         INSTANCES: [],
@@ -142,7 +129,6 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                     VERTICES_2D: keypoints,
                     VERTICES_2D_ADDITIONAL_DATA: {
                         CONFIDENCE: confidences,
-                        VERTEX_ROLE: list(range(len(self.data["kpt_names"]))),
                     },
                     BBS_2D: [
                         {
@@ -153,11 +139,6 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                         }
                     ],
                 }
-                if batch[LINES][0] is not None:
-                    instance[LINES] = batch[LINES][0]
-                if batch[TRIANGLES][0] is not None:
-                    instance[TRIANGLES] = batch[TRIANGLES][0]
-                    instance[TRIANGLES_ADDITIONAL_DATA] = {TRIANGLE_ROLE: list(range(len(self.data["triangle_names"])))}
 
                 instances.append(instance)
 
@@ -165,8 +146,6 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                 {
                     X_MAX: w,
                     Y_MAX: h,
-                    X_MIN: 0,
-                    Y_MIN: 0,
                     INSTANCES: instances,
                     INSTANCES_ADDITIONAL_DATA: {
                         LABEL: predicted_classes,

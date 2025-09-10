@@ -7,12 +7,8 @@ from typing import Literal
 import tlc
 import yaml
 from tlc.core.builtins.constants import (
-    INSTANCES,
     INSTANCES_ADDITIONAL_DATA,
     LABEL,
-    LINES,
-    VERTICES_2D,
-    VERTICES_2D_ADDITIONAL_DATA,
 )
 from ultralytics.data.utils import check_cls_dataset, check_det_dataset
 from ultralytics.utils import LOGGER, colorstr
@@ -175,13 +171,26 @@ def check_tlc_dataset(  # noqa: C901
     names = tlc.SchemaHelper.to_simple_value_map(value_map)
     if task == "pose":
         kpt_shape = tlc.GeometryHelper.get_kpt_shape_from_table(tables[first_split], label_column_name)
-        flip_idx = tlc.GeometryHelper.get_flip_idx_from_table(tables[first_split])
-        keypoint_names = tlc.GeometryHelper.get_keypoint_names_from_table(tables[first_split], label_column_name, task)
+        flip_idx = tlc.GeometryHelper.get_flip_indices_from_table(tables[first_split], label_column_name)
+        keypoint_attributes = tlc.GeometryHelper.get_keypoint_attributes_from_table(
+            tables[first_split], label_column_name
+        )
         lines = tlc.GeometryHelper.get_lines_from_table(tables[first_split], label_column_name)
+        line_attributes = tlc.GeometryHelper.get_line_attributes_from_table(tables[first_split], label_column_name)
         triangles = tlc.GeometryHelper.get_triangles_from_table(tables[first_split], label_column_name)
-        triangle_names = tlc.GeometryHelper.get_triangle_names_from_table(tables[first_split], label_column_name)
+        triangle_attributes = tlc.GeometryHelper.get_triangle_attributes_from_table(
+            tables[first_split], label_column_name
+        )
     else:
-        kpt_shape, flip_idx, keypoint_names, lines = (17, 3), None, None, None
+        kpt_shape, flip_idx, keypoint_attributes, lines, line_attributes, triangles, triangle_attributes = (
+            (17, 3),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
 
     if names is None:
         raise ValueError(f"Failed to get value map for table with Url: {tables[first_split].url}")
@@ -229,16 +238,21 @@ def check_tlc_dataset(  # noqa: C901
         "3lc_class_to_range": {v: k for k, v in range_to_3lc_class.items()},
         "channels": 3,  # TODO(Frederik): Read out channels from appropriate place and populate here
         "kpt_shape": kpt_shape,
-        "kpt_names": keypoint_names,
     }
-    if task == "pose" and flip_idx is not None:
-        ret["flip_idx"] = flip_idx
-    if task == "pose" and lines is not None:
-        ret["lines"] = lines
-    if task == "pose" and triangles is not None:
-        ret["triangles"] = triangles
-    if task == "pose" and triangle_names is not None:
-        ret["triangle_names"] = triangle_names
+    if task == "pose":
+        if flip_idx is not None:
+            ret["flip_indices"] = flip_idx
+        if keypoint_attributes is not None:
+            ret["keypoint_attributes"] = keypoint_attributes
+        if lines is not None:
+            ret["lines"] = lines
+        if line_attributes is not None:
+            ret["line_attributes"] = line_attributes
+        if triangles is not None:
+            ret["triangles"] = triangles
+        if triangle_attributes is not None:
+            ret["triangle_attributes"] = triangle_attributes
+
     return ret
 
 
