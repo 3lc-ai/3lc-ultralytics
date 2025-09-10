@@ -10,7 +10,7 @@ requires-python = ">=3.9"
 dependencies = [
     "3lc>=2.13.1,!=2.16.1,<=2.16.2",
     "pacmap>=0.8.0",
-    "ultralytics>=8.3.169,<8.3.183",
+    "ultralytics>=8.3.169,<8.3.198",
 ]
 
 [build]

@@ -9,6 +9,7 @@ Since this package integrates with two actively developed dependencies (`ultraly
 # Added
 
 - Add a check for validity of the `tables` when passed directly to `model.train()` and `model.collect()` ([#34](https://github.com/3lc-ai/3lc-ultralytics/pull/34)).
+- Raise when a NDJson dataset is passed ([#35](https://github.com/3lc-ai/3lc-ultralytics/pull/35)).
 
 # Changed
 

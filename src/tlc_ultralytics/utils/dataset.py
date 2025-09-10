@@ -35,6 +35,13 @@ def check_tlc_dataset(  # noqa: C901
     :return: Dictionary of tables and class names
     """
 
+    if data.endswith(".ndjson"):
+        raise ValueError(
+            "NDJson datasets are not yet supported in the YOLO integration. Create a tlc.Table from the ",
+            "data or convert it to a YOLO dataset and use `tlc.Table.from_yolo`. The NDJson format will be ",
+            "supported in the future."
+        )
+
     # If the data starts with the 3LC prefix, parse the YAML file and populate `tables`
     has_prefix = False
     if tables is None and isinstance(data, str) and data.startswith(TLC_PREFIX):
