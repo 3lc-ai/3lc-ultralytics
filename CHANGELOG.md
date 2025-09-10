@@ -6,6 +6,10 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+# Added
+
+- Add a check for validity of the `tables` when passed directly to `model.train()` and `model.collect()` ([#34](https://github.com/3lc-ai/3lc-ultralytics/pull/34)).
+
 # Changed
 
 - Modify the check for compatible versions of `3lc` and `ultralytics` to warn instead of raising ([#33](https://github.com/3lc-ai/3lc-ultralytics/pull/33)).

@@ -210,13 +210,13 @@ def parse_3lc_yaml_file(data_file: str) -> dict[str, tlc.Table]:
 
 def _check_tables(tables: dict[str, str | tlc.Url | tlc.Table]):
     if not isinstance(tables, dict):
-        msg = f"When providing tables directly, they must be a dictionary, got {type(tables)}."
+        msg = f"When providing tables directly, they must be a dictionary, but got type {type(tables)}."
         raise ValueError(msg)
 
     for key, table in tables.items():
-        if not isinstance(table, (str, Path, tlc.Url, tlc.Table)):
+        if not isinstance(table, (str, tlc.Url, tlc.Table)):
             msg = (
-                "When providing tables directly, they must be a tlc.Table or the URL to a tlc.Table. ",
+                "When providing tables directly, they must be a tlc.Table or a URL to a tlc.Table. ",
                 f"Got {type(table)} for split {key}."
             )
             raise ValueError(msg)
