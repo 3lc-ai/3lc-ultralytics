@@ -88,6 +88,8 @@ def check_tlc_dataset(  # noqa: C901
 
     else:
         # LOGGER.info(f"{TLC_COLORSTR}Using data directly from tables")
+        _check_tables(tables)
+
         for key, table in tables.items():
             if splits is not None and key not in splits:
                 continue
@@ -205,3 +207,16 @@ def parse_3lc_yaml_file(data_file: str) -> dict[str, tlc.Table]:
         tables[split] = table
 
     return tables
+
+def _check_tables(tables: dict[str, str | tlc.Url | tlc.Table]):
+    if not isinstance(tables, dict):
+        msg = f"When providing tables directly, they must be a dictionary, got {type(tables)}."
+        raise ValueError(msg)
+
+    for key, table in tables.items():
+        if not isinstance(table, (str, Path, tlc.Url, tlc.Table)):
+            msg = (
+                "When providing tables directly, they must be a tlc.Table or the URL to a tlc.Table. ",
+                f"Got {type(table)} for split {key}."
+            )
+            raise ValueError(msg)
