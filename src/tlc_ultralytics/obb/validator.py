@@ -41,20 +41,6 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
             )
         }
 
-    # def postprocess(self, preds: list[torch.Tensor]) -> list[dict[str, torch.Tensor]]:
-    #     """Post-process predictions. Use native mask processing to get full-size masks with higher accuracy.
-    #     These are later used to compute COCO masks which are collected in the 3LC Run.
-
-    #     preds: Predictions passed to the validator postprocess method.
-    #     returns: Predictions with full-size masks, to be used by Ultralytics and 3LC metrics collection."""
-
-    #     prev_process = self.process
-    #     self.process = ops.process_mask_native
-    #     preds = SegmentationValidator.postprocess(self, preds)
-    #     self.process = prev_process
-
-    #     return preds
-
     def _compute_3lc_metrics(self, preds, batch) -> dict[str, list[dict[str, any]]]:
         """Compute 3LC metrics for instance segmentation.
 
@@ -71,8 +57,9 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
                 pred["conf"].clone(),
             )
             h, w = batch["ori_shape"][i]
+            mask = predicted_confidences >= self._settings.conf_thres
 
-            if len(pred) == 0:
+            if len(pred) == 0 or not torch.any(mask):
                 predicted.append(
                     {
                         X_MIN: 0,
@@ -83,10 +70,6 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
                         INSTANCES_ADDITIONAL_DATA: {LABEL: [], CONFIDENCE: []},
                     }
                 )
-                continue
-
-            mask = predicted_confidences >= self._settings.conf_thres
-            if not torch.any(mask):
                 continue
 
             predicted_bboxes = predicted_bboxes[mask]
