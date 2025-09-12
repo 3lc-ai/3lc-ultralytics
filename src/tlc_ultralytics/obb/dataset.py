@@ -130,9 +130,11 @@ class TLCOBBDataset(BaseTLCYOLODataset):
             w = instance[ORIENTED_BBS_2D][0][SIZE_X] / image_width
             h = instance[ORIENTED_BBS_2D][0][SIZE_Y] / image_height
             r = instance[ORIENTED_BBS_2D][0][ROTATION]
+
+            r = r * 180 / np.pi  # Convert radians to degrees
             corner_points = cv2.boxPoints(((xc, yc), (w, h), r))
-            box = corner_points_to_xywh(corner_points)
             segments.append(corner_points)
+            box = corner_points_to_xywh(corner_points)
             boxes.append(box)
 
         bboxes_arr = np.array(boxes, ndmin=2, dtype=np.float32)

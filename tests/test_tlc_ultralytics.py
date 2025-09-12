@@ -1441,11 +1441,60 @@ def test_single_sample_equality(task: str, mode: str) -> None:
         sample_3lc = dataset_3lc[i]
         sample_ultralytics = dataset_ultralytics[i]
 
-        plot = False
+        plot = True
         if plot:  # and i == 0:
             plot_ultralytics(sample_3lc, "3LC")
             plot_ultralytics(sample_ultralytics, "Ultralytics")
-            plot_matplotlib(sample_3lc, "3LC")
-            plot_matplotlib(sample_ultralytics, "Ultralytics")
+            # plot_matplotlib(sample_3lc, "3LC")
+            # plot_matplotlib(sample_ultralytics, "Ultralytics")
+            # seg_u = dataset_ultralytics.labels[0]["segments"]
+            # seg_3 = dataset_3lc.labels[0]["segments"]
+            # import matplotlib.pyplot as plt
+
+            # plt.subplot(1, 2, 1)
+            # # segs are lists of (4, 2) arrays. Plot each one in a different color
+            # for seg in seg_u:
+            #     plt.plot(np.append(seg[:, 0], seg[0, 0]), np.append(seg[:, 1], seg[0, 1]), color="red")
+            # plt.subplot(1, 2, 2)
+            # for seg in seg_3:
+            #     plt.plot(np.append(seg[:, 0], seg[0, 0]), np.append(seg[:, 1], seg[0, 1]), color="blue")
+            # plt.show()
+            # assert True
 
         compare_dataset_values(sample_ultralytics, sample_3lc, task, mode)
+
+
+def test_obb_conversion() -> None:
+    import torch
+    from ultralytics.utils.ops import resample_segments, xyxyxyxy2xywhr
+
+    from tlc_ultralytics.obb.dataset import corner_points_to_xywh, xcyxwhr_to_corner_points
+
+    label_file = "C:/Project/datasets/dota8/labels/train/P0861__1024__0___1648.txt"
+    with open(label_file, "r") as f:
+        lines = f.readlines()
+
+    for line in lines:
+        line = line.strip()
+        if line:
+            parts = line.split()
+            original_corner_points = np.array(list(map(float, parts[1:])), dtype=np.float32)
+
+            # 3LC data processing
+            (cx, cy), (w, h), angle = cv2.minAreaRect(original_corner_points.reshape(-1, 2))
+            angle = angle / 180 * np.pi
+
+            recreated_corner_points = xcyxwhr_to_corner_points(cx, cy, w, h, angle)
+            recreated_corner_points_from_cv2 = cv2.boxPoints(((cx, cy), (w, h), angle))
+            axis_aligned_bb_from_original = corner_points_to_xywh(original_corner_points)
+            axis_aligned_bb_from_recreated = corner_points_to_xywh(recreated_corner_points)
+            axis_aligned_bb_from_recreated_from_cv2 = corner_points_to_xywh(recreated_corner_points_from_cv2)
+
+            # END 3LC data processing
+
+            # Ultralytics data processing
+            segments = original_corner_points.reshape(-1, 2)
+            segments_resampled = resample_segments([segments], n=100)
+            xywhr_from_ultralytics = xyxyxyxy2xywhr(torch.from_numpy(np.array(segments_resampled)))
+
+            assert True

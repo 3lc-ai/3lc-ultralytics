@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Any
 
-import cv2
 import numpy as np
 import torch
 from ultralytics.utils.metrics import batch_probiou, bbox_iou, mask_iou
@@ -14,7 +13,7 @@ IOU_THRESHOLDS = {
         "detect": 0.98,
         "segment": 0.97,
         "pose": 0.999,
-        "obb": 0.93,
+        "obb": 0.999,
     },
 }
 
