@@ -35,6 +35,13 @@ def check_tlc_dataset(  # noqa: C901
     :return: Dictionary of tables and class names
     """
 
+    if not tables and data is not None and data.endswith(".ndjson"):
+        raise ValueError(
+            "NDJson datasets are not yet supported in the YOLO integration. Create a tlc.Table from the ",
+            "data or convert it to a YOLO dataset and use `tlc.Table.from_yolo`. The NDJson format will be ",
+            "supported in the future.",
+        )
+
     # If the data starts with the 3LC prefix, parse the YAML file and populate `tables`
     has_prefix = False
     if tables is None and isinstance(data, str) and data.startswith(TLC_PREFIX):
@@ -88,6 +95,8 @@ def check_tlc_dataset(  # noqa: C901
 
     else:
         # LOGGER.info(f"{TLC_COLORSTR}Using data directly from tables")
+        _check_tables(tables)
+
         for key, table in tables.items():
             if splits is not None and key not in splits:
                 continue
@@ -205,3 +214,17 @@ def parse_3lc_yaml_file(data_file: str) -> dict[str, tlc.Table]:
         tables[split] = table
 
     return tables
+
+
+def _check_tables(tables: object):
+    if not isinstance(tables, dict):
+        msg = f"When providing tables directly, they must be a dictionary, but got type {type(tables)}."
+        raise ValueError(msg)
+
+    for key, table in tables.items():
+        if not isinstance(table, (str, Path, tlc.Url, tlc.Table)):
+            msg = (
+                "When providing tables directly, they must be a tlc.Table or a URL to a tlc.Table. ",
+                f"Got {type(table)} for split {key}.",
+            )
+            raise ValueError(msg)

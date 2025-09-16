@@ -8,12 +8,15 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Added
 
-- Add document on Active Labeling in the examples directory, and a corresponding FAQ entry in the main README.md ([#31](https://github.com/3lc-ai/3lc-ultralytics/pull/31)).
+- Add a check for validity of the `tables` when passed directly to `model.train()` and `model.collect()` ([#34](https://github.com/3lc-ai/3lc-ultralytics/pull/34)).
+- Raise when a NDJson dataset is passed ([#34](https://github.com/3lc-ai/3lc-ultralytics/pull/34)).
 
 ### Changed
 
+- Add document on Active Labeling in the examples directory, and a corresponding FAQ entry in the main README.md ([#31](https://github.com/3lc-ai/3lc-ultralytics/pull/31)).
 - Skip unnecessary extra validation when the train and val sets are set to the same table ([#31](https://github.com/3lc-ai/3lc-ultralytics/pull/31)).
 - Modify the check for compatible versions of `3lc` and `ultralytics` to warn instead of raising ([#33](https://github.com/3lc-ai/3lc-ultralytics/pull/33)).
+- Increase upper bound of `ultralytics` from 8.3.183 to 8.3.193 ([#34](https://github.com/3lc-ai/3lc-ultralytics/pull/34)).
 
 ## [0.1.3] - 2025-08-28
 
