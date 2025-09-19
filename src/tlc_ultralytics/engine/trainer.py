@@ -45,6 +45,7 @@ class TLCTrainerMixin(BaseTrainer):
         super().__init__(cfg, overrides, _callbacks)
 
         self._train_validator = None
+        self._train_equals_val_result = None
 
         if RANK in {-1, 0}:
             self._metrics_collection_epochs = set(self._settings.get_metrics_collection_epochs(self.epochs))
@@ -139,11 +140,13 @@ class TLCTrainerMixin(BaseTrainer):
 
     def validate(self):
         """Perform validation with 3LC metrics collection, also on the training data, if applicable."""
-        # Validate on the training set
+
+        # Validate on the training set, unless the training and validation sets are identical
         if (
             not self._settings.collection_disable
             and not self._settings.collection_val_only
             and self.epoch + 1 in self._metrics_collection_epochs
+            and not self._train_equals_val()
         ):
             with _restore_random_state():
                 self.train_validator(trainer=self)
@@ -151,12 +154,24 @@ class TLCTrainerMixin(BaseTrainer):
         # Validate on the validation/test set like usual
         return super().validate()
 
+    def _train_equals_val(self):
+        if self._train_equals_val_result is not None:
+            return self._train_equals_val_result
+
+        self._train_equals_val_result = self.data["train"] is (self.data.get("val") or self.data["test"])
+        if self._train_equals_val_result:
+            LOGGER.info(
+                f"{TLC_COLORSTR}Training and validation sets are identical. "
+                "Skipping duplicate validation on the training set."
+            )
+        return self._train_equals_val_result
+
     def final_eval(self):
         """Perform normal final validation with metrics collection on the val set, after first doing metrics collection
         on the train set.
         """
         if not self._settings.collection_val_only and not self._settings.collection_disable:
-            if self.best.exists():
+            if self.best.exists() and not self._train_equals_val():
                 with _restore_random_state():
                     self.train_validator._final_validation = True
                     self.train_validator._epoch = self.epoch

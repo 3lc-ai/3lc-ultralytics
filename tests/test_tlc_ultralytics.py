@@ -282,10 +282,24 @@ def test_detect_training_with_yolo12() -> None:
     model_3lc = TLCYOLO(model)
     # Embeddings can't be collected for yolo12
     with pytest.raises(ValueError):
-        model_3lc.train(**overrides, settings=Settings(image_embeddings_dim=2))
+        model_3lc.train(**overrides, settings=Settings(image_embeddings_dim=2, run_name="test_yolo12_embeddings"))
 
     # But should run to completion without embeddings collection
-    model_3lc.train(**overrides)
+    model_3lc.train(**overrides, settings=Settings(run_name="test_yolo12_no_embeddings"))
+
+    # Also check that validation is skipped when training and validating on the same table
+    overrides["tables"] = {
+        "train": tlc.Table.from_url(model_3lc.trainer.data["train"].url),
+        "val": tlc.Table.from_url(model_3lc.trainer.data["train"].url),
+    }
+    results_dupe = model_3lc.train(**overrides, settings=Settings(run_name="test_yolo12_dupe_validation"))
+
+    run_dupe = tlc.Run.from_url(results_dupe.run_url)
+    per_sample_metrics_tables = get_metrics_tables_from_run(run_dupe)["default_stream"]
+
+    assert len(per_sample_metrics_tables) == 1, (
+        "Expected 1 per-sample metrics table to be written when training and validating on the same table"
+    )
 
 
 def test_classify_training() -> None:

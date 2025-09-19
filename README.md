@@ -277,3 +277,7 @@ This is not supported yet, but will be added in a future commit!
 ## Why is the 3LC integration pinned to just a few versions of `Ultralytics`?
 
 Ultralytics makes changes to the internals of the `ultralytics` codebase, which occasionally breaks the 3LC integration. It is therefore pinned to versions which are known to work with the integration.
+
+## How can I train and validate on the same data, without collecting metrics twice?
+
+This is a common scenario when employing an active labeling approach, where a model is trained on a small amount of labeled data and then used to predict candidate labels which are batch assigned in the 3LC Dashboard to grow the dataset efficiently. Check out the [Active Labeling Example](examples/active_labeling.md) for how to do this.
