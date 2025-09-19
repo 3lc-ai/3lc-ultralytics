@@ -3,14 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from tlc.core import GeometryHelper
 from tlc.core.builtins.constants import (
     BBS_2D,
     IMAGE,
     INSTANCES,
     KEYPOINTS_2D,
     LABEL,
-    LINES,
     VERTICES_2D,
     VERTICES_2D_ADDITIONAL_DATA,
     VISIBILITIES,

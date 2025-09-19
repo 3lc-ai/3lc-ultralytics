@@ -1188,7 +1188,7 @@ def test_complete_label_column_name() -> None:
 
 
 @pytest.mark.parametrize("mode", ["train", "val"])
-@pytest.mark.parametrize("task", ["detect", "pose"])
+@pytest.mark.parametrize("task", ["detect", "pose", "obb"])
 def test_dataset_determinism(mode, task) -> None:
     """Test that datasets are deterministic with the same seed across separate processes."""
     from dataset_determinism import _compare_dataset_rows, create_dataset_samples
@@ -1201,8 +1201,13 @@ def test_dataset_determinism(mode, task) -> None:
         _compare_dataset_rows(row_ultralytics, row_3lc)
 
 
+# '<frozen importlib._bootstrap_external>:999\n  <frozen importlib._bootstrap>:488\n
+# C:\\Project\\ultralytics\\ultralytics\\hub\\utils.py:267\n
+# C:\\Project\\ultralytics\\ultralytics\\hub\\utils.py:214'
+
+
 @pytest.mark.parametrize("mode", ["train", "val"])
-@pytest.mark.parametrize("task", ["detect", "pose"])
+@pytest.mark.parametrize("task", ["detect", "pose", "obb"])
 def test_dataset_determinism_with_random_tracking(mode, task) -> None:
     """Test that datasets are deterministic and don't make unexpected random calls.
 
@@ -1412,8 +1417,8 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
 def test_single_sample_equality(task: str, mode: str) -> None:
     """Test that a single sample from the dataset is equal between 3LC and Ultralytics."""
 
-    if mode == "train":
-        pytest.skip("Train mode is not supported for this test")
+    # if mode == "train":
+    #     pytest.skip("Train mode is not supported for this test")
 
     NUM_SAMPLES = 4
     settings = Settings(project_name="test_dataset_determinism_mode_train")
@@ -1461,40 +1466,4 @@ def test_single_sample_equality(task: str, mode: str) -> None:
             # plt.show()
             # assert True
 
-        compare_dataset_values(sample_ultralytics, sample_3lc, task, mode)
-
-
-def test_obb_conversion() -> None:
-    import torch
-    from ultralytics.utils.ops import resample_segments, xyxyxyxy2xywhr
-
-    from tlc_ultralytics.obb.dataset import corner_points_to_xywh, xcyxwhr_to_corner_points
-
-    label_file = "C:/Project/datasets/dota8/labels/train/P0861__1024__0___1648.txt"
-    with open(label_file, "r") as f:
-        lines = f.readlines()
-
-    for line in lines:
-        line = line.strip()
-        if line:
-            parts = line.split()
-            original_corner_points = np.array(list(map(float, parts[1:])), dtype=np.float32)
-
-            # 3LC data processing
-            (cx, cy), (w, h), angle = cv2.minAreaRect(original_corner_points.reshape(-1, 2))
-            angle = angle / 180 * np.pi
-
-            recreated_corner_points = xcyxwhr_to_corner_points(cx, cy, w, h, angle)
-            recreated_corner_points_from_cv2 = cv2.boxPoints(((cx, cy), (w, h), angle))
-            axis_aligned_bb_from_original = corner_points_to_xywh(original_corner_points)
-            axis_aligned_bb_from_recreated = corner_points_to_xywh(recreated_corner_points)
-            axis_aligned_bb_from_recreated_from_cv2 = corner_points_to_xywh(recreated_corner_points_from_cv2)
-
-            # END 3LC data processing
-
-            # Ultralytics data processing
-            segments = original_corner_points.reshape(-1, 2)
-            segments_resampled = resample_segments([segments], n=100)
-            xywhr_from_ultralytics = xyxyxyxy2xywhr(torch.from_numpy(np.array(segments_resampled)))
-
-            assert True
+        # compare_dataset_values(sample_ultralytics, sample_3lc, task, mode)

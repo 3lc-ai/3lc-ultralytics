@@ -109,11 +109,20 @@ class Settings:
 
     Default: None"""
 
+    points: list[float] | None = field(default=None)
+    """Default point locations for pose estimation. Should be relative to a unit square. Default: None"""
+
     lines: list[int] | None = field(default=None)
     """Lines for pose estimation. Default: None"""
 
     kpt_names: list[str] | None = field(default=None)
     """Keypoint names for pose estimation. Default: None"""
+
+    oks_sigmas: list[float] | None = field(default=None)
+    """OKS sigmas for pose estimation. Default: None"""
+
+    flip_indices: list[int] | None = field(default=None)
+    """Flip indices for pose estimation. Default: None"""
 
     @classmethod
     def from_env(cls) -> Settings:

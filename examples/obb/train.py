@@ -19,4 +19,4 @@ if __name__ == "__main__":
     # results = model.collect(data="dota8.yaml", splits=("train",), imgsz=640, workers=0)
     # results = model.collect(tables=tables, imgsz=640, workers=0)
     # results = model.train(data="dota8.yaml", imgsz=640, workers=0, epochs=1, settings=settings)
-    results = model.train(data=data_yaml, imgsz=640, workers=0, epochs=1, settings=settings)
+    results = model.train(data=data_yaml, imgsz=640, workers=0, epochs=9, settings=settings)

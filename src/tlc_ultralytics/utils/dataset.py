@@ -170,20 +170,24 @@ def check_tlc_dataset(  # noqa: C901
     value_map = get_value_map_from_table(tables[first_split], label_column_name, task)
     names = tlc.SchemaHelper.to_simple_value_map(value_map)
     if task == "pose":
-        kpt_shape = tlc.GeometryHelper.get_kpt_shape_from_table(tables[first_split], label_column_name)
-        flip_idx = tlc.GeometryHelper.get_flip_indices_from_table(tables[first_split], label_column_name)
-        keypoint_attributes = tlc.GeometryHelper.get_keypoint_attributes_from_table(
+        kpt_shape = tlc.KeypointHelper.get_kpt_shape_from_table(tables[first_split], label_column_name)
+        flip_idx = tlc.KeypointHelper.get_flip_indices_from_table(tables[first_split], label_column_name)
+        keypoint_attributes = tlc.KeypointHelper.get_keypoint_attributes_from_table(
             tables[first_split], label_column_name
         )
-        lines = tlc.GeometryHelper.get_lines_from_table(tables[first_split], label_column_name)
-        line_attributes = tlc.GeometryHelper.get_line_attributes_from_table(tables[first_split], label_column_name)
-        triangles = tlc.GeometryHelper.get_triangles_from_table(tables[first_split], label_column_name)
-        triangle_attributes = tlc.GeometryHelper.get_triangle_attributes_from_table(
+        lines = tlc.KeypointHelper.get_lines_from_table(tables[first_split], label_column_name)
+        line_attributes = tlc.KeypointHelper.get_line_attributes_from_table(tables[first_split], label_column_name)
+        triangles = tlc.KeypointHelper.get_triangles_from_table(tables[first_split], label_column_name)
+        triangle_attributes = tlc.KeypointHelper.get_triangle_attributes_from_table(
             tables[first_split], label_column_name
         )
+        oks_sigmas = tlc.KeypointHelper.get_oks_sigmas_from_table(tables[first_split], label_column_name)
+        points = tlc.KeypointHelper.get_points_from_table(tables[first_split], label_column_name)
     else:
-        kpt_shape, flip_idx, keypoint_attributes, lines, line_attributes, triangles, triangle_attributes = (
-            (17, 3),
+        kpt_shape, flip_idx, keypoint_attributes, lines, line_attributes, triangles, triangle_attributes, points = (
+            [17, 3],
+            None,
+            None,
             None,
             None,
             None,
@@ -241,7 +245,7 @@ def check_tlc_dataset(  # noqa: C901
     }
     if task == "pose":
         if flip_idx is not None:
-            ret["flip_indices"] = flip_idx
+            ret["flip_idx"] = flip_idx
         if keypoint_attributes is not None:
             ret["keypoint_attributes"] = keypoint_attributes
         if lines is not None:
@@ -252,7 +256,10 @@ def check_tlc_dataset(  # noqa: C901
             ret["triangles"] = triangles
         if triangle_attributes is not None:
             ret["triangle_attributes"] = triangle_attributes
-
+        if oks_sigmas is not None:
+            ret["oks_sigmas"] = oks_sigmas
+        if points is not None:
+            ret["points"] = points
     return ret
 
 

@@ -60,16 +60,23 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             label_column_name=self._label_column_name,
         )
 
+    def init_metrics(self, model: torch.nn.Module) -> None:
+        super().init_metrics(model)
+
+        if self.data.get("oks_sigmas"):
+            self.sigma = np.array(self.data.get("oks_sigmas"))
+
     def postprocess(self, preds):
         self._curr_raw_preds = preds if self._settings.collect_loss else None
         return super().postprocess(preds)
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         predicted_pose_schema = Keypoints2DSchema(
-            object_name=self.data["names"][0],
+            classes=[self.data["names"][0]],
             num_keypoints=self.kpt_shape[0],
-            flip_indices=self.data.get("flip_indices"),
-            point_attributes=self.data["keypoint_attributes"],
+            flip_indices=self.data.get("flip_idx"),
+            points=self.data.get("points"),
+            point_attributes=self.data.get("keypoint_attributes"),
             lines=self.data.get("lines"),
             line_attributes=self.data.get("line_attributes"),
             triangles=self.data.get("triangles"),

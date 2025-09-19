@@ -37,8 +37,10 @@ def get_or_create_pose_table(
         if_exists="reuse",
         add_weight_column=True,
         description="Created with 3LC YOLO integration",
-        keypoint_names=settings.kpt_names,
+        keypoint_attributes=settings.kpt_names,
         lines=settings.lines,
+        oks_sigmas=settings.oks_sigmas,
+        flip_indices=settings.flip_indices,
     )
 
 
