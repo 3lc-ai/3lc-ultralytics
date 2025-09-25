@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.1.4] - 2025-09-25
+
 ### Added
 
 - Add a check for validity of the `tables` when passed directly to `model.train()` and `model.collect()` ([#34](https://github.com/3lc-ai/3lc-ultralytics/pull/34)).
