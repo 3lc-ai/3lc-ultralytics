@@ -180,7 +180,7 @@ def check_tlc_dataset(  # noqa: C901
     value_map = get_value_map_from_table(tables[first_split], label_column_name, task)
     names = tlc.SchemaHelper.to_simple_value_map(value_map)
     if task == "pose":
-        kpt_shape = tlc.KeypointHelper.get_kpt_shape_from_table(tables[first_split], label_column_name)
+        kpt_shape = tlc.KeypointHelper.get_keypoint_shape_from_table(tables[first_split], label_column_name)
         flip_idx = tlc.KeypointHelper.get_flip_indices_from_table(tables[first_split], label_column_name)
         keypoint_attributes = tlc.KeypointHelper.get_keypoint_attributes_from_table(
             tables[first_split], label_column_name
