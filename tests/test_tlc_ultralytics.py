@@ -275,7 +275,7 @@ def test_training(task) -> None:
         )
 
     if task == "pose":
-        # Pose does not collect per-class (yet?!)
+        # Pose does not collect per-class metrics (yet?!)
         return
 
     per_class_metrics_tables = metrics_tables[PER_CLASS_METRICS_STREAM_NAME]
@@ -1134,7 +1134,7 @@ def test_absolutize_image_url() -> None:
 def test_extra_metrics() -> None:
     """Test providing extra metrics callback and schemas work as expected"""
 
-    yolo_dataset_path, (table_train, table_val) = _create_test_image_and_table()
+    _yolo_dataset_path, (table_train, table_val) = _create_test_image_and_table()
 
     BATCH_SIZE = 2
 
@@ -1455,6 +1455,86 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
     table_val = tlc.Table.from_yolo(yolo_dataset_file, "val", if_exists="overwrite")
 
     return yolo_dataset_file, (table_train, table_val)
+
+
+def test_pose_flip_and_oks_overrides() -> None:
+    """Verify that flip augmentation uses provided flip indices and loss uses provided OKS sigmas."""
+    from ultralytics.data.augment import RandomFlip
+    from ultralytics.nn.tasks import PoseModel
+
+    # Settings with custom flip indices and OKS sigmas
+    settings = Settings(
+        project_name="test_pose_overrides_project",
+        run_name="test_pose_overrides",
+        **COCO_POSE_SETTINGS_OVERRIDES,
+    )
+
+    overrides = {
+        "data": TASK2DATASET["pose"],
+        "model": TASK2MODEL["pose"],
+        "device": "cpu",
+        "epochs": 1,
+        "batch": 2,
+        "imgsz": 64,
+        "workers": 0,
+        "deterministic": True,
+        "seed": 0,
+    }
+
+    trainer = TLCPoseTrainer(overrides={**overrides, "settings": settings})
+    # Avoid requiring a constructed model for dataset build
+    trainer.model = None
+
+    # 1) Assert dataset carries flip_idx from settings
+    assert trainer.data.get("flip_idx") == settings.flip_indices, "flip_idx not propagated to dataset"
+
+    # 2) Spy on RandomFlip construction to ensure flip_idx is passed into augmentations
+    constructed_flip_indices = []
+
+    original_init = RandomFlip.__init__
+
+    def wrapped_init(self, *args, **kwargs):
+        constructed_flip_indices.append(kwargs.get("flip_idx"))
+        return original_init(self, *args, **kwargs)
+
+    try:
+        # Patch constructor during dataset build (transforms are created here)
+        RandomFlip.__init__ = wrapped_init  # type: ignore[assignment]
+        _ = trainer.build_dataset(trainer.data["train"], mode="train", batch=2)
+    finally:
+        RandomFlip.__init__ = original_init  # type: ignore[assignment]
+
+    # RandomFlip is instantiated (vertical + horizontal) with the provided indices
+    constructed_flip_indices = [fi for fi in constructed_flip_indices if fi is not None]
+    assert constructed_flip_indices, "RandomFlip was not constructed during dataset build"
+    assert all(fi == settings.flip_indices for fi in constructed_flip_indices), (
+        "RandomFlip not constructed with provided flip indices"
+    )
+
+    # 3) Prepare a lightweight pose model and validator; verify loss uses provided OKS sigmas
+    model = PoseModel(
+        ch=trainer.data["channels"],
+        nc=trainer.data["nc"],
+        data_kpt_shape=trainer.data["kpt_shape"],
+        verbose=False,
+    )
+    trainer.model = model
+
+    validator = trainer.get_validator(
+        dataloader=trainer.get_dataloader(
+            trainer.data.get("val") or trainer.data["test"],
+            batch_size=2,
+            rank=-1,
+            mode="val",
+        )
+    )
+    # Build loss function (hooked to respect model.oks_sigmas via TLCPoseValidator and TLCv8PoseLoss)
+    validator._prepare_loss_fn(trainer.model)
+
+    sigmas_tensor = validator.loss_fn.keypoint_loss.sigmas.detach().cpu().numpy()
+    assert np.allclose(sigmas_tensor, np.array(settings.oks_sigmas, dtype=np.float32)), (
+        "Loss did not pick up provided OKS sigmas"
+    )
 
 
 @pytest.mark.parametrize("task", ["pose", "obb", "detect", "segment"])
