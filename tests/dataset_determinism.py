@@ -33,10 +33,7 @@ def _compare_dataset_rows(row_ultralytics: dict[str, Any], row_3lc: dict[str, An
             continue
 
         if isinstance(value_ultralytics, (np.ndarray, torch.Tensor)):
-            # torch.testing.assert_close(value_ultralytics, value_3lc, atol=0.013, rtol=0.125),
-            # f"Value {key} not equal in 3LC and Ultralytics",
-            # assert (value_ultralytics == value_3lc).all(), f"Value {key} not equal in 3LC and Ultralytics"
-            assert True
+            assert np.allclose(value_3lc, value_ultralytics), f"Value {key} not equal in 3LC and Ultralytics"
         else:
             assert value_ultralytics == value_3lc, f"Value {key} not equal in 3LC and Ultralytics"
 
