@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import pathlib
+import random
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
@@ -13,7 +14,7 @@ import pandas as pd
 import pytest
 import tlc
 from PIL import Image
-from testing_helpers import compare_dataset_values, plot_matplotlib, plot_ultralytics
+from testing_helpers import compare_dataset_values, plot_ultralytics
 from ultralytics.models.yolo import YOLO
 from ultralytics.models.yolo.detect import DetectionTrainer
 from ultralytics.models.yolo.obb import OBBTrainer
@@ -1426,19 +1427,6 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
     return yolo_dataset_file, (table_train, table_val)
 
 
-def seed_everything(seed: int) -> None:
-    """Seed everything for reproducibility."""
-    import random
-
-    import numpy as np
-    import torch
-
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-
-
 @pytest.mark.parametrize("task", ["pose", "obb", "detect", "segment"])
 @pytest.mark.parametrize("mode", ["train", "val"])
 def test_single_sample_equality(task: str, mode: str) -> None:
@@ -1476,10 +1464,11 @@ def test_single_sample_equality(task: str, mode: str) -> None:
         if mode == "train":
             # FIXME: known issue with random seed in train mode for obb and pose
             # Samples will not be equal unless we explicitly seed before fetching data
-            seed_everything(42)
+            random.seed(42)
+
         sample_3lc = dataset_3lc[i]
         if mode == "train":
-            seed_everything(42)
+            random.seed(42)
         sample_ultralytics = dataset_ultralytics[i]
 
         if plot and i == 0:
