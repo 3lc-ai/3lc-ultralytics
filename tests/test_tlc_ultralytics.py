@@ -1426,13 +1426,27 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
     return yolo_dataset_file, (table_train, table_val)
 
 
+def seed_everything(seed: int) -> None:
+    """Seed everything for reproducibility."""
+    import random
+
+    import numpy as np
+    import torch
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+
+
 @pytest.mark.parametrize("task", ["pose", "obb", "detect", "segment"])
 @pytest.mark.parametrize("mode", ["train", "val"])
 def test_single_sample_equality(task: str, mode: str) -> None:
     """Test that a single sample from the dataset is equal between 3LC and Ultralytics."""
 
-    # if mode == "train":
-    #     pytest.skip("Train mode is not supported for this test")
+    if task == "segment" and mode == "train":
+        # FIXME: known issue with out of order instances in train mode for segment
+        pytest.skip("Fails because of out of order instances")
 
     NUM_SAMPLES = 4
     settings = Settings(project_name="test_dataset_determinism_mode_train")
@@ -1456,28 +1470,20 @@ def test_single_sample_equality(task: str, mode: str) -> None:
     trainer_3lc.model = None
     dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=1)
 
+    plot = False  # Turn on to enable debug viz.
+
     for i in range(NUM_SAMPLES):
+        if mode == "train":
+            # FIXME: known issue with random seed in train mode for obb and pose
+            # Samples will not be equal unless we explicitly seed before fetching data
+            seed_everything(42)
         sample_3lc = dataset_3lc[i]
+        if mode == "train":
+            seed_everything(42)
         sample_ultralytics = dataset_ultralytics[i]
 
-        plot = True
-        if plot:  # and i == 0:
+        if plot and i == 0:
             plot_ultralytics(sample_3lc, "3LC")
             plot_ultralytics(sample_ultralytics, "Ultralytics")
-            # plot_matplotlib(sample_3lc, "3LC")
-            # plot_matplotlib(sample_ultralytics, "Ultralytics")
-            # seg_u = dataset_ultralytics.labels[0]["segments"]
-            # seg_3 = dataset_3lc.labels[0]["segments"]
-            # import matplotlib.pyplot as plt
 
-            # plt.subplot(1, 2, 1)
-            # # segs are lists of (4, 2) arrays. Plot each one in a different color
-            # for seg in seg_u:
-            #     plt.plot(np.append(seg[:, 0], seg[0, 0]), np.append(seg[:, 1], seg[0, 1]), color="red")
-            # plt.subplot(1, 2, 2)
-            # for seg in seg_3:
-            #     plt.plot(np.append(seg[:, 0], seg[0, 0]), np.append(seg[:, 1], seg[0, 1]), color="blue")
-            # plt.show()
-            # assert True
-
-        # compare_dataset_values(sample_ultralytics, sample_3lc, task, mode)
+        compare_dataset_values(sample_ultralytics, sample_3lc, task, mode)

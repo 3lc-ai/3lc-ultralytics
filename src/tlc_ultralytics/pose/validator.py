@@ -168,10 +168,11 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         }
 
     def _prepare_loss_fn(self, model):
-        self.loss_fn = v8UnreducedPoseLoss(
-            model.model if hasattr(model.model, "model") else model,
-            training=self._training,
-        )
+        loss_model = model.model if hasattr(model.model, "model") else model
+        # Pass through dataset-provided OKS sigmas to the loss via model attribute for consistency
+        if self.data.get("oks_sigmas") is not None:
+            loss_model.oks_sigmas = self.data.get("oks_sigmas")
+        self.loss_fn = v8UnreducedPoseLoss(loss_model, training=self._training)
 
     def _add_embeddings_hook(self, model) -> int:
         if hasattr(model.model, "model"):

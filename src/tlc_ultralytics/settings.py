@@ -115,8 +115,17 @@ class Settings:
     lines: list[int] | None = field(default=None)
     """Lines for pose estimation. Default: None"""
 
-    kpt_names: list[str] | None = field(default=None)
-    """Keypoint names for pose estimation. Default: None"""
+    triangles: list[int] | None = field(default=None)
+    """Triangles for pose estimation. Default: None"""
+
+    point_attributes: list[str] | None = field(default=None)
+    """Point attributes for pose estimation. Default: None"""
+
+    line_attributes: list[str] | None = field(default=None)
+    """Line attributes for pose estimation. Default: None"""
+
+    triangle_attributes: list[str] | None = field(default=None)
+    """Triangle attributes for pose estimation. Default: None"""
 
     oks_sigmas: list[float] | None = field(default=None)
     """OKS sigmas for pose estimation. Default: None"""

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 import torch.nn.functional as F
-from ultralytics.utils.loss import v8PoseLoss
+from ultralytics.utils.loss import KeypointLoss, v8PoseLoss
 from ultralytics.utils.ops import xyxy2xywh
 
 from tlc_ultralytics.detect.loss import UnreducedBboxLoss
@@ -13,6 +13,11 @@ class v8UnreducedPoseLoss(v8PoseLoss):
 
     def __init__(self, model, training: bool = False):  # model must be de-paralleled
         super().__init__(model)
+        # Prefer dataset-provided OKS sigmas if available on the model instance
+        oks_sigmas = getattr(model, "oks_sigmas", None)
+        if oks_sigmas is not None:
+            sigmas_tensor = torch.as_tensor(oks_sigmas, device=self.device, dtype=torch.float32)
+            self.keypoint_loss = KeypointLoss(sigmas=sigmas_tensor)
         # Replace bbox loss with unreduced variant and store training flag
         self.bbox_loss = UnreducedBboxLoss(self.reg_max)
         self.training = training
@@ -162,3 +167,18 @@ class v8UnreducedPoseLoss(v8PoseLoss):
 
         anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
         return anchor_points, stride_tensor
+
+
+class TLCv8PoseLoss(v8PoseLoss):
+    """Pose loss that prefers dataset-provided OKS sigmas when available.
+
+    If the attached model has an attribute `oks_sigmas` (list/ndarray/tensor), use it to
+    configure the `KeypointLoss`. Falls back to the default behavior otherwise.
+    """
+
+    def __init__(self, model):
+        super().__init__(model)
+        oks_sigmas = getattr(model, "oks_sigmas", None)
+        if oks_sigmas is not None:
+            sigmas_tensor = torch.as_tensor(oks_sigmas, device=self.device, dtype=torch.float32)
+            self.keypoint_loss = KeypointLoss(sigmas=sigmas_tensor)

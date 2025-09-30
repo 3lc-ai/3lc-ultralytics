@@ -3,11 +3,22 @@ from __future__ import annotations
 from copy import deepcopy
 
 from ultralytics.models.yolo.pose.train import PoseTrainer
+from ultralytics.nn.tasks import PoseModel
 
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME
 from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
+from tlc_ultralytics.pose.loss import TLCv8PoseLoss
 from tlc_ultralytics.pose.validator import TLCPoseValidator
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
+
+
+# Monkeypatch Ultralytics PoseModel to use TLCv8PoseLoss which respects dataset oks_sigmas
+def _tlc_pose_init_criterion(self):
+    return TLCv8PoseLoss(self)
+
+
+# Apply the monkeypatch once at import time
+PoseModel.init_criterion = _tlc_pose_init_criterion
 
 
 class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
@@ -41,6 +52,14 @@ class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
             self.data["test"] = data_test["test"]
 
         return self.data
+
+    def set_model_attributes(self):
+        """Set keypoints shape and attach dataset-provided OKS sigmas to the model if available."""
+        super().set_model_attributes()
+        oks_sigmas = self.data.get("oks_sigmas")
+        if oks_sigmas is not None:
+            # Attach to model so TLCv8PoseLoss/v8UnreducedPoseLoss can pick it up
+            self.model.oks_sigmas = oks_sigmas
 
     def get_validator(self, dataloader=None):
         self.loss_names = ("box_loss", "pose_loss", "kobj_loss", "cls_loss", "dfl_loss")
