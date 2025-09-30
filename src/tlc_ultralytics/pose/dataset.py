@@ -11,7 +11,7 @@ from tlc.core.builtins.constants import (
     LABEL,
     VERTICES_2D,
     VERTICES_2D_ADDITIONAL_DATA,
-    VISIBILITIES,
+    VISIBILITY,
     X_MAX,
     X_MIN,
     Y_MAX,
@@ -107,7 +107,7 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
             # Visibilities
             if VERTICES_2D_ADDITIONAL_DATA in instance:
                 add = instance[VERTICES_2D_ADDITIONAL_DATA]
-                vis = np.array(add[VISIBILITIES], dtype=np.float32).reshape(-1, 1)
+                vis = np.array(add[VISIBILITY], dtype=np.float32).reshape(-1, 1)
             else:
                 vis = np.ones((xys_arr.shape[0], 1), dtype=np.float32)
 
