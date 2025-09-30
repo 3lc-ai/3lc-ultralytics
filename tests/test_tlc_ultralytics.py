@@ -108,9 +108,9 @@ COCO_POSE_SETTINGS_OVERRIDES = {
     "lines": tlc.KeypointHelper.COCO_SKELETON,
     "point_attributes": [f"p{i}" for i in range(17)],
     "line_attributes": [f"l{i}" for i in range(16)],
-    "oks_sigmas": [0.069] * 17,
-    "flip_indices": list(range(17)),
 }
+
+OKS_SIGMAS = np.array([0.069] * 17, dtype=np.float64)
 
 try:
     import umap  # noqa: F401
@@ -168,7 +168,6 @@ def test_training(task) -> None:
         project_name=f"test_{task}_project",
         run_name=f"test_{task}",
         run_description=f"Test {task} training",
-        **COCO_POSE_SETTINGS_OVERRIDES if task == "pose" else {},
     )
 
     # Run ultralytics training and capture logs
@@ -207,23 +206,16 @@ def test_training(task) -> None:
     # Compare 3LC integration with ultralytics results
     # Segmentation results will be slightly different due to the 3lc mask storage format and conversion
     # back to polygons
-    if task != "pose":
-        atol = 0.1 if task == "segment" else 0
-        for k in results_ultralytics.results_dict.keys():
-            assert np.isclose(results_ultralytics.results_dict[k], results_3lc.results_dict[k], atol=atol), (
-                f"Results validation metrics 3LC different from Ultralytics for {k}"
-            )
+    atol = 0.1 if task == "segment" else 0
+    for k in results_ultralytics.results_dict.keys():
+        assert np.isclose(results_ultralytics.results_dict[k], results_3lc.results_dict[k], atol=atol), (
+            f"Results validation metrics 3LC different from Ultralytics for {k}"
+        )
 
-        assert results_ultralytics.names == results_3lc.names, "Results validation names"
+    assert results_ultralytics.names == results_3lc.names, "Results validation names"
 
     # Get 3LC run and inspect the results
     run = _get_run_from_settings(settings)
-    if task == "pose":
-        first_metrics_table = run.metrics_tables[0]
-        train_table = tlc.Table.from_url(
-            first_metrics_table.get_foreign_table_url().to_absolute(first_metrics_table.url)
-        )
-        check_pose_table_and_metrics_tables(train_table, first_metrics_table)
 
     assert run.status == tlc.RUN_STATUS_COMPLETED, "Run status not set to completed after training"
 
@@ -1457,15 +1449,26 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
     return yolo_dataset_file, (table_train, table_val)
 
 
-def test_pose_flip_and_oks_overrides() -> None:
+def test_pose_flip_and_oks_overrides(mocker) -> None:
     """Verify that flip augmentation uses provided flip indices and loss uses provided OKS sigmas."""
     from ultralytics.data.augment import RandomFlip
-    from ultralytics.nn.tasks import PoseModel
+    from ultralytics.utils.loss import KeypointLoss
 
-    # Settings with custom flip indices and OKS sigmas
+    from tlc_ultralytics.pose.loss import v8UnreducedPoseLoss
+
+    # Spies for the various components of the pose loss.
+    random_flip_spy = mocker.spy(RandomFlip, "__init__")
+    keypoint_loss_init_spy = mocker.spy(KeypointLoss, "__init__")
+    keypoint_loss_call_spy = mocker.spy(KeypointLoss, "__call__")
+    unreduced_keypoint_loss_call_spy = mocker.spy(v8UnreducedPoseLoss, "__call__")
+
+    # Settings with custom flip indices, OKS sigmas, and point/line properties.
     settings = Settings(
         project_name="test_pose_overrides_project",
         run_name="test_pose_overrides",
+        collect_loss=True,
+        oks_sigmas=OKS_SIGMAS.tolist(),
+        flip_indices=list(range(17)),
         **COCO_POSE_SETTINGS_OVERRIDES,
     )
 
@@ -1479,62 +1482,60 @@ def test_pose_flip_and_oks_overrides() -> None:
         "workers": 0,
         "deterministic": True,
         "seed": 0,
+        "flipud": 0.0,
+        "fliplr": 1.0,
     }
 
-    trainer = TLCPoseTrainer(overrides={**overrides, "settings": settings})
-    # Avoid requiring a constructed model for dataset build
-    trainer.model = None
+    model = TLCYOLO(TASK2MODEL["pose"])
 
-    # 1) Assert dataset carries flip_idx from settings
-    assert trainer.data.get("flip_idx") == settings.flip_indices, "flip_idx not propagated to dataset"
+    model.train(settings=settings, **overrides)
 
-    # 2) Spy on RandomFlip construction to ensure flip_idx is passed into augmentations
-    constructed_flip_indices = []
+    ## Data / metrics checks
 
-    original_init = RandomFlip.__init__
+    # Check the run, training table, and first metrics table are all correct
+    run = _get_run_from_settings(settings)
+    first_metrics_table = run.metrics_tables[0]
+    train_table = tlc.Table.from_url(first_metrics_table.get_foreign_table_url().to_absolute(first_metrics_table.url))
+    check_pose_table_and_metrics_tables(train_table, first_metrics_table, COCO_POSE_SETTINGS_OVERRIDES)
 
-    def wrapped_init(self, *args, **kwargs):
-        constructed_flip_indices.append(kwargs.get("flip_idx"))
-        return original_init(self, *args, **kwargs)
+    ## Tests for flip augmentation.
 
-    try:
-        # Patch constructor during dataset build (transforms are created here)
-        RandomFlip.__init__ = wrapped_init  # type: ignore[assignment]
-        _ = trainer.build_dataset(trainer.data["train"], mode="train", batch=2)
-    finally:
-        RandomFlip.__init__ = original_init  # type: ignore[assignment]
+    # Assert that RandomFlip is instantiated with the provided flip indices
+    assert random_flip_spy.call_count == 2
+    assert random_flip_spy.call_args_list[0][1] == {
+        "p": 0.0,
+        "direction": "vertical",
+        "flip_idx": settings.flip_indices,
+    }
+    assert random_flip_spy.call_args_list[1][1] == {
+        "p": 1.0,
+        "direction": "horizontal",
+        "flip_idx": settings.flip_indices,
+    }
 
-    # RandomFlip is instantiated (vertical + horizontal) with the provided indices
-    constructed_flip_indices = [fi for fi in constructed_flip_indices if fi is not None]
-    assert constructed_flip_indices, "RandomFlip was not constructed during dataset build"
-    assert all(fi == settings.flip_indices for fi in constructed_flip_indices), (
-        "RandomFlip not constructed with provided flip indices"
-    )
+    ## Tests for OKS sigmas - gilding the lily, but can't hurt to be sure.
 
-    # 3) Prepare a lightweight pose model and validator; verify loss uses provided OKS sigmas
-    model = PoseModel(
-        ch=trainer.data["channels"],
-        nc=trainer.data["nc"],
-        data_kpt_shape=trainer.data["kpt_shape"],
-        verbose=False,
-    )
-    trainer.model = model
+    # Assert that KeypointLoss is instantiated with the provided OKS sigmas
+    assert keypoint_loss_init_spy.call_count == 8
+    for call in [1, 3, 5, 7]:
+        # The other calls are from super.__init__, where other sigmas are used
+        call_kwargs = keypoint_loss_init_spy.call_args_list[call][1]
+        assert np.allclose(call_kwargs["sigmas"].numpy(), OKS_SIGMAS)
 
-    validator = trainer.get_validator(
-        dataloader=trainer.get_dataloader(
-            trainer.data.get("val") or trainer.data["test"],
-            batch_size=2,
-            rank=-1,
-            mode="val",
-        )
-    )
-    # Build loss function (hooked to respect model.oks_sigmas via TLCPoseValidator and TLCv8PoseLoss)
-    validator._prepare_loss_fn(trainer.model)
+    # Assert that keypoint loss is called with the provided OKS sigmas
+    assert keypoint_loss_call_spy.call_count != 0
+    for args in keypoint_loss_call_spy.call_args_list:
+        assert np.allclose(args[0][0].sigmas.numpy(), OKS_SIGMAS)
 
-    sigmas_tensor = validator.loss_fn.keypoint_loss.sigmas.detach().cpu().numpy()
-    assert np.allclose(sigmas_tensor, np.array(settings.oks_sigmas, dtype=np.float32)), (
-        "Loss did not pick up provided OKS sigmas"
-    )
+    # Assert that unreduced keypoint loss is called with the provided OKS sigmas
+    assert unreduced_keypoint_loss_call_spy.call_count == 2
+    for arg in unreduced_keypoint_loss_call_spy.call_args_list:
+        assert np.allclose(arg[0][0].keypoint_loss.sigmas.numpy(), OKS_SIGMAS)
+
+    # Assert that the sigmas are set on the model and validators
+    assert np.allclose(model.trainer.model.criterion.keypoint_loss.sigmas.numpy(), OKS_SIGMAS)
+    assert np.allclose(model.trainer.validator.loss_fn.keypoint_loss.sigmas.numpy(), OKS_SIGMAS)
+    assert np.allclose(model.trainer.train_validator.loss_fn.keypoint_loss.sigmas.numpy(), OKS_SIGMAS)
 
 
 @pytest.mark.parametrize("task", ["pose", "obb", "detect", "segment"])

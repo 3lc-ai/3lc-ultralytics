@@ -14,8 +14,8 @@ resolution-markers = [
 
 [[package]]
 name = "3lc"
-version = "2.16.3"
-source = { registry = "https://pypi.org/simple" }
+version = "2.17"
+source = { editable = "../tlc-monorepo" }
 dependencies = [
     { name = "cachetools" },
     { name = "cryptlex-lexactivator" },
@@ -43,6 +43,7 @@ dependencies = [
     { name = "ruamel-yaml" },
     { name = "s3fs", extra = ["boto3"] },
     { name = "sentry-sdk", extra = ["litestar"] },
+    { name = "termcolor" },
     { name = "textual" },
     { name = "torch" },
     { name = "torchvision" },
@@ -51,27 +52,115 @@ dependencies = [
     { name = "uvicorn" },
     { name = "watchdog" },
 ]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/17/5d/08b378675bac8dee933d52e62c34e53818abb07493a24a9e171b9be07e09/3lc-2.16.3-cp310-cp310-macosx_13_0_arm64.whl", hash = "sha256:95a9ed9f75223db21a8401c13b209a73ac37f9336ec2a0df262d66dcf12e6fea", size = 3897565, upload-time = "2025-09-05T13:20:26.699Z" },
-    { url = "https://files.pythonhosted.org/packages/88/50/ae75cb49ababf537bac3c7e600ca146ad3e99fd7ff4a050ff6169c3ef47c/3lc-2.16.3-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:a09454ead0d9c076376a059b350a74e1f032f0f59db41fbf4823e1803ba94fe3", size = 3929498, upload-time = "2025-09-05T13:20:28.388Z" },
-    { url = "https://files.pythonhosted.org/packages/02/45/d96838259a3069517bbe7b840155492dc072c9847555e7f3529dd9a0bbd2/3lc-2.16.3-cp310-cp310-win_amd64.whl", hash = "sha256:8c1391c971966f42990360f6eaa346a6e0ed8129f72695c0f72045a6a7d754e5", size = 3910818, upload-time = "2025-09-05T13:20:29.833Z" },
-    { url = "https://files.pythonhosted.org/packages/e3/7a/4b1670c9756dfece1832860820a843944dc30eb1c9d07f1ae3583ee4cd0b/3lc-2.16.3-cp311-cp311-macosx_13_0_arm64.whl", hash = "sha256:94543ee4dbb4fb9dbf6c402fd744842dfe4aac9e5a503b734a737403508d79c9", size = 5505443, upload-time = "2025-09-05T13:20:31.101Z" },
-    { url = "https://files.pythonhosted.org/packages/f1/31/4a6eb37b12731cb42cfa98fe1b91f672e4505bd41de9f8440ba3c9fe0af4/3lc-2.16.3-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:5a58f81cc1f221a7330cd50a6668c5dfafe68f987c2641e1c8afd2df1292bee5", size = 5541135, upload-time = "2025-09-05T13:20:32.71Z" },
-    { url = "https://files.pythonhosted.org/packages/bd/3b/99da87cc96c8b032dc5ff6be242b31fbe0922c0e2ab173a0454981e9c414/3lc-2.16.3-cp311-cp311-win_amd64.whl", hash = "sha256:399c8a7231e05c36c9db9f91731b715fac5a2b50ef15e8645e7073c32829a2a3", size = 5518259, upload-time = "2025-09-05T13:20:33.982Z" },
-    { url = "https://files.pythonhosted.org/packages/a3/96/c86b88e9d8ef2968d9240d095aee3c1e9d6929f4606355c6332186fab547/3lc-2.16.3-cp312-cp312-macosx_13_0_arm64.whl", hash = "sha256:3d95b44dbed973b33a3d8cb63318a6f6c5212d52d3d81e136e461d0c57e67a39", size = 4935362, upload-time = "2025-09-05T13:20:35.434Z" },
-    { url = "https://files.pythonhosted.org/packages/8a/13/d1c917cc8c3fb58502a2173a51a81d075926c6f8b7c15e2e693339e43b7e/3lc-2.16.3-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:77a772ded1ffb204f486cf0af1ecbfc71999b55ae73b7e868cebf6f45b6012aa", size = 4971632, upload-time = "2025-09-05T13:20:36.969Z" },
-    { url = "https://files.pythonhosted.org/packages/12/ef/bd043f0cea78062229341f7fccdcff37bd979605b4cfb0e68265d384d63e/3lc-2.16.3-cp312-cp312-win_amd64.whl", hash = "sha256:5156a9b2ab9bfe9dc6b226c9bda51e1c494f212e75310da495aa85fb04abb6cf", size = 4949182, upload-time = "2025-09-05T13:20:38.153Z" },
-    { url = "https://files.pythonhosted.org/packages/cb/f5/f9ae733abf16cc177fb20f32b688f7f071a7f3b945c85b68c81cdcc8c91c/3lc-2.16.3-cp313-cp313-macosx_13_0_arm64.whl", hash = "sha256:4e691645b55dadabc3035efcb028bc97e9eaf675d31cef144294c64dd11cae39", size = 4954740, upload-time = "2025-09-05T13:20:39.293Z" },
-    { url = "https://files.pythonhosted.org/packages/b7/26/fffd8c2a5305b99e11ab82685fe838039f0b069d22913c1c67666471a1c5/3lc-2.16.3-cp313-cp313-manylinux2014_x86_64.whl", hash = "sha256:343ac2de5bf498428a6404407bc9a8b13ca7ac6070d0e4496d8aeabc4eb216e5", size = 4982563, upload-time = "2025-09-05T13:20:40.432Z" },
-    { url = "https://files.pythonhosted.org/packages/64/90/36acd2796af4912262656366327512b4aa334931dabefffd55325d7dc357/3lc-2.16.3-cp313-cp313-win_amd64.whl", hash = "sha256:860107af11248a468d4e55bb847e3494f89ad1be4494cbb3505ce8287c4c42db", size = 4966522, upload-time = "2025-09-05T13:20:42.139Z" },
-    { url = "https://files.pythonhosted.org/packages/c1/4b/dd37e0b135bca29e7014207eed3c124ee9b8cdf689ad481a4c66ae6b773e/3lc-2.16.3-cp39-cp39-macosx_13_0_arm64.whl", hash = "sha256:ec2791a1227ca93dae6b942520da3f1b29b7dd98b8c89ac1e4e817475f2028de", size = 3869892, upload-time = "2025-09-05T13:20:43.732Z" },
-    { url = "https://files.pythonhosted.org/packages/0e/03/ae3ddcc9eadaa90211b096bff32de57f641cf8300aa3d2c1fab8a85c1fc6/3lc-2.16.3-cp39-cp39-manylinux2014_x86_64.whl", hash = "sha256:cb6f91db801b2649cae65361be20dd7bce622eae5c945558b7ad4a4301405ed4", size = 3911151, upload-time = "2025-09-05T13:20:44.995Z" },
-    { url = "https://files.pythonhosted.org/packages/6a/c9/3d5f7334024b1afb2e550bba15622240d288a68d5ed26726369920f72601/3lc-2.16.3-cp39-cp39-win_amd64.whl", hash = "sha256:e65b22b078e40ad7026a58cdd17f77b17beb12bdb9737cad2888ccc53c298f95", size = 3882969, upload-time = "2025-09-05T13:20:46.589Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "accelerate", marker = "extra == 'huggingface'", specifier = ">=1.2.1" },
+    { name = "adlfs", marker = "extra == 'abfs'", specifier = "==2024.4.1" },
+    { name = "cachetools", specifier = ">=5.5.0,<6.0.0" },
+    { name = "cryptlex-lexactivator", specifier = ">=3.28.1,<4.0.0" },
+    { name = "cryptography", specifier = ">=43.0.1,<44.0.0" },
+    { name = "datasets", marker = "extra == 'huggingface'", specifier = ">=2.17.0" },
+    { name = "deepdiff", specifier = ">=8.5.0" },
+    { name = "evaluate", marker = "extra == 'huggingface'", specifier = ">=0.4.1,<1.0.0" },
+    { name = "filelock", specifier = ">=3.13.1,<4.0.0" },
+    { name = "google-cloud-storage", marker = "extra == 'gcs'", specifier = ">=3.0.0" },
+    { name = "joblib", marker = "extra == 'umap'", specifier = ">=1.4.0,<2.0.0" },
+    { name = "litestar", specifier = ">=2.15.0,<3.0.0" },
+    { name = "numpy", specifier = ">=1.17.0,<3.0.0" },
+    { name = "opencv-python", specifier = ">=4.11.0.86" },
+    { name = "packaging", specifier = ">=23.1" },
+    { name = "pacmap", marker = "extra == 'pacmap'", specifier = ">=0.7.1,<1.0.0" },
+    { name = "pandas", specifier = ">=1.4.2" },
+    { name = "pillow", specifier = ">=10.4.0,<11.0.0" },
+    { name = "platformdirs", specifier = ">=3.8.1,<4.0.0" },
+    { name = "psutil", specifier = ">=5.9.8,<6.0.0" },
+    { name = "pyarrow", specifier = ">=18" },
+    { name = "pycocotools", specifier = ">=2.0.10,<3.0.0" },
+    { name = "pydantic", specifier = ">=2" },
+    { name = "pyjwt", specifier = ">=2.8.0,<3.0.0" },
+    { name = "pyngrok", marker = "extra == 'pyngrok'", specifier = ">=7.1.3,<8.0.0" },
+    { name = "pytorch-lightning", marker = "extra == 'lightning'", specifier = ">=2.0.0" },
+    { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=310,<311" },
+    { name = "randomname", specifier = ">=0.2.1,<1.0.0" },
+    { name = "readerwriterlock", specifier = ">=1.0.9,<2.0.0" },
+    { name = "requests", specifier = ">=2.31.0,<3.0.0" },
+    { name = "rich", specifier = ">=13.4.2,<14.0.0" },
+    { name = "ruamel-yaml", specifier = ">=0.17.32,<1.0.0" },
+    { name = "s3fs", extras = ["boto3"], specifier = "==2024.3.1" },
+    { name = "sentry-sdk", extras = ["litestar"], specifier = ">=2.13.0,<2.15.0" },
+    { name = "termcolor", specifier = ">=2.2.0" },
+    { name = "textual", specifier = ">=0.52.1,<1.0.0" },
+    { name = "torch", specifier = ">=1.8.0" },
+    { name = "torchvision", specifier = ">=0.10.0" },
+    { name = "tqdm", specifier = ">=4.65.0,<5.0.0" },
+    { name = "transformers", marker = "extra == 'huggingface'", specifier = ">=4.30.2,<5.0.0" },
+    { name = "umap-learn", marker = "extra == 'umap'", specifier = ">=0.5.4,<1.0.0" },
+    { name = "urllib3", specifier = "<2.0" },
+    { name = "uvicorn", specifier = ">=0.17.6" },
+    { name = "watchdog", specifier = ">=4.0.0,<6.0.0" },
+]
+provides-extras = ["huggingface", "gcs", "abfs", "umap", "pacmap", "pyngrok", "lightning"]
+
+[package.metadata.requires-dev]
+detectron2 = [
+    { name = "detectron2", marker = "python_full_version == '3.9.*' and sys_platform == 'linux'", url = "https://dl.fbaipublicfiles.com/detectron2/wheels/cpu/torch1.10/detectron2-0.6%2Bcpu-cp39-cp39-linux_x86_64.whl" },
+    { name = "numpy", marker = "python_full_version >= '3.9'", specifier = "~=1.24" },
+    { name = "setuptools", marker = "python_full_version == '3.9.*' and sys_platform == 'linux'", specifier = "==58.2.0" },
+    { name = "torch", marker = "python_full_version == '3.9.*' and sys_platform == 'linux'", specifier = "==1.10.1" },
+    { name = "torchvision", marker = "python_full_version == '3.9.*' and sys_platform == 'linux'", specifier = "==0.11.*" },
+]
+dev = [
+    { name = "flask", specifier = ">=2.2.3,<3.0.0" },
+    { name = "ipykernel", specifier = ">=6.21.2,<7.0.0" },
+    { name = "ipywidgets", specifier = ">=8.0.6,<9.0.0" },
+    { name = "jupyter", specifier = ">=1.0.0,<2.0.0" },
+    { name = "jwcrypto", specifier = ">=1.5.6" },
+    { name = "licensecheck", specifier = "==2024.2" },
+    { name = "matplotlib", specifier = ">=3.7.1,<4.0.0" },
+    { name = "mypy", specifier = "<=1.13" },
+    { name = "papermill", specifier = ">=2.5.0,<3.0.0" },
+    { name = "pre-commit", specifier = "==3.5.0" },
+    { name = "pyarmor", specifier = ">=9.0.7,<10.0.0" },
+    { name = "pyarrow-stubs", specifier = ">18" },
+    { name = "pytest", specifier = "==8.3.2" },
+    { name = "pytest-asyncio", specifier = "==0.23.8" },
+    { name = "pytest-benchmark", specifier = ">=4.0.0,<5.0.0" },
+    { name = "pytest-cov", specifier = ">=4.0.0,<5.0.0" },
+    { name = "pytest-mock", specifier = ">=3.11.1,<4.0.0" },
+    { name = "pytest-order", specifier = ">=1.3.0" },
+    { name = "pytest-profiling", specifier = ">=1.7.0,<2.0.0" },
+    { name = "pytest-repeat", specifier = ">=0.9.3,<1.0.0" },
+    { name = "pytest-timeout", specifier = ">=2.3.1,<3.0.0" },
+    { name = "pytest-xdist", specifier = ">=3.3.1,<4.0.0" },
+    { name = "ruff", specifier = ">=0.13.0,<0.14" },
+    { name = "textual-dev", specifier = ">=1.5.1,<2.0.0" },
+    { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0.1,<3.0.0" },
+    { name = "tomli-w", specifier = ">=1.2.0" },
+    { name = "types-pyyaml", specifier = ">=6.0.12.8,<7.0.0.0" },
+    { name = "types-requests", specifier = "==2.28.11.17" },
+    { name = "types-tqdm", specifier = ">=4.65.0.1,<5.0.0.0" },
+    { name = "typing-extensions", specifier = "==4.12.2" },
+]
+docs = [
+    { name = "furo", specifier = ">=2023.7.26,<2024.0.0" },
+    { name = "myst-parser", specifier = ">=2.0.0,<3.0.0" },
+    { name = "nbsphinx", specifier = ">=0.9.2,<1.0.0" },
+    { name = "sphinx", specifier = ">=7.2.6,<8.0.0" },
+    { name = "sphinx-autodoc2", specifier = ">=0.5.0,<1.0.0" },
+    { name = "sphinx-codeautolink", specifier = ">=0.15.0,<0.17.0" },
+    { name = "sphinx-copybutton", specifier = ">=0.5.2,<1.0.0" },
+    { name = "sphinx-design", specifier = ">=0.5.0,<1.0.0" },
+    { name = "sphinx-docsearch", specifier = ">=0.0.4,<1.0.0" },
+    { name = "sphinx-tippy", specifier = ">=0.4.1,<1.0.0" },
+    { name = "sphinx-togglebutton", specifier = ">=0.3.2,<1.0.0" },
+    { name = "sphinxcontrib-images", specifier = ">=0.9.4,<1.0.0" },
+    { name = "sphinxcontrib-mermaid", specifier = ">=0.9.2,<1.0.0" },
 ]
 
 [[package]]
 name = "3lc-ultralytics"
-version = "0.1.3"
+version = "0.1.4"
 source = { editable = "." }
 dependencies = [
     { name = "3lc" },
@@ -82,13 +171,14 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
+    { name = "pytest-mock" },
     { name = "pytest-xdist" },
     { name = "ruff" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "3lc", specifier = ">=2.13.1,!=2.16.1,<=2.16.3" },
+    { name = "3lc", editable = "../tlc-monorepo" },
     { name = "pacmap", specifier = ">=0.8.0" },
     { name = "ultralytics", specifier = ">=8.3.169,<8.3.193" },
 ]
@@ -96,6 +186,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "pytest", specifier = ">=8.3.5" },
+    { name = "pytest-mock", specifier = ">=3.15.1" },
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "ruff", specifier = ">=0.11.11" },
 ]
@@ -3025,6 +3116,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/08/ba/45911d754e8eba3d5a841a5ce61a65a685ff1798421ac054f85aa8747dfb/pytest-8.4.1.tar.gz", hash = "sha256:7c67fd69174877359ed9371ec3af8a3d2b04741818c51e5e99cc1742251fa93c", size = 1517714, upload-time = "2025-06-18T05:48:06.109Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/29/16/c8a903f4c4dffe7a12843191437d7cd8e32751d5de349d45d3fe69544e87/pytest-8.4.1-py3-none-any.whl", hash = "sha256:539c70ba6fcead8e78eebbf1115e8b589e7565830d7d006a8723f19ac8a0afb7", size = 365474, upload-time = "2025-06-18T05:48:03.955Z" },
+]
+
+[[package]]
+name = "pytest-mock"
+version = "3.15.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/68/14/eb014d26be205d38ad5ad20d9a80f7d201472e08167f0bb4361e251084a9/pytest_mock-3.15.1.tar.gz", hash = "sha256:1849a238f6f396da19762269de72cb1814ab44416fa73a8686deac10b0d87a0f", size = 34036, upload-time = "2025-09-16T16:37:27.081Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5a/cc/06253936f4a7fa2e0f48dfe6d851d9c56df896a9ab09ac019d70b760619c/pytest_mock-3.15.1-py3-none-any.whl", hash = "sha256:0a25e2eb88fe5168d535041d09a4529a188176ae608a6d249ee65abc0949630d", size = 10095, upload-time = "2025-09-16T16:37:25.734Z" },
 ]
 
 [[package]]

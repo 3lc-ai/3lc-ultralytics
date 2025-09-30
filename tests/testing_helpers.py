@@ -1,9 +1,19 @@
+import json
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import tlc
 import torch
+from tlc.core.builtins.constants.column_names import (
+    CONFIDENCE,
+    INSTANCES,
+    INSTANCES_ADDITIONAL_DATA,
+    LABEL,
+    VERTEX_ROLE,
+    VERTICES_2D,
+    VERTICES_2D_ADDITIONAL_DATA,
+)
 from ultralytics.utils.metrics import batch_probiou, bbox_iou
 
 IOU_THRESHOLDS = {
@@ -162,7 +172,8 @@ def plot_matplotlib(sample, name: str) -> None:
         plt.show()
 
 
-def check_pose_table_and_metrics_tables(table, metrics_table):
+def check_pose_table_and_metrics_tables(table, metrics_table, overrides: dict[str, Any]):
+    # Fetch table metadata.
     table_points = tlc.KeypointHelper.get_points_from_table(table)
     table_lines = tlc.KeypointHelper.get_lines_from_table(table)
     table_point_attributes = tlc.KeypointHelper.get_keypoint_attributes_from_table(table)
@@ -170,32 +181,59 @@ def check_pose_table_and_metrics_tables(table, metrics_table):
     table_oks_sigmas = tlc.KeypointHelper.get_oks_sigmas_from_table(table)
     table_flip_indices = tlc.KeypointHelper.get_flip_indices_from_table(table)
 
-    metrics_table_points = tlc.KeypointHelper.get_points_from_table(
-        metrics_table, label_column_name="keypoints_2d_predicted"
-    )
-    metrics_table_lines = tlc.KeypointHelper.get_lines_from_table(
-        metrics_table, label_column_name="keypoints_2d_predicted"
-    )
-    metrics_table_point_attributes = tlc.KeypointHelper.get_keypoint_attributes_from_table(
-        metrics_table, label_column_name="keypoints_2d_predicted"
-    )
-    metrics_table_line_attributes = tlc.KeypointHelper.get_line_attributes_from_table(
-        metrics_table, label_column_name="keypoints_2d_predicted"
-    )
-    metrics_table_oks_sigmas = tlc.KeypointHelper.get_oks_sigmas_from_table(
-        metrics_table, label_column_name="keypoints_2d_predicted"
-    )
-    metrics_table_flip_indices = tlc.KeypointHelper.get_flip_indices_from_table(
-        metrics_table, label_column_name="keypoints_2d_predicted"
-    )
-
-    assert table_points == metrics_table_points
-    assert table_lines == metrics_table_lines
-    assert table_point_attributes == metrics_table_point_attributes
-    assert table_line_attributes == metrics_table_line_attributes
+    # Check table metadata correctness.
+    assert table_points == overrides["points"]
+    assert table_lines == overrides["lines"]
+    assert table_point_attributes == [{"internal_name": name} for name in overrides["point_attributes"]]
+    assert table_line_attributes == [{"internal_name": name} for name in overrides["line_attributes"]]
     assert table_oks_sigmas == [0.069] * 17
     assert table_flip_indices == list(range(17))
+
+    # Fetch metrics table metadata.
+    pred_column = "keypoints_2d_predicted"
+    metrics_table_points = tlc.KeypointHelper.get_points_from_table(metrics_table, pred_column)
+    metrics_table_lines = tlc.KeypointHelper.get_lines_from_table(metrics_table, pred_column)
+    metrics_table_point_attr = tlc.KeypointHelper.get_keypoint_attributes_from_table(metrics_table, pred_column)
+    metrics_table_line_attr = tlc.KeypointHelper.get_line_attributes_from_table(metrics_table, pred_column)
+    metrics_table_oks_sigmas = tlc.KeypointHelper.get_oks_sigmas_from_table(metrics_table, pred_column)
+    metrics_table_flip_indices = tlc.KeypointHelper.get_flip_indices_from_table(metrics_table, pred_column)
+
+    # Check metrics table correctness.
+    assert metrics_table_points == table_points
+    assert metrics_table_lines == table_lines
+    assert metrics_table_point_attr == table_point_attributes
+    assert metrics_table_line_attr == table_line_attributes
     assert metrics_table_oks_sigmas is None  # We don't copy over the sigmas
     assert metrics_table_flip_indices is None  # We don't copy over the flip indices
 
+    assert metrics_table.columns == [
+        "example_id",
+        "keypoints_2d_predicted",
+        "cls_loss",
+        "box_loss",
+        "dfl_loss",
+        "pose_loss",
+        "kobj_loss",
+        "loss",
+        "epoch",
+        "Training Phase",
+        "input_table_id",
+    ]
     assert not metrics_table.rows_schema["keypoints_2d_predicted"].writable
+
+    # Check the first metrics table row (we don't check the input table data, that is covered by core tests)
+    metrics_table_row = metrics_table.table_rows[3][pred_column]  # only row with predictions
+    assert INSTANCES_ADDITIONAL_DATA in metrics_table_row
+    assert CONFIDENCE in metrics_table_row[INSTANCES_ADDITIONAL_DATA]
+    assert LABEL in metrics_table_row[INSTANCES_ADDITIONAL_DATA]
+    assert INSTANCES in metrics_table_row and len(metrics_table_row[INSTANCES]) == 1
+    assert VERTICES_2D_ADDITIONAL_DATA in metrics_table_row[INSTANCES][0]
+    assert CONFIDENCE in metrics_table_row[INSTANCES][0][VERTICES_2D_ADDITIONAL_DATA]
+    assert VERTEX_ROLE in metrics_table_row[INSTANCES][0][VERTICES_2D_ADDITIONAL_DATA]
+    assert VERTICES_2D in metrics_table_row[INSTANCES][0]
+
+    # Cheeky string comparison to pin the row down - will this be too fragile?
+    assert (
+        json.dumps(metrics_table_row)
+        == '{"x_min": 0.0, "y_min": 0.0, "x_max": 481.0, "y_max": 640.0, "instances": [{"lines": [3, 1, 4, 2, 1, 0, 0, 2, 5, 6, 5, 7, 6, 8, 7, 9, 8, 10, 11, 12, 11, 13, 12, 14, 13, 15, 14, 16, 5, 11, 6, 12], "lines_additional_data": {"line_role": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}, "vertices_2d": [261.3307800292969, 244.01507568359375, 279.0058898925781, 227.51434326171875, 247.5042724609375, 227.35733032226562, 311.8406677246094, 238.04412841796875, 238.6436004638672, 237.12435913085938, 353.57470703125, 337.904541015625, 221.15402221679688, 337.7941589355469, 420.21734619140625, 456.3583679199219, 193.9453125, 457.38018798828125, 440.1544189453125, 550.0919799804688, 206.7235107421875, 548.3096313476562, 347.01666259765625, 532.8427124023438, 263.6978759765625, 533.6087646484375, 396.7471008300781, 538.8079223632812, 259.0788269042969, 541.6107177734375, 427.5286865234375, 569.4536743164062, 281.0750427246094, 569.3405151367188], "vertices_2d_additional_data": {"vertex_role": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], "confidence": [0.8946985006332397, 0.8680123090744019, 0.8405828475952148, 0.6776658892631531, 0.5823836922645569, 0.9826786518096924, 0.9777358770370483, 0.8919739127159119, 0.8344438672065735, 0.7838741540908813, 0.7172360420227051, 0.8988322615623474, 0.889037549495697, 0.4888758957386017, 0.46207594871520996, 0.24518102407455444, 0.23172228038311005]}, "bbs_2d": [{"x_min": 137.60887145996094, "y_min": 144.41246032714844, "x_max": 481.0, "y_max": 638.9334716796875}]}], "instances_additional_data": {"label": [0], "confidence": [0.21688038110733032]}}'  # noqa: E501
+    )
