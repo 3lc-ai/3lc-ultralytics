@@ -74,7 +74,6 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         predicted_pose_schema = Keypoints2DSchema(
             classes=[self.data["names"][0]],
             num_keypoints=self.kpt_shape[0],
-            flip_indices=self.data.get("flip_idx"),
             points=self.data.get("points"),
             point_attributes=self.data.get("keypoint_attributes"),
             lines=self.data.get("lines"),

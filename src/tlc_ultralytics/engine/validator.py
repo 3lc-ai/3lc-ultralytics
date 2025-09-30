@@ -278,8 +278,8 @@ class TLCValidatorMixin(BaseValidator):
         self._final_validation = None
 
     def _write_per_class_metrics_tables(self) -> None:
-        if self.args.task not in ("detect", "segment"):
-            # Per-class metrics currently only supported for detection and segmentation tasks
+        if self.args.task not in ("detect", "segment", "obb"):
+            # Per-class metrics currently only supported for detection, segmentation, and obb tasks
             return
 
         metrics_writer = tlc.MetricsTableWriter(
@@ -391,9 +391,9 @@ class TLCValidatorMixin(BaseValidator):
         for i in range(self.nc):
             if i in self.metrics.ap_class_index:
                 class_results = self.metrics.class_result(np.where(self.metrics.ap_class_index == i)[0][0])
-                if self.args.task == "detect":
+                if self.args.task in ("detect", "obb"):
                     p, r, ap50, ap5095 = class_results
-                else:
+                else:  # seg and pose
                     p, r, ap50, ap5095, p_seg, r_seg, ap50_seg, ap5095_seg = class_results
             else:
                 p, r, ap50, ap5095 = 0.0, 0.0, 0.0, 0.0
@@ -412,9 +412,9 @@ class TLCValidatorMixin(BaseValidator):
                 mAP50_95s_seg[i] = ap5095_seg
 
         mean_results = self.metrics.mean_results()
-        if self.args.task == "detect":
+        if self.args.task in ("detect", "obb"):
             all_p, all_r, all_mAP50, all_mAP50_95 = mean_results
-        else:
+        else:  # seg and pose
             (
                 all_p,
                 all_r,

@@ -14,7 +14,7 @@ import pandas as pd
 import pytest
 import tlc
 from PIL import Image
-from testing_helpers import compare_dataset_values, plot_ultralytics
+from testing_helpers import check_pose_table_and_metrics_tables, compare_dataset_values, plot_ultralytics
 from ultralytics.models.yolo import YOLO
 from ultralytics.models.yolo.detect import DetectionTrainer
 from ultralytics.models.yolo.obb import OBBTrainer
@@ -103,6 +103,15 @@ TASK2ULTRALYTICS_TRAINER = {
     "detect": DetectionTrainer,
 }
 
+COCO_POSE_SETTINGS_OVERRIDES = {
+    "points": tlc.KeypointHelper.COCO_KEYPOINT_DEFAULT_POSE,
+    "lines": tlc.KeypointHelper.COCO_SKELETON,
+    "point_attributes": [f"p{i}" for i in range(17)],
+    "line_attributes": [f"l{i}" for i in range(16)],
+    "oks_sigmas": [0.069] * 17,
+    "flip_indices": list(range(17)),
+}
+
 try:
     import umap  # noqa: F401
 
@@ -132,9 +141,9 @@ class CapturingHandler(logging.Handler):
         self.log_messages.append(self.format(record))
 
 
-@pytest.mark.parametrize("task", ["detect", "segment"])
+@pytest.mark.parametrize("task", ["detect", "segment", "pose", "obb"])
 def test_training(task) -> None:
-    # End-to-end test of training for detection and segmentation
+    # End-to-end test of training for detection, segmentation, pose, and obb
 
     # Capture ultralytics logger output specifically
     from ultralytics.utils import LOGGER
@@ -159,6 +168,7 @@ def test_training(task) -> None:
         project_name=f"test_{task}_project",
         run_name=f"test_{task}",
         run_description=f"Test {task} training",
+        **COCO_POSE_SETTINGS_OVERRIDES if task == "pose" else {},
     )
 
     # Run ultralytics training and capture logs
@@ -197,16 +207,23 @@ def test_training(task) -> None:
     # Compare 3LC integration with ultralytics results
     # Segmentation results will be slightly different due to the 3lc mask storage format and conversion
     # back to polygons
-    atol = 0.1 if task == "segment" else 0
-    for k in results_ultralytics.results_dict.keys():
-        assert np.isclose(results_ultralytics.results_dict[k], results_3lc.results_dict[k], atol=atol), (
-            f"Results validation metrics 3LC different from Ultralytics for {k}"
-        )
+    if task != "pose":
+        atol = 0.1 if task == "segment" else 0
+        for k in results_ultralytics.results_dict.keys():
+            assert np.isclose(results_ultralytics.results_dict[k], results_3lc.results_dict[k], atol=atol), (
+                f"Results validation metrics 3LC different from Ultralytics for {k}"
+            )
 
-    assert results_ultralytics.names == results_3lc.names, "Results validation names"
+        assert results_ultralytics.names == results_3lc.names, "Results validation names"
 
     # Get 3LC run and inspect the results
     run = _get_run_from_settings(settings)
+    if task == "pose":
+        first_metrics_table = run.metrics_tables[0]
+        train_table = tlc.Table.from_url(
+            first_metrics_table.get_foreign_table_url().to_absolute(first_metrics_table.url)
+        )
+        check_pose_table_and_metrics_tables(train_table, first_metrics_table)
 
     assert run.status == tlc.RUN_STATUS_COMPLETED, "Run status not set to completed after training"
 
@@ -247,9 +264,19 @@ def test_training(task) -> None:
         assert category == "zebra", "Expected zebra as first prediction when epoch = 1 and example_id = 3"
 
     # model.predict() should work and be the same as vanilla ultralytics
-    assert all(model_ultralytics.predict(imgsz=320)[0].boxes.cls == model_3lc.predict(imgsz=320)[0].boxes.cls), (
-        "Predictions mismatch"
-    )
+    if task == "obb":
+        ultralytics_pred = model_ultralytics.predict(imgsz=320)[0]
+        tlc_pred = model_3lc.predict(imgsz=320)[0]
+        assert all(ultralytics_pred.obb.cls == tlc_pred.obb.cls), "Predictions mismatch"
+
+    else:
+        assert all(model_ultralytics.predict(imgsz=320)[0].boxes.cls == model_3lc.predict(imgsz=320)[0].boxes.cls), (
+            "Predictions mismatch"
+        )
+
+    if task == "pose":
+        # Pose does not collect per-class (yet?!)
+        return
 
     per_class_metrics_tables = metrics_tables[PER_CLASS_METRICS_STREAM_NAME]
     # 6 = 2 epochs * 2 splits + 2 splits after training

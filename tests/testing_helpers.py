@@ -2,8 +2,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import tlc
 import torch
-from ultralytics.utils.metrics import batch_probiou, bbox_iou, mask_iou
+from ultralytics.utils.metrics import batch_probiou, bbox_iou
 
 IOU_THRESHOLDS = {
     "masks": {
@@ -159,3 +160,42 @@ def plot_matplotlib(sample, name: str) -> None:
         plt.title(name)
         plt.imshow(sample["masks"].squeeze().cpu().numpy())
         plt.show()
+
+
+def check_pose_table_and_metrics_tables(table, metrics_table):
+    table_points = tlc.KeypointHelper.get_points_from_table(table)
+    table_lines = tlc.KeypointHelper.get_lines_from_table(table)
+    table_point_attributes = tlc.KeypointHelper.get_keypoint_attributes_from_table(table)
+    table_line_attributes = tlc.KeypointHelper.get_line_attributes_from_table(table)
+    table_oks_sigmas = tlc.KeypointHelper.get_oks_sigmas_from_table(table)
+    table_flip_indices = tlc.KeypointHelper.get_flip_indices_from_table(table)
+
+    metrics_table_points = tlc.KeypointHelper.get_points_from_table(
+        metrics_table, label_column_name="keypoints_2d_predicted"
+    )
+    metrics_table_lines = tlc.KeypointHelper.get_lines_from_table(
+        metrics_table, label_column_name="keypoints_2d_predicted"
+    )
+    metrics_table_point_attributes = tlc.KeypointHelper.get_keypoint_attributes_from_table(
+        metrics_table, label_column_name="keypoints_2d_predicted"
+    )
+    metrics_table_line_attributes = tlc.KeypointHelper.get_line_attributes_from_table(
+        metrics_table, label_column_name="keypoints_2d_predicted"
+    )
+    metrics_table_oks_sigmas = tlc.KeypointHelper.get_oks_sigmas_from_table(
+        metrics_table, label_column_name="keypoints_2d_predicted"
+    )
+    metrics_table_flip_indices = tlc.KeypointHelper.get_flip_indices_from_table(
+        metrics_table, label_column_name="keypoints_2d_predicted"
+    )
+
+    assert table_points == metrics_table_points
+    assert table_lines == metrics_table_lines
+    assert table_point_attributes == metrics_table_point_attributes
+    assert table_line_attributes == metrics_table_line_attributes
+    assert table_oks_sigmas == [0.069] * 17
+    assert table_flip_indices == list(range(17))
+    assert metrics_table_oks_sigmas is None  # We don't copy over the sigmas
+    assert metrics_table_flip_indices is None  # We don't copy over the flip indices
+
+    assert not metrics_table.rows_schema["keypoints_2d_predicted"].writable
