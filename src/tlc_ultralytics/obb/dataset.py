@@ -5,7 +5,6 @@ from typing import Any
 import cv2
 import numpy as np
 from tlc.core.builtins.constants import (
-    BBS_2D,
     CENTER_X,
     CENTER_Y,
     IMAGE,
@@ -46,7 +45,7 @@ def xcyxwhr_to_corner_points(xc, yc, w, h, r):
     pts = corners @ R.T
     pts[:, 0] += xc
     pts[:, 1] += yc
-    return pts  # [[3, 2, 1, 0]]
+    return pts
 
 
 def corner_points_to_xywh(corner_points):
@@ -99,7 +98,7 @@ class TLCOBBDataset(BaseTLCYOLODataset):
             exclude_zero=exclude_zero,
             class_map=class_map,
             image_column_name=image_column_name or IMAGE,
-            label_column_name=label_column_name or "oriented_bbs_2d",
+            label_column_name=label_column_name or ORIENTED_BBS_2D,
             **kwargs,
         )
         self._post_init()
