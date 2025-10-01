@@ -12,7 +12,8 @@ if __name__ == "__main__":
     # Load a model
     model = YOLO("yolo11n-obb.pt")
 
-    # Train the model
+    # Train the model (this example is for demonstration purposes only - the
+    # model we are trianing has already been trained on DOTA8)
     results = model.train(
         data="dota8.yaml",
         imgsz=640,

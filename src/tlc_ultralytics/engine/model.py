@@ -28,7 +28,7 @@ class YOLO(YOLOBase):
     def __init__(self, *args, **kwargs):
         """Initialize YOLO model with 3LC integration. Checks that the installed version of 3LC is compatible."""
 
-        # check_requirements()
+        check_requirements()
 
         super().__init__(*args, **kwargs)
 

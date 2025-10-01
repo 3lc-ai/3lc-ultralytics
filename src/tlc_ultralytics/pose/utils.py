@@ -71,7 +71,7 @@ def check_pose_table(table: tlc.Table, image_column_name: str, label_column_name
 
         instances_schema = schema.values[INSTANCES]
         assert hasattr(instances_schema, "values"), "Instances schema must be composite."
-        for k in (VERTICES_2D, LINES, BBS_2D):
+        for k in (VERTICES_2D, BBS_2D):
             assert k in instances_schema.values, f"Instances missing '{k}'."
 
     except (AssertionError, KeyError) as e:

@@ -215,6 +215,10 @@ python examples/segment/collect.py
 # Pose Estimation
 python examples/pose/train.py
 python examples/pose/collect.py
+
+# Oriented Object Detection
+python examples/obb/train.py
+python examples/obb/collect.py
 ```
 
 ## Next Steps

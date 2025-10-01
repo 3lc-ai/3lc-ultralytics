@@ -65,6 +65,7 @@ Check out the [examples directory](examples/) for complete training and metrics 
 - **Object Detection**: [examples/detect/train.py](examples/detect/train.py) and [examples/detect/collect.py](examples/detect/collect.py)
 - **Segmentation**: [examples/detect/train.py](examples/segment/train.py) and [examples/detect/collect.py](examples/segment/collect.py)
 - **Pose Estimation**: [examples/pose/train.py](examples/pose/train.py) and [examples/pose/collect.py](examples/pose/collect.py)
+- **Oriented Object Detection**: [examples/obb/train.py](examples/obb/train.py) and [examples/obb/collect.py](examples/obb/collect.py)
 
 ## Working with Datasets
 
@@ -175,7 +176,11 @@ For instance segmentation, you can provide `image_column_name` and `label_column
 
 ### Pose Estimation
 
-When working with tables created with `tlc.Table.from_yolo()`, set `task="pose"`, to get the correct formats for pose estimation. If you are working with a custom table, some care must be taken to ensure the required data is present in the table, such as `kpt_shape`, `kpt_names`, `names`, `flip_idx` and information about keypoint connectivity, if any. A detailed example of using a custom table for pose estimation can be found in [TODO: addme].
+When working with tables created with `tlc.Table.from_yolo()`, set `task="pose"`, to get the correct formats for pose estimation. If you are working with a custom table, some care must be taken to ensure the required data is present in the table, such as `kpt_shape`, `kpt_names`, `names`, `flip_idx` and information about keypoint connectivity, if any. A detailed example of using a custom table for pose estimation can be found in the [3LC Examples](https://github.com/3lc-ai/3lc-examples/blob/main/tutorials/1-create-tables/create-custom-keypoints-table.ipynb).
+
+### Oriented Object Detection
+
+When working with tables created with `tlc.Table.from_yolo()`, set `task="obb"`, to get the correct formats for oriented object detection. Any custom OB-compatible table can be used for training/metrics collection. A detailed example of using a custom table for oriented object detection can be found in the [3LC Examples](https://github.com/3lc-ai/3lc-examples/blob/main/tutorials/1-create-tables/create-custom-obb-table.ipynb).
 
 ## Metrics Collection Only
 
