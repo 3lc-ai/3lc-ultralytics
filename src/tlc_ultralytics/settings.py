@@ -4,9 +4,11 @@ import importlib
 import os
 from dataclasses import dataclass, field, fields
 from difflib import get_close_matches
+from pathlib import Path
 from typing import Any, Callable
 
 import tlc
+import yaml
 from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.constants import TLC_COLORSTR
@@ -109,6 +111,12 @@ class Settings:
 
     Default: None"""
 
+    image_column_name: str | None = field(default=None)
+    """The name of the image column in the dataset. Default: None"""
+
+    label_column_name: str | None = field(default=None)
+    """The name of the label column or full value path to the label. Default: None"""
+
     @classmethod
     def from_env(cls) -> Settings:
         """Create a Settings instance from environment variables.
@@ -136,6 +144,28 @@ class Settings:
         # Mark as not created from environment variables
         if not hasattr(self, "_from_env"):
             self._from_env = False
+
+    def to_yaml(self, yaml_file_path: Path) -> None:
+        """Save the settings to a YAML file.
+
+        :param yaml_file_path: The path to the YAML file to save the settings to.
+        """
+        content = {
+            k: v
+            for k, v in self.__dict__.items()
+            if k not in ("metrics_collection_function", "metrics_schemas")
+            and not k.startswith("_")
+        }
+        yaml_file_path.write_text(yaml.safe_dump(content))
+
+    @classmethod
+    def from_yaml(cls, yaml_file_path: Path) -> Settings:
+        """Create a Settings instance from a JSON string.
+
+        :param json_str: A JSON string representing the settings.
+        :returns: A Settings instance.
+        """
+        return cls(**yaml.safe_load(yaml_file_path.read_text()))
 
     def verify(self, training: bool = True) -> None:
         """Verify that the settings are valid.

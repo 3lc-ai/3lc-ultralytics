@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import tlc
+import yaml
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
 from ultralytics.utils.metrics import smooth
@@ -22,6 +23,37 @@ class TLCTrainerMixin(BaseTrainer):
     def __init__(self, cfg=DEFAULT_CFG, overrides=None, _callbacks=None):
         LOGGER.info("Using 3LC Trainer 🌟")
         self._settings = overrides.pop("settings", Settings())
+
+        # Override settings with image_column_name and label_column_name, both deprecated
+        for column_name in ["image_column_name", "label_column_name"]:
+            if column_name in overrides:
+                msg = (
+                    f"`{column_name}` is deprecated. Provide `{column_name}` to a `Settings` object instead."
+                )
+                LOGGER.warning(f"{TLC_COLORSTR}{msg}")
+
+                value = overrides.pop(column_name)
+
+                if getattr(self._settings, column_name) is not None:
+                    msg = (
+                        f"`{column_name}` is both set in the `Settings` object and provided directly. Using the one "
+                        "from the `Settings` object."
+                    )
+                    LOGGER.warning(f"{TLC_COLORSTR}{msg}")
+
+                else:
+                    setattr(self._settings, column_name, value)
+
+        self._label_column_name = _complete_label_column_name(
+            self._settings.label_column_name,
+            self._default_label_column_name,
+        )
+
+        if self._settings.image_column_name is None:
+            self._settings.image_column_name = self._default_image_column_name
+
+        self._image_column_name = self._settings.image_column_name
+
         self._settings.verify(training=True)
 
         assert "data" in overrides or "tables" in overrides, (
@@ -35,14 +67,28 @@ class TLCTrainerMixin(BaseTrainer):
             )
             raise ValueError(msg)
 
-        self._tables = overrides.pop("tables", None)
+        tables = overrides.pop("tables", None)
 
-        # Column names
-        self._image_column_name = overrides.pop("image_column_name", self._default_image_column_name)
-        self._label_column_name = overrides.pop("label_column_name", self._default_label_column_name)
-        self._label_column_name = _complete_label_column_name(self._label_column_name, self._default_label_column_name)
+        if tables:
+            self._tables = {}
+            for k, v in tables.items():
+                if isinstance(v, tlc.Table):
+                    self._tables[k] = v.url.to_str()
+                elif isinstance(v, (str, Path, tlc.Url)):
+                    self._tables[k] = tlc.Url(v).to_str()
+                else:
+                    raise ValueError(f"Invalid type {type(v)} for split {k} provided through `tables`.")
+        else:
+            self._tables = None
 
         super().__init__(cfg, overrides, _callbacks)
+
+        # Handle case where DDP training is used - make settings available to all processes
+        settings_yaml_file_path = self._3lc_run_dir / "settings_3lc.yaml"
+        if RANK in {-1, 0}:
+            self._settings.to_yaml(settings_yaml_file_path)
+        else:
+            self._settings = Settings.from_yaml(settings_yaml_file_path)
 
         self._train_validator = None
         self._train_equals_val_result = None
@@ -109,6 +155,27 @@ class TLCTrainerMixin(BaseTrainer):
         LOGGER.info(f"{TLC_COLORSTR}{message}")
 
     def get_dataset(self):
+        tables_yaml_file_path = (self._3lc_run_dir / "tables_3lc.yaml").absolute()
+        self.args.data = f"3LC://{tables_yaml_file_path.as_posix()}"
+
+        # Write table urls to a 3LC YAML file in the run directory
+        if RANK == -1 and self._tables:
+            tables_yaml_file_path.write_text(yaml.safe_dump(self._tables))
+
+        return self._get_dataset()
+
+    @property
+    def _3lc_run_dir(self) -> Path:
+        if not hasattr(self, "save_dir"):
+            raise ValueError("save_dir is not set")
+
+        run_dir = Path(self.save_dir.parent / (self.save_dir.name + "_3lc"))
+
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        return run_dir
+
+    def _get_dataset(self):
         raise NotImplementedError("Subclasses must implement this method.")
 
     def build_dataset(self, table, mode="train", batch=None):

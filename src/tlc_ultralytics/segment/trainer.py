@@ -11,7 +11,7 @@ from tlc_ultralytics.segment.validator import TLCSegmentationValidator
 class TLCSegmentationTrainer(SegmentationTrainer, TLCDetectionTrainer):
     _default_label_column_name = SEGMENTATION_LABEL_COLUMN_NAME
 
-    def get_dataset(self):
+    def _get_dataset(self):
         # Parse yaml and create tables
         self.data = tlc_check_seg_dataset(
             self.args.data,
