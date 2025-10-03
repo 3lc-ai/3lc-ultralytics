@@ -30,8 +30,8 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
         self.data = tlc_check_det_dataset(
             self.args.data,
             self._tables,
-            self._image_column_name,
-            self._label_column_name,
+            self._settings.image_column_name,
+            self._settings.label_column_name,
             project_name=self._settings.project_name,
             splits=("train", "val"),
         )
@@ -41,8 +41,8 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
             data_test = tlc_check_det_dataset(
                 self.args.data,
                 self._tables,
-                self._image_column_name,
-                self._label_column_name,
+                self._settings.image_column_name,
+                self._settings.label_column_name,
                 project_name=self._settings.project_name,
                 splits=("test",),
             )
@@ -60,8 +60,8 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
             build_tlc_yolo_dataset,
             exclude_zero=exclude_zero,
             class_map=self.data["3lc_class_to_range"],
-            image_column_name=self._image_column_name,
-            label_column_name=self._label_column_name,
+            image_column_name=self._settings.image_column_name,
+            label_column_name=self._settings.label_column_name,
         )
 
         result = DetectionTrainer.build_dataset(self, *args, **kwargs)
@@ -80,8 +80,6 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
             save_dir=self.save_dir,
             args=self.args,
             run=self._run,
-            image_column_name=self._image_column_name,
-            label_column_name=self._label_column_name,
             settings=self._settings,
             training=True,
         )

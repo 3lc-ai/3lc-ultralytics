@@ -1,6 +1,10 @@
 import contextlib
 import random
 
+from ultralytics.utils import LOGGER
+
+from tlc_ultralytics.constants import TLC_COLORSTR
+
 
 def _complete_label_column_name(label_column_name: str, default_label_column_name: str) -> str:
     """Create a complete label column name from a potentially partial one.
@@ -31,3 +35,24 @@ def _restore_random_state():
     state = random.getstate()
     yield
     random.setstate(state)
+
+
+def _handle_deprecated_column_name(arg_value: str | None, settings_value: str | None, default_value: str) -> str:
+    if arg_value is not None:
+        msg = (
+            f"Passing `{arg_value}` as an argument is deprecated. Provide `{arg_value}` to a `Settings` object instead."
+        )
+        LOGGER.warning(f"{TLC_COLORSTR}{msg}")
+
+        if settings_value is not None:
+            msg = (
+                f"`{arg_value}` is both set in the `Settings` object and provided directly. Using the one from the "
+                "`Settings` object."
+            )
+            LOGGER.warning(f"{TLC_COLORSTR}{msg}")
+
+        else:
+            return arg_value
+    elif settings_value is None:
+        return default_value
+    return settings_value

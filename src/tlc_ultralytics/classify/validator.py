@@ -28,8 +28,8 @@ class TLCClassificationValidator(TLCValidatorMixin, yolo.classify.Classification
             args=self.args,
             augment=False,
             prefix=self.args.split,
-            image_column_name=self._image_column_name,
-            label_column_name=self._label_column_name,
+            image_column_name=self._settings.image_column_name,
+            label_column_name=self._settings.label_column_name,
             exclude_zero=self._settings.exclude_zero_weight_collection,
             class_map=self.data["3lc_class_to_range"],
         )
@@ -81,7 +81,7 @@ class TLCClassificationValidator(TLCValidatorMixin, yolo.classify.Classification
             "top1_accuracy": (torch.argmax(preds, dim=1) == batch["cls"]).to(torch.float32),
         }
 
-        if len(self.dataloader.dataset.table.get_value_map(self._label_column_name)) > 5:
+        if len(self.dataloader.dataset.table.get_value_map(self._settings.label_column_name)) > 5:
             _, top5_pred = torch.topk(preds, 5, dim=1)
             labels_expanded = batch["cls"].view(-1, 1).expand_as(top5_pred)
             top5_correct = torch.any(top5_pred == labels_expanded, dim=1)

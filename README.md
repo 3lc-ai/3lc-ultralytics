@@ -158,19 +158,13 @@ Note that `names` and `nc` are not needed since the `tlc.Table`s themselves cont
 
 ## Task-Specific Configuration
 
-### Classification
-
-For image classification, you can provide `image_column_name` and `label_column_name` when calling `model.train()`, `model.val()` and `model.collect()` if you are providing your own table which has different column names to those expected by 3LC.
-
 ### Object Detection
 
-In addition to tables created with `Table.from_yolo()` (which is called internally when you provide a YOLO dataset), it is also possible to use tables with the COCO format used in the 3LC Detectron2 integration. If you have created 3LC tables in the Detectron2 integration, you can also use this `tlc.Table` in this integration!
+In addition to tables created with `Table.from_yolo()` (which is called internally when you provide a YOLO dataset), it is also possible to use other 3LC `Table`s with bounding boxes, such as `tlc.Table.from_coco()`.
 
 ### Segmentation
 
 Working with instance segmentation in the 3LC integration is similar to object detection. If you are using `tlc.Table.from_yolo()` to create your tables, make sure to pass `task="segment"`, as the default is `"detect"`.
-
-For instance segmentation, you can provide `image_column_name` and `label_column_name` when calling `model.train()`, `model.val()` and `model.collect()` if you are providing your own table which has different column names to those expected by 3LC. Note that the `label_column_name` should be the path to the segmentation label field within the table schema, with the default being `"segmentations.instance_properties.label"` which points to the category labels for each segmentation instance.
 
 ### Unsupported Tasks
 
@@ -208,7 +202,7 @@ model.collect(
 
 See [examples/detect/collect.py](examples/detect/collect.py) for a complete metrics collection example.
 
-> WARNING ⚠️: When using `.collect()`, the model must be compatible with the provided `tlc.Table`.
+> WARNING ⚠️: When using `.collect()`, the model must be compatible with the provided `tlc.Table`(s).
 > For example, the categories (called `names` in Ultralytics) in the `tlc.Table`s must match those that the model was trained on.
 
 ## 3LC Settings
@@ -247,6 +241,10 @@ Use `exclude_zero_weight_training=True` (only applies to training) and `exclude_
 - **`collection_val_only=True`**: Disable metrics collection on the training set. This only applies to training.
 - **`collection_disable=True`**: Disable metrics collection entirely. This only applies to training. A run will still be created, and hyperparameters and aggregate metrics will be logged to 3LC.
 - **`collection_epoch_start` and `collection_epoch_interval`**: Define when to collect metrics during training. The start epoch is 1-based, i.e. 1 means after the first epoch. As an example, `collection_epoch_start=1` with `collection_epoch_interval=2` means metrics collection will occur after the first epoch and then every other epoch after that.
+
+### Column names
+
+When providing `tables` directly or through a 3LC YOLO YAML file which have non-default column names, set the `image_column_name` and `label_column_name` in the `Settings` object. While `image_column_name` needs to be the top-level column name of image column, the `label_column_name` can be either the top level column (such as `"bbs"` for detection) or a value path to the label inside the detection column (such as `"bbs.bb_list.label"` for detection).
 
 ## Dashboard Output
 

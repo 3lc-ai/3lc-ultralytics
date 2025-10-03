@@ -16,8 +16,8 @@ class TLCSegmentationTrainer(SegmentationTrainer, TLCDetectionTrainer):
         self.data = tlc_check_seg_dataset(
             self.args.data,
             self._tables,
-            self._image_column_name,
-            self._label_column_name,
+            self._settings.image_column_name,
+            self._settings.label_column_name,
             project_name=self._settings.project_name,
             splits=("train", "val"),
         )
@@ -27,8 +27,8 @@ class TLCSegmentationTrainer(SegmentationTrainer, TLCDetectionTrainer):
             data_test = tlc_check_seg_dataset(
                 self.args.data,
                 self._tables,
-                self._image_column_name,
-                self._label_column_name,
+                self._settings.image_column_name,
+                self._settings.label_column_name,
                 project_name=self._settings.project_name,
                 splits=("test",),
             )

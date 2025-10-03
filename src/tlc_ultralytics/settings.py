@@ -8,8 +8,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import tlc
-import yaml
-from ultralytics.utils import LOGGER
+from ultralytics.utils import LOGGER, YAML
 
 from tlc_ultralytics.constants import TLC_COLORSTR
 
@@ -111,8 +110,8 @@ class Settings:
 
     Default: None"""
 
-    image_column_name: str | None = field(default=None)
-    """The name of the image column in the dataset. Default: None"""
+    image_column_name: str = "image"
+    """The name of the image column in the dataset. Default: 'image'"""
 
     label_column_name: str | None = field(default=None)
     """The name of the label column or full value path to the label. Default: None"""
@@ -153,10 +152,9 @@ class Settings:
         content = {
             k: v
             for k, v in self.__dict__.items()
-            if k not in ("metrics_collection_function", "metrics_schemas")
-            and not k.startswith("_")
+            if k not in ("metrics_collection_function", "metrics_schemas") and not k.startswith("_")
         }
-        yaml_file_path.write_text(yaml.safe_dump(content))
+        YAML.save(yaml_file_path.as_posix(), content)
 
     @classmethod
     def from_yaml(cls, yaml_file_path: Path) -> Settings:
@@ -165,7 +163,7 @@ class Settings:
         :param json_str: A JSON string representing the settings.
         :returns: A Settings instance.
         """
-        return cls(**yaml.safe_load(yaml_file_path.read_text()))
+        return cls(**YAML.load(yaml_file_path.as_posix()))
 
     def verify(self, training: bool = True) -> None:
         """Verify that the settings are valid.
@@ -188,6 +186,8 @@ class Settings:
             assert callable(self.metrics_collection_function), (
                 f"metrics_collection_function must be callable, got {type(self.metrics_collection_function)}"
             )
+
+        assert self.label_column_name is not None, "label_column_name must be set, got None"
 
         # Train / collect specific settings
         self._verify_training() if training else self._verify_collection()

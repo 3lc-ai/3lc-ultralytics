@@ -169,6 +169,10 @@ def test_training(task) -> None:
 
     assert results_ultralytics.names == results_3lc.names, "Results validation names"
 
+    # Check that the settings were saved
+    settings_loaded = Settings.from_yaml(results_3lc.save_dir / "settings_3lc.yaml")
+    assert settings_loaded.project_name == settings.project_name, "Project name mismatch"
+
     # Get 3LC run and inspect the results
     run = _get_run_from_settings(settings)
 
@@ -1260,6 +1264,39 @@ def test_bad_arguments() -> None:
     # Data is used instead of tables
     with pytest.raises(ValueError):
         model.train(data={"train": train_table, "val": val_table})
+
+
+def test_settings_serialization() -> None:
+    settings = Settings(
+        project_name="test_settings_serialization",
+        run_name="test_settings_serialization",
+        image_embeddings_reducer="umap",
+        image_embeddings_dim=2,
+        exclude_zero_weight_training=True,
+        metrics_collection_function=lambda x, y: {"test_metric": [1] * len(x)},
+    )
+
+    settings.to_yaml(TMP / "settings_3lc.yaml")
+
+    settings_loaded = Settings.from_yaml(TMP / "settings_3lc.yaml")
+
+    # Non-default values should be the same
+    assert settings_loaded.project_name == settings.project_name
+    assert settings_loaded.run_name == settings.run_name
+    assert settings_loaded.image_embeddings_reducer == settings.image_embeddings_reducer
+    assert settings_loaded.image_embeddings_dim == settings.image_embeddings_dim
+    assert settings_loaded.exclude_zero_weight_training == settings.exclude_zero_weight_training
+
+    # Default values should be the same
+    assert settings_loaded.conf_thres == settings.conf_thres
+    assert settings_loaded.max_det == settings.max_det
+    assert settings_loaded.collect_loss == settings.collect_loss
+    assert settings_loaded.metrics_schemas == settings.metrics_schemas
+    assert settings_loaded.image_column_name == settings.image_column_name
+    assert settings_loaded.label_column_name == settings.label_column_name
+
+    # Metrics collection function is not serialized
+    assert settings_loaded.metrics_collection_function is None
 
 
 # HELPERS

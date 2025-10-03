@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import tlc
-import yaml
 from ultralytics.engine.trainer import BaseTrainer
-from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
+from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK, YAML
 from ultralytics.utils.metrics import smooth
 
 from tlc_ultralytics.constants import DEFAULT_TRAIN_RUN_DESCRIPTION, TLC_COLORSTR
-from tlc_ultralytics.engine.utils import _complete_label_column_name, _restore_random_state
+from tlc_ultralytics.engine.utils import (
+    _complete_label_column_name,
+    _handle_deprecated_column_name,
+    _restore_random_state,
+)
 from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import reduce_embeddings
 
@@ -24,35 +28,21 @@ class TLCTrainerMixin(BaseTrainer):
         LOGGER.info("Using 3LC Trainer 🌟")
         self._settings = overrides.pop("settings", Settings())
 
-        # Override settings with image_column_name and label_column_name, both deprecated
-        for column_name in ["image_column_name", "label_column_name"]:
-            if column_name in overrides:
-                msg = (
-                    f"`{column_name}` is deprecated. Provide `{column_name}` to a `Settings` object instead."
-                )
-                LOGGER.warning(f"{TLC_COLORSTR}{msg}")
-
-                value = overrides.pop(column_name)
-
-                if getattr(self._settings, column_name) is not None:
-                    msg = (
-                        f"`{column_name}` is both set in the `Settings` object and provided directly. Using the one "
-                        "from the `Settings` object."
-                    )
-                    LOGGER.warning(f"{TLC_COLORSTR}{msg}")
-
-                else:
-                    setattr(self._settings, column_name, value)
-
-        self._label_column_name = _complete_label_column_name(
+        self.settings.image_column_name = _handle_deprecated_column_name(
+            overrides.pop("image_column_name", None),
+            self._settings.image_column_name,
+            self._default_image_column_name,
+        )
+        self.settings.label_column_name = _handle_deprecated_column_name(
+            overrides.pop("label_column_name", None),
             self._settings.label_column_name,
             self._default_label_column_name,
         )
 
-        if self._settings.image_column_name is None:
-            self._settings.image_column_name = self._default_image_column_name
-
-        self._image_column_name = self._settings.image_column_name
+        self._settings.label_column_name = _complete_label_column_name(
+            self._settings.label_column_name,
+            self._default_label_column_name,
+        )
 
         self._settings.verify(training=True)
 
@@ -84,16 +74,12 @@ class TLCTrainerMixin(BaseTrainer):
         super().__init__(cfg, overrides, _callbacks)
 
         # Handle case where DDP training is used - make settings available to all processes
-        settings_yaml_file_path = self._3lc_run_dir / "settings_3lc.yaml"
-        if RANK in {-1, 0}:
-            self._settings.to_yaml(settings_yaml_file_path)
-        else:
-            self._settings = Settings.from_yaml(settings_yaml_file_path)
+        self._write_load_settings()
 
         self._train_validator = None
         self._train_equals_val_result = None
 
-        if RANK in {-1, 0}:
+        if RANK == -1:
             self._metrics_collection_epochs = set(self._settings.get_metrics_collection_epochs(self.epochs))
 
             # Create a 3LC run
@@ -155,12 +141,19 @@ class TLCTrainerMixin(BaseTrainer):
         LOGGER.info(f"{TLC_COLORSTR}{message}")
 
     def get_dataset(self):
-        tables_yaml_file_path = (self._3lc_run_dir / "tables_3lc.yaml").absolute()
-        self.args.data = f"3LC://{tables_yaml_file_path.as_posix()}"
+        """Override get_dataset to write Table Urls to a 3LC YAML file in the run directory, and set the data
+        argument to the path to this YAML file to make it available to DDP processes.
 
-        # Write table urls to a 3LC YAML file in the run directory
-        if RANK == -1 and self._tables:
-            tables_yaml_file_path.write_text(yaml.safe_dump(self._tables))
+        It is implemented here because it requires access to the run directory, which is set in the parent __init__,
+        and before datasets are created.
+        """
+
+        tables_yaml_file_path = (self._3lc_run_dir / "tables_3lc.yaml").absolute()
+
+        if RANK == -1:
+            YAML.save(tables_yaml_file_path.as_posix(), self._tables or {})
+        else:
+            self.args.data = f"3LC://{tables_yaml_file_path.as_posix()}"
 
         return self._get_dataset()
 
@@ -174,6 +167,30 @@ class TLCTrainerMixin(BaseTrainer):
         run_dir.mkdir(parents=True, exist_ok=True)
 
         return run_dir
+
+    def _move_3lc_run_dir(self):
+        """Move the 3LC specific run artifacts to the Ultralytics run directory."""
+        source_dir = self._3lc_run_dir
+        target_dir = Path(self.save_dir)
+
+        for file in source_dir.glob("*"):
+            shutil.move(file, target_dir / file.name)
+
+        # Verify source dir is empty
+        assert not list(source_dir.glob("*")), "Source directory is not empty"
+        source_dir.rmdir()
+
+    def _write_load_settings(self):
+        """Make settings available to all processes through the run directory.
+
+        For the main node, the settings are written to the temporary 3lc run directory.
+        For launched DDP processes, the settings are loaded from the temporary 3lc run directory.
+        """
+        settings_yaml_file_path = self._3lc_run_dir / "settings_3lc.yaml"
+        if RANK == -1:
+            self._settings.to_yaml(settings_yaml_file_path)
+        else:
+            self._settings = Settings.from_yaml(settings_yaml_file_path)
 
     def _get_dataset(self):
         raise NotImplementedError("Subclasses must implement this method.")
@@ -255,6 +272,7 @@ class TLCTrainerMixin(BaseTrainer):
                     foreign_table_url=foreign_table_url,
                     reducer_args=self._settings.image_embeddings_reducer_args,
                 )
+            self._move_3lc_run_dir()
             self._run.set_status_completed()
 
     def _save_confidence_metrics(self):
