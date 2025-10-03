@@ -69,7 +69,6 @@ class TLCTrainerMixin(BaseTrainer):
         self._metrics_collection_epochs = set(self._settings.get_metrics_collection_epochs(self.epochs))
 
         if RANK == -1:
-
             # Create a 3LC run
             description = (
                 self._settings.run_description if self._settings.run_description else DEFAULT_TRAIN_RUN_DESCRIPTION
