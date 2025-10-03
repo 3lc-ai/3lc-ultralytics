@@ -62,7 +62,7 @@ def _handle_deprecated_column_name(arg_value: str | None, settings_value: str | 
         if settings_value is not None:
             msg = (
                 f"`{arg_value}` is both set in the `Settings` object and provided directly. Using the one passed "
-                "directly."
+                f"directly: '{arg_value}'."
             )
             LOGGER.warning(f"{TLC_COLORSTR}{msg}")
 
