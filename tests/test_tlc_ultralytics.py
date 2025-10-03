@@ -1410,7 +1410,7 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
 
     yolo_dataset_file = _create_no_predictions_data_yaml(data_set_path)
 
-    table_train = tlc.Table.from_yolo(yolo_dataset_file, "train", if_exists="overwrite")
-    table_val = tlc.Table.from_yolo(yolo_dataset_file, "val", if_exists="overwrite")
+    table_train = tlc.Table.from_yolo(yolo_dataset_file, "train", if_exists="overwrite", dataset_name="train")
+    table_val = tlc.Table.from_yolo(yolo_dataset_file, "val", if_exists="overwrite", dataset_name="val")
 
     return yolo_dataset_file, (table_train, table_val)
