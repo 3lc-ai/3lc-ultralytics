@@ -3,20 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from tlc.core.builtins.constants import (
-    BBS_2D,
-    IMAGE,
-    INSTANCES,
-    KEYPOINTS_2D,
-    LABEL,
-    VERTICES_2D,
-    VERTICES_2D_ADDITIONAL_DATA,
-    VISIBILITY,
-    X_MAX,
-    X_MIN,
-    Y_MAX,
-    Y_MIN,
-)
+from tlc.core.builtins.constants import IMAGE, KEYPOINTS_2D
+from tlc.client.data_format import Keypoints2DInstances
 
 from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
 
@@ -50,84 +38,46 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
 
     def _get_label_from_row(self, im_file: str, row: Any, example_id: int) -> dict[str, Any]:
         pose_root = self._label_column_name.split(".")[0]
-
         label_column_value = row[pose_root]
 
-        x_min = label_column_value[X_MIN]
-        y_min = label_column_value[Y_MIN]
-        x_max = label_column_value[X_MAX]
-        y_max = label_column_value[Y_MAX]
-
-        image_width = x_max - x_min
-        image_height = y_max - y_min
-
-        # Desired fixed K from dataset config (default 17)
+        # Desired fixed K from dataset config (default 17) for empty-case shapes
         kpt_shape = self.data.get("kpt_shape")
 
-        instances = label_column_value[INSTANCES]
+        # Parse using the shared dataclass, export normalized arrays
+        instances = Keypoints2DInstances.from_row(label_column_value)
+        arrays = instances.as_numpy(normalized=True, bbox_format="xywh")
 
-        classes_list: list[int] = []
-        keypoints_list: list[np.ndarray] = []
-        bb_list = []
+        labels = arrays.get("labels")
+        bboxes_xywh = arrays.get("bboxes")  # top-left x,y,w,h normalized
+        kxy = arrays.get("keypoints")  # (N,K,2) normalized
+        vis = arrays.get("visibilities")
 
-        for instance in instances:
-            # Class (dummy 0 if missing)
-            label_val = instance.get(LABEL, 0)
-            mapped = self._class_map.get(label_val, label_val)
-            classes_list.append(int(mapped))
-
-            # Bounding boxes
-            bb = instance[BBS_2D][0]  # Only one bounding box per instance
-            bb_width = bb[X_MAX] - bb[X_MIN]
-            bb_height = bb[Y_MAX] - bb[Y_MIN]
-            bb_xywhn = [bb[X_MIN] + bb_width / 2, bb[Y_MIN] + bb_height / 2, bb_width, bb_height]
-            bb_xywhn = [
-                bb_xywhn[0] / image_width,
-                bb_xywhn[1] / image_height,
-                bb_xywhn[2] / image_width,
-                bb_xywhn[3] / image_height,
-            ]
-            bb_list.append(bb_xywhn)
-
-            # Keypoints xys
-            xys = instance[VERTICES_2D]
-            if len(xys) >= 2:
-                xys_arr = np.array(xys, dtype=np.float32).reshape(-1, 2)
-            else:
-                xys_arr = np.zeros((0, 2), dtype=np.float32)
-
-            if xys_arr.size:
-                norm_xy = np.empty_like(xys_arr)
-                norm_xy[:, 0] = xys_arr[:, 0] / image_width
-                norm_xy[:, 1] = xys_arr[:, 1] / image_height
-                norm_xy = np.clip(norm_xy, 0.0, 1.0)
-            else:
-                norm_xy = xys_arr
-
-            # Visibilities
-            if VERTICES_2D_ADDITIONAL_DATA in instance:
-                add = instance[VERTICES_2D_ADDITIONAL_DATA]
-                vis = np.array(add[VISIBILITY], dtype=np.float32).reshape(-1, 1)
-            else:
-                vis = np.ones((xys_arr.shape[0], 1), dtype=np.float32)
-
-            kp = np.concatenate([norm_xy, vis], axis=1)
-
-            keypoints_list.append(kp)
-
-        # Convert to arrays with expected shapes
-        cls_arr = np.array(classes_list, dtype=np.float32).reshape(-1, 1)
-        bboxes_arr = np.array(bb_list, dtype=np.float32).reshape(-1, 4)
-
-        # Stack to (N, K, 3)
-        if keypoints_list:
-            kp_stack = np.stack(keypoints_list, axis=0)
-        else:
+        if labels is None or bboxes_xywh is None or kxy is None:
+            # Fallback empty outputs
+            cls_arr = np.zeros((0, 1), dtype=np.float32)
+            bboxes_arr = np.zeros((0, 4), dtype=np.float32)
             kp_stack = np.zeros((0, kpt_shape[0], 3), dtype=np.float32)
+        else:
+            # Map labels
+            mapped_labels = np.vectorize(lambda v: self._class_map.get(int(v), int(v)))(labels.astype(np.int32))
+            cls_arr = mapped_labels.astype(np.float32).reshape(-1, 1)
+
+            # Convert xywh (top-left) -> xywh (center)
+            # bboxes_xywh is normalized already
+            cx = bboxes_xywh[:, 0] + bboxes_xywh[:, 2] / 2.0
+            cy = bboxes_xywh[:, 1] + bboxes_xywh[:, 3] / 2.0
+            bboxes_arr = np.stack([cx, cy, bboxes_xywh[:, 2], bboxes_xywh[:, 3]], axis=1).astype(np.float32)
+
+            # Build (N,K,3) with visibilities
+            if vis is None:
+                vis_arr = np.ones((kxy.shape[0], kxy.shape[1], 1), dtype=np.float32)
+            else:
+                vis_arr = vis.astype(np.float32, copy=False).reshape(kxy.shape[0], kxy.shape[1], 1)
+            kp_stack = np.concatenate([kxy.astype(np.float32, copy=False), vis_arr], axis=2)
 
         return {
             "im_file": im_file,
-            "shape": (round(image_height), round(image_width)),
+            "shape": (round(instances.image_height), round(instances.image_width)),
             "cls": cls_arr,
             "bboxes": bboxes_arr,
             "segments": [],

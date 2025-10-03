@@ -5,20 +5,8 @@ from typing import Any
 import numpy as np
 import tlc
 import torch
-from tlc.core.builtins.constants import (
-    BBS_2D,
-    CONFIDENCE,
-    INSTANCES,
-    INSTANCES_ADDITIONAL_DATA,
-    KEYPOINTS_2D_PREDICTED,
-    LABEL,
-    VERTICES_2D,
-    VERTICES_2D_ADDITIONAL_DATA,
-    X_MAX,
-    X_MIN,
-    Y_MAX,
-    Y_MIN,
-)
+from tlc.core.builtins.constants import KEYPOINTS_2D_PREDICTED
+from tlc.client.data_format import Keypoints2DRowBuilder
 from tlc.core.builtins.schemas import Keypoints2DSchema
 from ultralytics.models.yolo.pose.val import PoseValidator
 from ultralytics.utils import ops
@@ -101,14 +89,8 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             h, w = batch["ori_shape"][i]
 
             if len(pred) == 0:
-                predicted.append(
-                    {
-                        X_MAX: w,
-                        Y_MAX: h,
-                        INSTANCES: [],
-                        INSTANCES_ADDITIONAL_DATA: {LABEL: [], CONFIDENCE: []},
-                    }
-                )
+                builder = Keypoints2DRowBuilder(image_height=int(h), image_width=int(w))
+                predicted.append(builder.to_row())
                 continue
 
             # Filter out low confidence predictions
@@ -124,41 +106,24 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             scaled_bboxes = ops.scale_boxes(resized_shape, predicted_bboxes, ori_shape, ratio_pad)
             scaled_keypoints = ops.scale_coords(resized_shape, predicted_keypoints, ori_shape, ratio_pad)
 
-            instances = []
+            builder = Keypoints2DRowBuilder(image_height=int(h), image_width=int(w))
             for j in range(len(predicted_keypoints)):
                 predicted_kpts = scaled_keypoints[j]
-                predicted_bbox = scaled_bboxes[j].cpu().numpy().astype(np.float32).tolist()
-                keypoints = predicted_kpts[:, 0:2].reshape(-1).cpu().numpy().astype(np.float32).tolist()
-                confidences = predicted_kpts[:, 2].cpu().numpy().astype(np.float32).tolist()
+                predicted_bbox = scaled_bboxes[j].cpu().numpy().astype(np.float32)
+                kxy = predicted_kpts[:, 0:2].cpu().numpy().astype(np.float32)
+                kconf = predicted_kpts[:, 2].cpu().numpy().astype(np.float32)
+                builder.add_instance(
+                    keypoints=kxy,
+                    bbox=predicted_bbox.tolist(),
+                    label=int(predicted_classes[j]),
+                    confidence=kconf.tolist(),
+                    normalized=False,
+                    bbox_format="xyxy",
+                    instance_confidence=float(predicted_confidences[j]),
+                )
 
-                instance = {
-                    VERTICES_2D: keypoints,
-                    VERTICES_2D_ADDITIONAL_DATA: {
-                        CONFIDENCE: confidences,
-                    },
-                    BBS_2D: [
-                        {
-                            X_MIN: predicted_bbox[0],
-                            Y_MIN: predicted_bbox[1],
-                            X_MAX: predicted_bbox[2],
-                            Y_MAX: predicted_bbox[3],
-                        }
-                    ],
-                }
-
-                instances.append(instance)
-
-            predicted.append(
-                {
-                    X_MAX: w,
-                    Y_MAX: h,
-                    INSTANCES: instances,
-                    INSTANCES_ADDITIONAL_DATA: {
-                        LABEL: predicted_classes,
-                        CONFIDENCE: predicted_confidences,
-                    },
-                }
-            )
+            row = builder.to_row()
+            predicted.append(row)
 
         losses = self.loss_fn(self._curr_raw_preds, batch) if self._settings.collect_loss else {}
         return {
