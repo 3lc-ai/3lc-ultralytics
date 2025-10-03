@@ -30,3 +30,8 @@ REQUIREMENTS_TO_CHECK = [
     ("3lc", "tlc"),
     ("ultralytics", "ultralytics"),
 ]
+
+# Output files
+SETTINGS_FILE_NAME = "settings_3lc.yaml"
+TABLES_FILE_NAME = "tables_3lc.yaml"
+RUN_FILE_NAME = "run.json"

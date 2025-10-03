@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -8,7 +9,13 @@ from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK, YAML
 from ultralytics.utils.metrics import smooth
 
-from tlc_ultralytics.constants import DEFAULT_TRAIN_RUN_DESCRIPTION, TLC_COLORSTR
+from tlc_ultralytics.constants import (
+    DEFAULT_TRAIN_RUN_DESCRIPTION,
+    RUN_FILE_NAME,
+    SETTINGS_FILE_NAME,
+    TABLES_FILE_NAME,
+    TLC_COLORSTR,
+)
 from tlc_ultralytics.engine.utils import (
     _complete_label_column_name,
     _handle_deprecated_column_name,
@@ -82,12 +89,11 @@ class TLCTrainerMixin(BaseTrainer):
                 description=description,
                 run_name=self._settings.run_name,
             )
+            self._save_run_state()
 
             LOGGER.info(
                 f"{TLC_COLORSTR}Created run named '{self._run.url.parts[-1]}' in project {self._run.project_name}."
             )
-
-            (self._3lc_run_dir / "run.txt").write_text(self._run.url.to_str())
 
             # Log parameters to 3LC
             self._log_3lc_parameters()
@@ -95,9 +101,21 @@ class TLCTrainerMixin(BaseTrainer):
             self._print_metrics_collection_epochs()
 
         else:
-            run_url = (self._3lc_run_dir / "run.txt").read_text()
-            LOGGER.info(f"{TLC_COLORSTR}DDP Rank {RANK}: Using run from {run_url}")
-            self._run = tlc.Run.from_url(run_url)
+            self._load_run_state()
+            LOGGER.info(f"{TLC_COLORSTR}DDP Rank {RANK}: Using run from {self._run.url.to_str()}")
+
+    def _save_run_state(self):
+        """Save the run state to the 3LC run directory."""
+        run_state_file_path = self._3lc_run_dir / RUN_FILE_NAME
+        with open(run_state_file_path, "w") as f:
+            json.dump({"run_url": self._run.url.to_str()}, f)
+
+    def _load_run_state(self):
+        """Load the run state from the 3LC run directory."""
+        run_state_file_path = self._3lc_run_dir / RUN_FILE_NAME
+        with open(run_state_file_path) as f:
+            run_state = json.load(f)
+        self._run = tlc.Run.from_url(run_state["run_url"])
 
     def _handle_tables_argument(self, tables: dict[str, tlc.Table | str | Path | tlc.Url] | None):
         """Handle the tables argument."""
@@ -156,7 +174,7 @@ class TLCTrainerMixin(BaseTrainer):
         and before datasets are created.
         """
 
-        tables_yaml_file_path = (self._3lc_run_dir / "tables_3lc.yaml").absolute()
+        tables_yaml_file_path = (self._3lc_run_dir / TABLES_FILE_NAME).absolute()
 
         # If tables is non-empty
         if self._tables and RANK == -1:
@@ -194,7 +212,7 @@ class TLCTrainerMixin(BaseTrainer):
         For the main node, the settings are written to the temporary 3lc run directory.
         For launched DDP processes, the settings are loaded from the temporary 3lc run directory.
         """
-        settings_yaml_file_path = self._3lc_run_dir / "settings_3lc.yaml"
+        settings_yaml_file_path = self._3lc_run_dir / SETTINGS_FILE_NAME
         if RANK == -1:
             self._settings.to_yaml(settings_yaml_file_path)
         else:
