@@ -28,12 +28,12 @@ class TLCTrainerMixin(BaseTrainer):
         LOGGER.info("Using 3LC Trainer 🌟")
         self._settings = overrides.pop("settings", Settings())
 
-        self.settings.image_column_name = _handle_deprecated_column_name(
+        self._settings.image_column_name = _handle_deprecated_column_name(
             overrides.pop("image_column_name", None),
             self._settings.image_column_name,
             self._default_image_column_name,
         )
-        self.settings.label_column_name = _handle_deprecated_column_name(
+        self._settings.label_column_name = _handle_deprecated_column_name(
             overrides.pop("label_column_name", None),
             self._settings.label_column_name,
             self._default_label_column_name,
@@ -57,19 +57,7 @@ class TLCTrainerMixin(BaseTrainer):
             )
             raise ValueError(msg)
 
-        tables = overrides.pop("tables", None)
-
-        if tables:
-            self._tables = {}
-            for k, v in tables.items():
-                if isinstance(v, tlc.Table):
-                    self._tables[k] = v.url.to_str()
-                elif isinstance(v, (str, Path, tlc.Url)):
-                    self._tables[k] = tlc.Url(v).to_str()
-                else:
-                    raise ValueError(f"Invalid type {type(v)} for split {k} provided through `tables`.")
-        else:
-            self._tables = None
+        self._handle_tables_argument(overrides.pop("tables", None))
 
         super().__init__(cfg, overrides, _callbacks)
 
@@ -104,6 +92,20 @@ class TLCTrainerMixin(BaseTrainer):
             self._log_3lc_parameters()
             self._run.set_status_running()
             self._print_metrics_collection_epochs()
+
+    def _handle_tables_argument(self, tables: dict[str, tlc.Table | str | Path | tlc.Url] | None):
+        """Handle the tables argument."""
+        if tables:
+            self._tables = {}
+            for k, v in tables.items():
+                if isinstance(v, tlc.Table):
+                    self._tables[k] = v.url.to_str()
+                elif isinstance(v, (str, Path, tlc.Url)):
+                    self._tables[k] = tlc.Url(v).to_str()
+                else:
+                    raise ValueError(f"Invalid type {type(v)} for split {k} provided through `tables`.")
+        else:
+            self._tables = None
 
     def _log_3lc_parameters(self):
         """Log various data as parameters to the tlc.Run."""
