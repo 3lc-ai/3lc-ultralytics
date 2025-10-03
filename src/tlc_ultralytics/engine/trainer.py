@@ -66,9 +66,9 @@ class TLCTrainerMixin(BaseTrainer):
 
         self._train_validator = None
         self._train_equals_val_result = None
+        self._metrics_collection_epochs = set(self._settings.get_metrics_collection_epochs(self.epochs))
 
         if RANK == -1:
-            self._metrics_collection_epochs = set(self._settings.get_metrics_collection_epochs(self.epochs))
 
             # Create a 3LC run
             description = (
@@ -88,10 +88,17 @@ class TLCTrainerMixin(BaseTrainer):
                 f"{TLC_COLORSTR}Created run named '{self._run.url.parts[-1]}' in project {self._run.project_name}."
             )
 
+            (self._3lc_run_dir / "run.txt").write_text(self._run.url.to_str())
+
             # Log parameters to 3LC
             self._log_3lc_parameters()
             self._run.set_status_running()
             self._print_metrics_collection_epochs()
+
+        else:
+            run_url = (self._3lc_run_dir / "run.txt").read_text()
+            LOGGER.info(f"{TLC_COLORSTR}DDP Rank {RANK}: Using run from {run_url}")
+            self._run = tlc.Run.from_url(run_url)
 
     def _handle_tables_argument(self, tables: dict[str, tlc.Table | str | Path | tlc.Url] | None):
         """Handle the tables argument."""
@@ -152,9 +159,9 @@ class TLCTrainerMixin(BaseTrainer):
 
         tables_yaml_file_path = (self._3lc_run_dir / "tables_3lc.yaml").absolute()
 
-        if RANK == -1:
-            YAML.save(tables_yaml_file_path.as_posix(), self._tables or {})
-        else:
+        # If tables is non-empty
+        if self._tables and RANK == -1:
+            YAML.save(tables_yaml_file_path.as_posix(), self._tables)
             self.args.data = f"3LC://{tables_yaml_file_path.as_posix()}"
 
         return self._get_dataset()
