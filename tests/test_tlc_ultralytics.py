@@ -177,7 +177,7 @@ def test_training(task) -> None:
     assert run_state_file_path.exists(), "Run state file not found"
     with open(run_state_file_path) as f:
         run_state = json.load(f)
-    assert run_state["run_url"] == results_3lc.run_url, "Run state mismatch"
+    assert run_state["run_url"] == results_3lc.run_url.to_str(), "Run state mismatch"
 
     # Get 3LC run and inspect the results
     run = _get_run_from_settings(settings)
