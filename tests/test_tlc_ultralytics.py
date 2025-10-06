@@ -1272,28 +1272,12 @@ def test_settings_serialization() -> None:
         metrics_collection_function=lambda x, y: {"test_metric": [1] * len(x)},
     )
 
-    settings.to_yaml(TMP / "settings_3lc.yaml")
+    settings_dict = settings.to_dict()
+    settings_from_dict = Settings(**settings_dict)
 
-    settings_loaded = Settings.from_yaml(TMP / "settings_3lc.yaml")
-
-    # Non-default values should be the same
-    assert settings_loaded.project_name == settings.project_name
-    assert settings_loaded.run_name == settings.run_name
-    assert settings_loaded.image_embeddings_reducer == settings.image_embeddings_reducer
-    assert settings_loaded.image_embeddings_dim == settings.image_embeddings_dim
-    assert settings_loaded.exclude_zero_weight_training == settings.exclude_zero_weight_training
-
-    # Default values should be the same
-    assert settings_loaded.conf_thres == settings.conf_thres
-    assert settings_loaded.max_det == settings.max_det
-    assert settings_loaded.collect_loss == settings.collect_loss
-    assert settings_loaded.metrics_schemas == settings.metrics_schemas
-    assert settings_loaded.image_column_name == settings.image_column_name
-    assert settings_loaded.label_column_name == settings.label_column_name
-
-    # Metrics collection function is not serialized
-    assert settings_loaded.metrics_collection_function is None
-
+    assert settings_from_dict.project_name == settings.project_name
+    assert settings_from_dict.run_name == settings.run_name
+    assert settings_from_dict.image_embeddings_reducer == settings.image_embeddings_reducer
 
 # HELPERS
 

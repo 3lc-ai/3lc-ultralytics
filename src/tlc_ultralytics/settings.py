@@ -4,11 +4,10 @@ import importlib
 import os
 from dataclasses import dataclass, field, fields
 from difflib import get_close_matches
-from pathlib import Path
 from typing import Any, Callable
 
 import tlc
-from ultralytics.utils import LOGGER, YAML
+from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.constants import TLC_COLORSTR
 
@@ -143,23 +142,6 @@ class Settings:
         # Mark as not created from environment variables
         if not hasattr(self, "_from_env"):
             self._from_env = False
-
-    def to_yaml(self, yaml_file_path: Path) -> None:
-        """Save the settings to a YAML file.
-
-        :param yaml_file_path: The path to the YAML file to save the settings to.
-        """
-        content = self._get_dict_to_serialize()
-        YAML.save(yaml_file_path.as_posix(), content)
-
-    @classmethod
-    def from_yaml(cls, yaml_file_path: Path) -> Settings:
-        """Create a Settings instance from a JSON string.
-
-        :param json_str: A JSON string representing the settings.
-        :returns: A Settings instance.
-        """
-        return cls(**YAML.load(yaml_file_path.as_posix()))
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the settings to a dictionary.
