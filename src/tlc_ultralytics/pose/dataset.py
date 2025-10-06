@@ -52,15 +52,18 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
         kxy = arrays.get("keypoints")  # (N,K,2) normalized
         vis = arrays.get("visibilities")
 
-        if labels is None or bboxes_xywh is None or kxy is None:
+        def _is_empty(a: Any) -> bool:
+            return a is None or (hasattr(a, "size") and getattr(a, "size") == 0)
+
+        if _is_empty(labels) or _is_empty(bboxes_xywh) or _is_empty(kxy):
             # Fallback empty outputs
             cls_arr = np.zeros((0, 1), dtype=np.float32)
             bboxes_arr = np.zeros((0, 4), dtype=np.float32)
             kp_stack = np.zeros((0, kpt_shape[0], 3), dtype=np.float32)
         else:
-            # Map labels
-            mapped_labels = np.vectorize(lambda v: self._class_map.get(int(v), int(v)))(labels.astype(np.int32))
-            cls_arr = mapped_labels.astype(np.float32).reshape(-1, 1)
+            labels_i32 = labels.astype(np.int32, copy=False)
+            mapped_list = [self._class_map.get(int(v), int(v)) for v in labels_i32.tolist()]
+            cls_arr = np.array(mapped_list, dtype=np.float32).reshape(-1, 1)
 
             # Convert xywh (top-left) -> xywh (center)
             # bboxes_xywh is normalized already
@@ -69,7 +72,7 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
             bboxes_arr = np.stack([cx, cy, bboxes_xywh[:, 2], bboxes_xywh[:, 3]], axis=1).astype(np.float32)
 
             # Build (N,K,3) with visibilities
-            if vis is None:
+            if vis is None or (hasattr(vis, "size") and vis.size == 0):
                 vis_arr = np.ones((kxy.shape[0], kxy.shape[1], 1), dtype=np.float32)
             else:
                 vis_arr = vis.astype(np.float32, copy=False).reshape(kxy.shape[0], kxy.shape[1], 1)
