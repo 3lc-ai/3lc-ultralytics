@@ -100,6 +100,7 @@ def check_tlc_dataset(  # noqa: C901
 
     else:
         # LOGGER.info(f"{TLC_COLORSTR}Using data directly from tables")
+        tables = tables.copy()
         _check_tables(tables)
 
         for key, table in tables.items():
