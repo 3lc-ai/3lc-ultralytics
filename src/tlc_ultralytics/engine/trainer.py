@@ -115,7 +115,7 @@ class TLCTrainerMixin(BaseTrainer):
             {
                 "run_url": self._run.url.to_str(),
                 "settings": self._settings.to_dict(),
-                "data": self.args.data if not self._tables else "",
+                "data": self.args.data,
                 "tables": self._tables if self._tables else None,
             }
         )
