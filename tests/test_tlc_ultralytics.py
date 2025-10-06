@@ -169,6 +169,15 @@ def test_training(task) -> None:
 
     assert results_ultralytics.names == results_3lc.names, "Results validation names"
 
+    # Ensure the trainer can be serialized
+    trainer_serialized = model_3lc.trainer._serialize_state()
+    assert isinstance(trainer_serialized, str), "Trainer serialization failed"
+    trainer_json_content = json.loads(trainer_serialized)
+    assert trainer_json_content["run_url"] == model_3lc.trainer._run.url.to_str(), "Run URL mismatch"
+    assert trainer_json_content["settings"] == model_3lc.trainer._settings.to_dict(), "Settings mismatch"
+    assert trainer_json_content["data"] == model_3lc.trainer.args.data, "Data mismatch"
+    assert trainer_json_content["tables"] == model_3lc.trainer._tables, "Tables mismatch"
+
     # Get 3LC run and inspect the results
     run = _get_run_from_settings(settings)
 
