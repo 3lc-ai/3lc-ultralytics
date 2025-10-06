@@ -1279,6 +1279,7 @@ def test_settings_serialization() -> None:
     assert settings_from_dict.run_name == settings.run_name
     assert settings_from_dict.image_embeddings_reducer == settings.image_embeddings_reducer
 
+
 # HELPERS
 
 
