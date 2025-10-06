@@ -84,8 +84,8 @@ class TLCTrainerMixin(BaseTrainer):
 
             self._run = tlc.Run.from_url(data["run_url"])
             self._settings = Settings(**data["settings"])
-            self._tables = data["tables"] if "tables" in data else None
-            self.args.data = data["data"] if "data" in data else ""
+            self._tables = data.get("tables", None)
+            overrides["data"] = data.get("data", "")
 
         super().__init__(cfg, overrides, _callbacks)
 
