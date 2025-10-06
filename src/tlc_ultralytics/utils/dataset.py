@@ -191,7 +191,9 @@ def check_tlc_dataset(  # noqa: C901
         triangle_attributes = tlc.KeypointHelper.get_triangle_attributes_from_table(
             tables[first_split], label_column_name
         )
-        oks_sigmas = tlc.KeypointHelper.get_oks_sigmas_from_table(tables[first_split], label_column_name)
+        oks_sigmas = (
+            tlc.KeypointHelper.get_oks_sigmas_from_table(tables[first_split], label_column_name) or settings.oks_sigmas
+        )
         points = tlc.KeypointHelper.get_points_from_table(tables[first_split], label_column_name)
     else:
         kpt_shape = [17, 3]  # yolo default

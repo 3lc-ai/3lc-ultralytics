@@ -5,8 +5,8 @@ from typing import Any
 import numpy as np
 import tlc
 import torch
+from tlc.client.data_format import Keypoints2DInstances
 from tlc.core.builtins.constants import KEYPOINTS_2D_PREDICTED
-from tlc.client.data_format import Keypoints2DRowBuilder
 from tlc.core.builtins.schemas import Keypoints2DSchema
 from ultralytics.models.yolo.pose.val import PoseValidator
 from ultralytics.utils import ops
@@ -69,7 +69,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             triangles=self.data.get("triangles"),
             triangle_attributes=self.data.get("triangle_attributes"),
             include_per_object_confidences=True,
-            include_per_point_confidences=True,
+            include_per_point_confidences=self.kpt_shape[1] == 3,
             writable=False,
         )
 
@@ -80,7 +80,12 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         predicted = []
 
         for i, pred in enumerate(preds):
-            predicted_keypoints, predicted_confidences, predicted_classes, predicted_bboxes = (
+            (
+                predicted_keypoints,
+                predicted_confidences,
+                predicted_classes,
+                predicted_bboxes,
+            ) = (
                 pred["keypoints"].clone(),
                 pred["conf"].clone(),
                 pred["cls"].clone(),
@@ -89,7 +94,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             h, w = batch["ori_shape"][i]
 
             if len(pred) == 0:
-                builder = Keypoints2DRowBuilder(image_height=int(h), image_width=int(w))
+                builder = Keypoints2DInstances.create_empty(image_height=int(h), image_width=int(w))
                 predicted.append(builder.to_row())
                 continue
 
@@ -106,17 +111,21 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             scaled_bboxes = ops.scale_boxes(resized_shape, predicted_bboxes, ori_shape, ratio_pad)
             scaled_keypoints = ops.scale_coords(resized_shape, predicted_keypoints, ori_shape, ratio_pad)
 
-            builder = Keypoints2DRowBuilder(image_height=int(h), image_width=int(w))
+            builder = Keypoints2DInstances.create_empty(image_height=int(h), image_width=int(w))
             for j in range(len(predicted_keypoints)):
                 predicted_kpts = scaled_keypoints[j]
                 predicted_bbox = scaled_bboxes[j].cpu().numpy().astype(np.float32)
                 kxy = predicted_kpts[:, 0:2].cpu().numpy().astype(np.float32)
-                kconf = predicted_kpts[:, 2].cpu().numpy().astype(np.float32)
+                kconf = (
+                    predicted_kpts[:, 2].cpu().numpy().astype(np.float32).tolist()
+                    if predicted_kpts.shape[1] == 3
+                    else None
+                )
                 builder.add_instance(
                     keypoints=kxy,
                     bbox=predicted_bbox.tolist(),
                     label=int(predicted_classes[j]),
-                    confidence=kconf.tolist(),
+                    confidence=kconf,
                     normalized=False,
                     bbox_format="xyxy",
                     instance_confidence=float(predicted_confidences[j]),
