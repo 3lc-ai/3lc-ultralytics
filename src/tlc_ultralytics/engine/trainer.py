@@ -70,7 +70,7 @@ class TLCTrainerMixin(BaseTrainer):
             else:
                 self._tables = None
 
-        else: # DDP worker nodes
+        else:  # DDP worker nodes
             try:
                 data = json.loads(overrides["data"])
             except json.JSONDecodeError as e:
@@ -100,8 +100,7 @@ class TLCTrainerMixin(BaseTrainer):
             self._print_metrics_collection_epochs()
 
     def train(self):
-        """Override the train method to use custom generate_ddp_command function to serialize 3LC data in data argument.
-        """
+        """Override the train method to use custom generate_ddp_command function to serialize 3LC data in data argument."""
         ultralytics.engine.trainer.generate_ddp_command = generate_ddp_command
         super().train()
         ultralytics.engine.trainer.generate_ddp_command = ultralytics.utils.dist.generate_ddp_command
@@ -127,18 +126,14 @@ class TLCTrainerMixin(BaseTrainer):
             self._settings.run_description if self._settings.run_description else DEFAULT_TRAIN_RUN_DESCRIPTION
         )
 
-        project_name = (
-            self._settings.project_name if self._settings.project_name else self.data["train"].project_name
-        )
+        project_name = self._settings.project_name if self._settings.project_name else self.data["train"].project_name
         self._run = tlc.init(
             project_name=project_name,
             description=description,
             run_name=self._settings.run_name,
         )
 
-        LOGGER.info(
-            f"{TLC_COLORSTR}Created run named '{self._run.url.parts[-1]}' in project {self._run.project_name}."
-        )
+        LOGGER.info(f"{TLC_COLORSTR}Created run named '{self._run.url.parts[-1]}' in project {self._run.project_name}.")
 
     @staticmethod
     def _handle_tables_argument(tables: dict[str, tlc.Table | str | Path | tlc.Url]) -> dict[str, str]:
