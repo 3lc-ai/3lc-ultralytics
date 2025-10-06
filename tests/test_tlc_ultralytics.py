@@ -169,16 +169,6 @@ def test_training(task) -> None:
 
     assert results_ultralytics.names == results_3lc.names, "Results validation names"
 
-    # Check that the settings were saved
-    settings_loaded = Settings.from_yaml(results_3lc.save_dir / "settings_3lc.yaml")
-    assert settings_loaded.project_name == settings.project_name, "Project name mismatch"
-
-    run_state_file_path = results_3lc.save_dir / "run.json"
-    assert run_state_file_path.exists(), "Run state file not found"
-    with open(run_state_file_path) as f:
-        run_state = json.load(f)
-    assert run_state["run_url"] == results_3lc.run_url.to_str(), "Run state mismatch"
-
     # Get 3LC run and inspect the results
     run = _get_run_from_settings(settings)
 
@@ -1257,7 +1247,7 @@ def test_dataset_cache(task) -> None:
 
 
 def test_bad_arguments() -> None:
-    """Test that bad arguments are caught early and an error is raised gracefully"""
+    """Test that bad arguments are caught early and an error is raised"""
     model = TLCYOLO(TASK2MODEL["detect"])
 
     train_table = tlc.Table.from_dict(

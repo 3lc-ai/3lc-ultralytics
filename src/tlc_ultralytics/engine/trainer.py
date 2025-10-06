@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import tlc
+import ultralytics
 from ultralytics.engine.trainer import BaseTrainer
-from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK, YAML
+from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
 from ultralytics.utils.metrics import smooth
 
 from tlc_ultralytics.constants import (
     DEFAULT_TRAIN_RUN_DESCRIPTION,
-    RUN_FILE_NAME,
-    SETTINGS_FILE_NAME,
-    TABLES_FILE_NAME,
     TLC_COLORSTR,
 )
 from tlc_ultralytics.engine.utils import (
@@ -23,6 +20,7 @@ from tlc_ultralytics.engine.utils import (
 )
 from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import reduce_embeddings
+from tlc_ultralytics.utils.generate_ddp import generate_ddp_command
 
 
 class TLCTrainerMixin(BaseTrainer):
@@ -33,103 +31,129 @@ class TLCTrainerMixin(BaseTrainer):
 
     def __init__(self, cfg=DEFAULT_CFG, overrides=None, _callbacks=None):
         LOGGER.info("Using 3LC Trainer 🌟")
-        self._settings = overrides.pop("settings", Settings())
 
-        self._settings.image_column_name = _handle_deprecated_column_name(
-            overrides.pop("image_column_name", None),
-            self._settings.image_column_name,
-            self._default_image_column_name,
-        )
-        self._settings.label_column_name = _handle_deprecated_column_name(
-            overrides.pop("label_column_name", None),
-            self._settings.label_column_name,
-            self._default_label_column_name,
-        )
+        if RANK == -1:
+            # Settings
+            self._settings = overrides.pop("settings", Settings())
 
-        self._settings.label_column_name = _complete_label_column_name(
-            self._settings.label_column_name,
-            self._default_label_column_name,
-        )
-
-        self._settings.verify(training=True)
-
-        assert "data" in overrides or "tables" in overrides, (
-            "You must provide either a data path or tables to train with 3LC."
-        )
-
-        if "data" in overrides and not isinstance(overrides["data"], (str, Path)):
-            msg = (
-                "`data` must be a string or pathlib.Path. "
-                "If you are using `tlc.Table` objects, provide `tables` instead."
+            self._settings.image_column_name = _handle_deprecated_column_name(
+                overrides.pop("image_column_name", None),
+                self._settings.image_column_name,
+                self._default_image_column_name,
             )
-            raise ValueError(msg)
+            self._settings.label_column_name = _handle_deprecated_column_name(
+                overrides.pop("label_column_name", None),
+                self._settings.label_column_name,
+                self._default_label_column_name,
+            )
 
-        self._handle_tables_argument(overrides.pop("tables", None))
+            self._settings.label_column_name = _complete_label_column_name(
+                self._settings.label_column_name,
+                self._default_label_column_name,
+            )
+
+            self._settings.verify(training=True)
+
+            # Tables / data
+            if "data" not in overrides and "tables" not in overrides:
+                msg = "You must provide either `data` or `tables` to train with 3LC."
+                raise ValueError(msg)
+
+            if "data" in overrides and not isinstance(overrides["data"], (str, Path)):
+                msg = "`data` must be a string. If you are passing tables directly, use the `tables` argument instead."
+                raise ValueError(msg)
+
+            # Ensure tables is a dictionary of URLs to the table urls
+            tables = overrides.pop("tables", None)
+            if tables:
+                self._tables = self._handle_tables_argument(tables)
+            else:
+                self._tables = None
+
+        else: # DDP worker nodes
+            try:
+                data = json.loads(overrides["data"])
+            except json.JSONDecodeError as e:
+                msg = f"RANK {RANK} expected `data` to be a JSON string with run url, settings and tables."
+                raise ValueError(msg) from e
+
+            for key in ("run_url", "settings"):
+                if key not in data:
+                    msg = f"RANK {RANK} expected `data` to contain a `{key}` key."
+                    raise ValueError(msg)
+
+            self._run = tlc.Run.from_url(data["run_url"])
+            self._settings = Settings(**data["settings"])
+            self._tables = data["tables"] if "tables" in data else None
+            self.args.data = data["data"] if "data" in data else ""
 
         super().__init__(cfg, overrides, _callbacks)
 
-        # Handle case where DDP training is used - make settings available to all processes
-        self._write_load_settings()
-
+        self._metrics_collection_epochs = set(self._settings.get_metrics_collection_epochs(self.epochs))
         self._train_validator = None
         self._train_equals_val_result = None
-        self._metrics_collection_epochs = set(self._settings.get_metrics_collection_epochs(self.epochs))
 
         if RANK == -1:
-            # Create a 3LC run
-            description = (
-                self._settings.run_description if self._settings.run_description else DEFAULT_TRAIN_RUN_DESCRIPTION
-            )
-
-            project_name = (
-                self._settings.project_name if self._settings.project_name else self.data["train"].project_name
-            )
-            self._run = tlc.init(
-                project_name=project_name,
-                description=description,
-                run_name=self._settings.run_name,
-            )
-            self._save_run_state()
-
-            LOGGER.info(
-                f"{TLC_COLORSTR}Created run named '{self._run.url.parts[-1]}' in project {self._run.project_name}."
-            )
-
-            # Log parameters to 3LC
+            self._create_run()
             self._log_3lc_parameters()
             self._run.set_status_running()
             self._print_metrics_collection_epochs()
 
-        else:
-            self._load_run_state()
-            LOGGER.info(f"{TLC_COLORSTR}DDP Rank {RANK}: Using run from {self._run.url.to_str()}")
+    def train(self):
+        """Override the train method to use custom generate_ddp_command function to serialize 3LC data in data argument.
+        """
+        ultralytics.engine.trainer.generate_ddp_command = generate_ddp_command
+        super().train()
+        ultralytics.engine.trainer.generate_ddp_command = ultralytics.utils.dist.generate_ddp_command
 
-    def _save_run_state(self):
-        """Save the run state to the 3LC run directory."""
-        run_state_file_path = self._3lc_run_dir / RUN_FILE_NAME
-        with open(run_state_file_path, "w") as f:
-            json.dump({"run_url": self._run.url.to_str()}, f)
+    def _serialize_state(self) -> str:
+        """Serialize the run url, settings and tables to a JSON string.
 
-    def _load_run_state(self):
-        """Load the run state from the 3LC run directory."""
-        run_state_file_path = self._3lc_run_dir / RUN_FILE_NAME
-        with open(run_state_file_path) as f:
-            run_state = json.load(f)
-        self._run = tlc.Run.from_url(run_state["run_url"])
+        :returns: A JSON string with the run url, settings and table URLs.
+        """
+        return json.dumps(
+            {
+                "run_url": self._run.url.to_str(),
+                "settings": self._settings.to_dict(),
+                "data": self.args.data if not self._tables else "",
+                "tables": self._tables if self._tables else None,
+            }
+        )
 
-    def _handle_tables_argument(self, tables: dict[str, tlc.Table | str | Path | tlc.Url] | None):
-        """Handle the tables argument."""
-        if tables:
-            self._tables = {}
-            for k, v in tables.items():
-                if isinstance(v, tlc.Table):
-                    self._tables[k] = v.url.to_str()
-                elif isinstance(v, (str, Path, tlc.Url)):
-                    self._tables[k] = tlc.Url(v).to_str()
-                else:
-                    raise ValueError(f"Invalid type {type(v)} for split {k} provided through `tables`.")
-        else:
-            self._tables = None
+    def _create_run(self) -> None:
+        """Create a run."""
+        # Create a 3LC run
+        description = (
+            self._settings.run_description if self._settings.run_description else DEFAULT_TRAIN_RUN_DESCRIPTION
+        )
+
+        project_name = (
+            self._settings.project_name if self._settings.project_name else self.data["train"].project_name
+        )
+        self._run = tlc.init(
+            project_name=project_name,
+            description=description,
+            run_name=self._settings.run_name,
+        )
+
+        LOGGER.info(
+            f"{TLC_COLORSTR}Created run named '{self._run.url.parts[-1]}' in project {self._run.project_name}."
+        )
+
+    @staticmethod
+    def _handle_tables_argument(tables: dict[str, tlc.Table | str | Path | tlc.Url]) -> dict[str, str]:
+        """Handle the tables argument and return it as a dictionary of URLs (as strings) to the Tables."""
+        table_urls = {}
+
+        for k, v in tables.items():
+            if isinstance(v, tlc.Table):
+                table_urls[k] = v.url.to_str()
+            elif isinstance(v, (str, Path, tlc.Url)):
+                table_urls[k] = tlc.Url(v).to_str()
+            else:
+                raise ValueError(f"Invalid type {type(v)} for split {k} of tables provided directly.")
+
+        return table_urls
 
     def _log_3lc_parameters(self):
         """Log various data as parameters to the tlc.Run."""
@@ -167,58 +191,6 @@ class TLCTrainerMixin(BaseTrainer):
         LOGGER.info(f"{TLC_COLORSTR}{message}")
 
     def get_dataset(self):
-        """Override get_dataset to write Table Urls to a 3LC YAML file in the run directory, and set the data
-        argument to the path to this YAML file to make it available to DDP processes.
-
-        It is implemented here because it requires access to the run directory, which is set in the parent __init__,
-        and before datasets are created.
-        """
-
-        tables_yaml_file_path = (self._3lc_run_dir / TABLES_FILE_NAME).absolute()
-
-        # If tables is non-empty
-        if self._tables and RANK == -1:
-            YAML.save(tables_yaml_file_path.as_posix(), self._tables)
-            self.args.data = f"3LC://{tables_yaml_file_path.as_posix()}"
-
-        return self._get_dataset()
-
-    @property
-    def _3lc_run_dir(self) -> Path:
-        if not hasattr(self, "save_dir"):
-            raise ValueError("save_dir is not set")
-
-        run_dir = Path(self.save_dir.parent / (self.save_dir.name + "_3lc"))
-
-        run_dir.mkdir(parents=True, exist_ok=True)
-
-        return run_dir
-
-    def _move_3lc_run_dir(self):
-        """Move the 3LC specific run artifacts to the Ultralytics run directory."""
-        source_dir = self._3lc_run_dir
-        target_dir = Path(self.save_dir)
-
-        for file in source_dir.glob("*"):
-            shutil.move(file, target_dir / file.name)
-
-        # Verify source dir is empty
-        assert not list(source_dir.glob("*")), "Source directory is not empty"
-        source_dir.rmdir()
-
-    def _write_load_settings(self):
-        """Make settings available to all processes through the run directory.
-
-        For the main node, the settings are written to the temporary 3lc run directory.
-        For launched DDP processes, the settings are loaded from the temporary 3lc run directory.
-        """
-        settings_yaml_file_path = self._3lc_run_dir / SETTINGS_FILE_NAME
-        if RANK == -1:
-            self._settings.to_yaml(settings_yaml_file_path)
-        else:
-            self._settings = Settings.from_yaml(settings_yaml_file_path)
-
-    def _get_dataset(self):
         raise NotImplementedError("Subclasses must implement this method.")
 
     def build_dataset(self, table, mode="train", batch=None):
@@ -298,7 +270,6 @@ class TLCTrainerMixin(BaseTrainer):
                     foreign_table_url=foreign_table_url,
                     reducer_args=self._settings.image_embeddings_reducer_args,
                 )
-            self._move_3lc_run_dir()
             self._run.set_status_completed()
 
     def _save_confidence_metrics(self):

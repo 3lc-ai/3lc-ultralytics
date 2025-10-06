@@ -149,11 +149,7 @@ class Settings:
 
         :param yaml_file_path: The path to the YAML file to save the settings to.
         """
-        content = {
-            k: v
-            for k, v in self.__dict__.items()
-            if k not in ("metrics_collection_function", "metrics_schemas") and not k.startswith("_")
-        }
+        content = self._get_dict_to_serialize()
         YAML.save(yaml_file_path.as_posix(), content)
 
     @classmethod
@@ -164,6 +160,24 @@ class Settings:
         :returns: A Settings instance.
         """
         return cls(**YAML.load(yaml_file_path.as_posix()))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the settings to a dictionary.
+
+        :returns: A dictionary with the settings.
+        """
+        return self._get_dict_to_serialize()
+
+    def _get_dict_to_serialize(self) -> dict[str, Any]:
+        """Get the dictionary to serialize.
+
+        :returns: A dictionary with the settings.
+        """
+        return {
+            k: v
+            for k, v in self.__dict__.items()
+            if k not in ("metrics_collection_function", "metrics_schemas") and not k.startswith("_")
+        }
 
     def verify(self, training: bool = True) -> None:
         """Verify that the settings are valid.

@@ -103,7 +103,7 @@ tables = {
     "train": my_train_table, 
     "val": my_val_table
 }
-model.train(tables=tables)
+model.train(tables=tables, ...)
 
 # Using table URLs
 tables = {
@@ -113,7 +113,7 @@ tables = {
 model.train(tables=tables, ...)
 ```
 
-When `tables` is provided, any value of `data` is ignored. In training, the table for the key `"train"` is used for training, and `"val"` or `"test"` for validation (val takes precedence).
+In training, when a dictionary of tables is passed to `tables`, the table for the key `"train"` is used for training, and `"val"` or `"test"` for validation (val takes precedence).
 
 </details>
 

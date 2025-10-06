@@ -25,7 +25,7 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
     _default_image_column_name = IMAGE_COLUMN_NAME
     _default_label_column_name = DETECTION_LABEL_COLUMN_NAME
 
-    def _get_dataset(self):
+    def get_dataset(self):
         # Parse yaml and create tables
         self.data = tlc_check_det_dataset(
             self.args.data,
