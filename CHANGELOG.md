@@ -6,6 +6,19 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Changed
+
+- Increase the upper bound of the `3lc` dependency from `2.16.3` to `2.17.0` ([#37](https://github.com/3lc-ai/3lc-ultralytics/pull/37)).
+- Change the error message when a `.ndjson` path is passed through `data` to also suggest using `tlc.Table.from_yolo_ndjson` ([#37](https://github.com/3lc-ai/3lc-ultralytics/pull/37)).
+
+### Fixed
+
+- Fix a problem causing Distributed Data Parallel training to fail when passing `tables` directly ([#36](https://github.com/3lc-ai/3lc-ultralytics/pull/36)).
+
+### Deprecated
+
+- The arguments `image_column_name` and `label_column_name` on the model methods `train`, `val` and `collect` have been deprecated in favor of `image_column_name` and `label_column_name` in `Settings` ([#36](https://github.com/3lc-ai/3lc-ultralytics/pull/36)).
+
 ## [0.1.4] - 2025-09-25
 
 ### Added
