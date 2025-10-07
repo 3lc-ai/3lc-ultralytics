@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.1.5] - 2025-10-07
+
 ### Changed
 
 - Increase the upper bound of the `3lc` dependency from `2.16.3` to `2.17.0` ([#37](https://github.com/3lc-ai/3lc-ultralytics/pull/37)).
