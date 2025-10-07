@@ -39,7 +39,9 @@ def _restore_random_state():
     random.setstate(state)
 
 
-def _handle_deprecated_column_name(arg_value: str | None, settings_value: str | None, default_value: str) -> str:
+def _handle_deprecated_column_name(
+    arg_value: str | None, settings_value: str | None, default_value: str, column_name: str
+) -> str:
     """Handling for when a column name is passed as an argument directly, instead of through a `Settings` object.
     Used in the `trainer` and `validator` classes. A warning is logged if the column name is passed as an argument.
 
@@ -55,13 +57,14 @@ def _handle_deprecated_column_name(arg_value: str | None, settings_value: str | 
     """
     if arg_value is not None:
         msg = (
-            f"Passing `{arg_value}` as an argument is deprecated. Provide `{arg_value}` to a `Settings` object instead."
+            f"Passing `{column_name}` as an argument is deprecated. Provide `{column_name}` to a `Settings` object "
+            "instead."
         )
         LOGGER.warning(f"{TLC_COLORSTR}{msg}")
 
         if settings_value is not None:
             msg = (
-                f"`{arg_value}` is both set in the `Settings` object and provided directly. Using the one passed "
+                f"`{column_name}` is both set in the `Settings` object and provided directly. Using the one passed "
                 f"directly: '{arg_value}'."
             )
             LOGGER.warning(f"{TLC_COLORSTR}{msg}")

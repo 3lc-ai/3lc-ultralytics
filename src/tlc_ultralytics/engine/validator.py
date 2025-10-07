@@ -54,11 +54,13 @@ class TLCValidatorMixin(BaseValidator):
             image_column_name,
             self._settings.image_column_name,
             self._default_image_column_name,
+            column_name="image_column_name",
         )
         self._settings.label_column_name = _handle_deprecated_column_name(
             label_column_name,
             self._settings.label_column_name,
             self._default_label_column_name,
+            column_name="label_column_name",
         )
         self._settings.label_column_name = _complete_label_column_name(
             self._settings.label_column_name,
