@@ -17,7 +17,7 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Deprecated
 
-- The arguments `image_column_name` and `label_column_name` on the model methods `train`, `val` and `collect` have been deprecated in favor of `image_column_name` and `label_column_name` in `Settings` ([#36](https://github.com/3lc-ai/3lc-ultralytics/pull/36)).
+- The parameters `image_column_name` and `label_column_name` on the model methods `train`, `val` and `collect` have been deprecated in favor of `image_column_name` and `label_column_name` in `Settings` ([#36](https://github.com/3lc-ai/3lc-ultralytics/pull/36)).
 
 ## [0.1.4] - 2025-09-25
 
