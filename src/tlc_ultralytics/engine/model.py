@@ -99,8 +99,6 @@ class YOLO(YOLOBase):
         if settings is None:
             settings = Settings()
 
-        settings.verify(training=False)
-
         if not settings.run_description:
             settings.run_description = DEFAULT_COLLECT_RUN_DESCRIPTION
 

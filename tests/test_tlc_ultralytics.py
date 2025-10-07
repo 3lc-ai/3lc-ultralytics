@@ -169,6 +169,15 @@ def test_training(task) -> None:
 
     assert results_ultralytics.names == results_3lc.names, "Results validation names"
 
+    # Ensure the trainer can be serialized
+    trainer_serialized = model_3lc.trainer._serialize_state()
+    assert isinstance(trainer_serialized, str), "Trainer serialization failed"
+    trainer_json_content = json.loads(trainer_serialized)
+    assert trainer_json_content["run_url"] == model_3lc.trainer._run.url.to_str(), "Run URL mismatch"
+    assert trainer_json_content["settings"] == model_3lc.trainer._settings.to_dict(), "Settings mismatch"
+    assert trainer_json_content["data"] == model_3lc.trainer.args.data, "Data mismatch"
+    assert trainer_json_content["tables"] == model_3lc.trainer._tables, "Tables mismatch"
+
     # Get 3LC run and inspect the results
     run = _get_run_from_settings(settings)
 
@@ -1247,7 +1256,7 @@ def test_dataset_cache(task) -> None:
 
 
 def test_bad_arguments() -> None:
-    """Test that bad arguments are caught early and an error is raised gracefully"""
+    """Test that bad arguments are caught early and an error is raised"""
     model = TLCYOLO(TASK2MODEL["detect"])
 
     train_table = tlc.Table.from_dict(
@@ -1260,6 +1269,24 @@ def test_bad_arguments() -> None:
     # Data is used instead of tables
     with pytest.raises(ValueError):
         model.train(data={"train": train_table, "val": val_table})
+
+
+def test_settings_serialization() -> None:
+    settings = Settings(
+        project_name="test_settings_serialization",
+        run_name="test_settings_serialization",
+        image_embeddings_reducer="umap",
+        image_embeddings_dim=2,
+        exclude_zero_weight_training=True,
+        metrics_collection_function=lambda x, y: {"test_metric": [1] * len(x)},
+    )
+
+    settings_dict = settings.to_dict()
+    settings_from_dict = Settings(**settings_dict)
+
+    assert settings_from_dict.project_name == settings.project_name
+    assert settings_from_dict.run_name == settings.run_name
+    assert settings_from_dict.image_embeddings_reducer == settings.image_embeddings_reducer
 
 
 # HELPERS
@@ -1373,7 +1400,7 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
 
     yolo_dataset_file = _create_no_predictions_data_yaml(data_set_path)
 
-    table_train = tlc.Table.from_yolo(yolo_dataset_file, "train", if_exists="overwrite")
-    table_val = tlc.Table.from_yolo(yolo_dataset_file, "val", if_exists="overwrite")
+    table_train = tlc.Table.from_yolo(yolo_dataset_file, "train", if_exists="overwrite", dataset_name="train")
+    table_val = tlc.Table.from_yolo(yolo_dataset_file, "val", if_exists="overwrite", dataset_name="val")
 
     return yolo_dataset_file, (table_train, table_val)

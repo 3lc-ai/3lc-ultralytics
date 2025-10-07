@@ -26,8 +26,8 @@ class TLCClassificationTrainer(TLCTrainerMixin, yolo.classify.ClassificationTrai
         self.data = tlc_check_cls_dataset(
             self.args.data,
             self._tables,
-            self._image_column_name,
-            self._label_column_name,
+            self._settings.image_column_name,
+            self._settings.label_column_name,
             project_name=self._settings.project_name,
             splits=("train", "val"),
         )
@@ -35,8 +35,8 @@ class TLCClassificationTrainer(TLCTrainerMixin, yolo.classify.ClassificationTrai
             data_test = tlc_check_cls_dataset(
                 self.args.data,
                 self._tables,
-                self._image_column_name,
-                self._label_column_name,
+                self._settings.image_column_name,
+                self._settings.label_column_name,
                 project_name=self._settings.project_name,
                 splits=("test",),
             )
@@ -52,8 +52,8 @@ class TLCClassificationTrainer(TLCTrainerMixin, yolo.classify.ClassificationTrai
             args=self.args,
             augment=mode == "train",
             prefix=mode,
-            image_column_name=self._image_column_name,
-            label_column_name=self._label_column_name,
+            image_column_name=self._settings.image_column_name,
+            label_column_name=self._settings.label_column_name,
             exclude_zero=exclude_zero,
             class_map=self.data["3lc_class_to_range"],
         )
@@ -66,8 +66,6 @@ class TLCClassificationTrainer(TLCTrainerMixin, yolo.classify.ClassificationTrai
             self.save_dir,
             _callbacks=self.callbacks,
             run=self._run,
-            image_column_name=self._image_column_name,
-            label_column_name=self._label_column_name,
             settings=self._settings,
             training=True,
         )
