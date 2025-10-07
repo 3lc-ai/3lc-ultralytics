@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from tlc.core.builtins.constants import IMAGE, KEYPOINTS_2D
 from tlc.client.data_format import Keypoints2DInstances
+from tlc.core.builtins.constants import IMAGE, KEYPOINTS_2D
 
 from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
 
@@ -43,40 +43,44 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
         # Desired fixed K from dataset config (default 17) for empty-case shapes
         kpt_shape = self.data.get("kpt_shape")
 
-        # Parse using the shared dataclass, export normalized arrays
         instances = Keypoints2DInstances.from_row(label_column_value)
-        arrays = instances.as_numpy(normalized=True, bbox_format="xywh")
 
-        labels = arrays.get("labels")
-        bboxes_xywh = arrays.get("bboxes")  # top-left x,y,w,h normalized
-        kxy = arrays.get("keypoints")  # (N,K,2) normalized
-        vis = arrays.get("visibilities")
+        # Image dimensions and raw arrays
+        H = float(instances.image_height)
+        W = float(instances.image_width)
+        labels = instances.instance_labels.astype(np.int32, copy=False)  # (N,)
+        bboxes_xyxy = instances.instance_bbs.astype(np.float32, copy=False)  # (N,4) [x_min, y_min, x_max, y_max]
+        kxy = instances.keypoints.astype(np.float32, copy=False)  # (N,K,2)
+        vis = instances.keypoint_visibilities  # (N,K) or None
 
-        def _is_empty(a: Any) -> bool:
-            return a is None or (hasattr(a, "size") and getattr(a, "size") == 0)
+        # Normalize keypoints to [0,1] (vectorized)
+        kxy[..., 0] /= W
+        kxy[..., 1] /= H
 
-        if _is_empty(labels) or _is_empty(bboxes_xywh) or _is_empty(kxy):
-            # Fallback empty outputs
+        # Vectorized: xyxy (abs) -> center-xywh (normalized)
+        xy_min = bboxes_xyxy[:, 0:2]
+        xy_max = bboxes_xyxy[:, 2:4]
+        wh_abs = xy_max - xy_min
+        ctr_abs = xy_min + 0.5 * wh_abs
+        scale = np.array([W, H], dtype=np.float32)
+        bboxes_arr = np.concatenate([(ctr_abs / scale), (wh_abs / scale)], axis=1).astype(np.float32)
+
+        # Handle empty vs non-empty in a straightforward way
+        if labels.size == 0:
+            K_cfg = int(kpt_shape[0]) if kpt_shape else (int(kxy.shape[1]) if kxy.shape[1] > 0 else 17)
             cls_arr = np.zeros((0, 1), dtype=np.float32)
             bboxes_arr = np.zeros((0, 4), dtype=np.float32)
-            kp_stack = np.zeros((0, kpt_shape[0], 3), dtype=np.float32)
+            kp_stack = np.zeros((0, K_cfg, 3), dtype=np.float32)
         else:
-            labels_i32 = labels.astype(np.int32, copy=False)
-            mapped_list = [self._class_map.get(int(v), int(v)) for v in labels_i32.tolist()]
-            cls_arr = np.array(mapped_list, dtype=np.float32).reshape(-1, 1)
-
-            # Convert xywh (top-left) -> xywh (center)
-            # bboxes_xywh is normalized already
-            cx = bboxes_xywh[:, 0] + bboxes_xywh[:, 2] / 2.0
-            cy = bboxes_xywh[:, 1] + bboxes_xywh[:, 3] / 2.0
-            bboxes_arr = np.stack([cx, cy, bboxes_xywh[:, 2], bboxes_xywh[:, 3]], axis=1).astype(np.float32)
+            mapped_list = [self._class_map.get(int(v), int(v)) for v in labels.tolist()]
+            cls_arr = np.asarray(mapped_list, dtype=np.float32).reshape(-1, 1)
 
             # Build (N,K,3) with visibilities
-            if vis is None or (hasattr(vis, "size") and vis.size == 0):
+            if vis is None:
                 vis_arr = np.ones((kxy.shape[0], kxy.shape[1], 1), dtype=np.float32)
             else:
                 vis_arr = vis.astype(np.float32, copy=False).reshape(kxy.shape[0], kxy.shape[1], 1)
-            kp_stack = np.concatenate([kxy.astype(np.float32, copy=False), vis_arr], axis=2)
+            kp_stack = np.concatenate([kxy, vis_arr], axis=2)
 
         return {
             "im_file": im_file,
