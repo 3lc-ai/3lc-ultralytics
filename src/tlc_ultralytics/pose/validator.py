@@ -60,7 +60,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         predicted_pose_schema = Keypoints2DSchema(
-            classes=[self.data["names"][0]],
+            classes=self.data["names"],
             num_keypoints=self.kpt_shape[0],
             points=self.data.get("points"),
             point_attributes=self.data.get("keypoint_attributes"),
