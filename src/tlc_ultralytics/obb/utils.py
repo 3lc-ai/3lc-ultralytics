@@ -40,22 +40,20 @@ def check_obb_table(table: tlc.Table, image_column_name: str, label_column_name:
     """
     row_schema = table.row_schema
     label_column_name = label_column_name.split(".")[0]
-    assert image_column_name in row_schema, f"Image column '{image_column_name}' not found."
-    assert label_column_name in row_schema, f"Label column '{label_column_name}' not found."
-
-    assert INSTANCES in row_schema[label_column_name], f"Label column '{label_column_name}' missing instances."
-    assert ORIENTED_BBS_2D in row_schema[label_column_name][INSTANCES], (
-        f"Label column '{label_column_name}' missing oriented bbs 2d."
-    )
-    assert INSTANCES_ADDITIONAL_DATA in row_schema[label_column_name], (
-        f"Label column '{label_column_name}' missing instances additional data."
-    )
-    assert LABEL in row_schema[label_column_name][INSTANCES_ADDITIONAL_DATA], (
-        f"Label column '{label_column_name}' missing label."
-    )
-
     try:
-        assert True
+        assert image_column_name in row_schema, f"Image column '{image_column_name}' not found."
+        assert label_column_name in row_schema, f"Label column '{label_column_name}' not found."
+
+        assert INSTANCES in row_schema[label_column_name], f"Label column '{label_column_name}' missing instances."
+        assert ORIENTED_BBS_2D in row_schema[label_column_name][INSTANCES], (
+            f"Label column '{label_column_name}' missing oriented bbs 2d."
+        )
+        assert INSTANCES_ADDITIONAL_DATA in row_schema[label_column_name], (
+            f"Label column '{label_column_name}' missing instances additional data."
+        )
+        assert LABEL in row_schema[label_column_name][INSTANCES_ADDITIONAL_DATA], (
+            f"Label column '{label_column_name}' missing label."
+        )
     except (AssertionError, ValueError) as e:
         msg = f"Data validation failed for {label_column_name} column in table with URL {table.url}. {e!s}"
         raise ValueError(msg) from e

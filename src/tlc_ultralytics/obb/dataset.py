@@ -106,6 +106,7 @@ class TLCOBBDataset(BaseTLCYOLODataset):
     def _get_label_from_row(self, im_file: str, row: Any, example_id: int) -> dict[str, Any]:
         label_root = self._label_column_name.split(".")[0]
         label_column_value = row[label_root]
+
         x_min = label_column_value[X_MIN]
         y_min = label_column_value[Y_MIN]
         x_max = label_column_value[X_MAX]
