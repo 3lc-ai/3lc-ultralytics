@@ -93,13 +93,17 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             )
             h, w = batch["ori_shape"][i]
 
-            if len(pred) == 0:
-                builder = Keypoints2DInstances.create_empty(image_height=int(h), image_width=int(w))
+            # Filter out low confidence predictions
+            mask = predicted_confidences > self._settings.conf_thres
+            if not mask.any():
+                builder = Keypoints2DInstances.create_empty(
+                    image_height=int(h),
+                    image_width=int(w),
+                    include_instance_confidences=True,
+                )
                 predicted.append(builder.to_row())
                 continue
 
-            # Filter out low confidence predictions
-            mask = predicted_confidences > self._settings.conf_thres
             predicted_keypoints = predicted_keypoints[mask]
             predicted_confidences = predicted_confidences[mask].tolist()
             predicted_classes = predicted_classes[mask].cpu().numpy().astype(np.int32).tolist()
