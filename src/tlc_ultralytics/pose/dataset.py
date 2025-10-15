@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from tlc.client.data_format import Keypoints2DInstances
 from tlc.core.builtins.constants import IMAGE, KEYPOINTS_2D
+from tlc.core.data_formats import Keypoints2DInstances
 
 from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
 

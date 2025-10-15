@@ -5,9 +5,9 @@ from typing import Any
 import numpy as np
 import tlc
 import torch
-from tlc.client.data_format import Keypoints2DInstances
 from tlc.core.builtins.constants import KEYPOINTS_2D_PREDICTED
 from tlc.core.builtins.schemas import Keypoints2DSchema
+from tlc.core.data_formats import Keypoints2DInstances
 from ultralytics.models.yolo.pose.val import PoseValidator
 from ultralytics.utils import ops
 
@@ -68,7 +68,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             line_attributes=self.data.get("line_attributes"),
             triangles=self.data.get("triangles"),
             triangle_attributes=self.data.get("triangle_attributes"),
-            include_per_object_confidences=True,
+            include_per_instance_confidences=True,
             include_per_point_confidences=self.kpt_shape[1] == 3,
             writable=False,
         )
@@ -115,7 +115,12 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             scaled_bboxes = ops.scale_boxes(resized_shape, predicted_bboxes, ori_shape, ratio_pad)
             scaled_keypoints = ops.scale_coords(resized_shape, predicted_keypoints, ori_shape, ratio_pad)
 
-            builder = Keypoints2DInstances.create_empty(image_height=int(h), image_width=int(w))
+            builder = Keypoints2DInstances.create_empty(
+                image_height=int(h),
+                image_width=int(w),
+                include_instance_confidences=True,
+            )
+
             for j in range(len(predicted_keypoints)):
                 predicted_kpts = scaled_keypoints[j]
                 predicted_bbox = scaled_bboxes[j].cpu().numpy().astype(np.float32)
