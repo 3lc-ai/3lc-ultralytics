@@ -4,7 +4,7 @@ from typing import Any, Callable, Literal
 
 import numpy as np
 import tlc
-from tlc.core.builtins.types.bounding_box import CenteredXYWHBoundingBox
+from tlc.core.data_formats.bounding_boxes import CenteredXYWHBoundingBox
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.data.utils import check_file_speeds, segments2boxes
 from ultralytics.utils import LOGGER, colorstr

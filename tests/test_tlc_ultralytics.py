@@ -15,6 +15,7 @@ import pytest
 import tlc
 from PIL import Image
 from testing_helpers import check_pose_table_and_metrics_tables, compare_dataset_values, plot_ultralytics
+from tlc.core.objects.tables.from_url.table_from_yolo import TableFromYolo
 from ultralytics.models.yolo import YOLO
 from ultralytics.models.yolo.detect import DetectionTrainer
 from ultralytics.models.yolo.obb import OBBTrainer
@@ -141,8 +142,24 @@ class CapturingHandler(logging.Handler):
         self.log_messages.append(self.format(record))
 
 
+def override_oks_sigmas(yaml_path: str) -> dict[str, str | int | dict[int, str | int] | list[str]]:
+    """Return coco8-pose.yaml contents overridden with the COCO oks_sigmas"""
+    from ultralytics.utils.metrics import OKS_SIGMA
+
+    return {
+        "train": "images/train",
+        "val": "images/val",
+        "test": None,
+        "kpt_shape": [17, 3],
+        "flip_idx": [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15],
+        "oks_sigmas": OKS_SIGMA.tolist(),
+        "names": {0: "person"},
+        "nc": 1,
+    }
+
+
 @pytest.mark.parametrize("task", ["detect", "segment", "pose", "obb"])
-def test_training(task) -> None:
+def test_training(task: str) -> None:
     # End-to-end test of training for detection, segmentation, pose, and obb
 
     # Capture ultralytics logger output specifically
@@ -185,7 +202,15 @@ def test_training(task) -> None:
 
     # Run 3LC training and capture logs
     model_3lc = TLCYOLO(TASK2MODEL[task])
-    results_3lc = model_3lc.train(**overrides, settings=settings)
+    if task == "pose":
+        with patch(
+            "tlc.core.objects.tables.from_url.table_from_yolo._TableFromYolo._load_yaml",
+            side_effect=override_oks_sigmas,
+        ) as mocked_method:
+            results_3lc = model_3lc.train(**overrides, settings=settings)
+            assert mocked_method.called
+    else:
+        results_3lc = model_3lc.train(**overrides, settings=settings)
 
     assert results_3lc, "Detection training failed"
 
@@ -206,7 +231,11 @@ def test_training(task) -> None:
     # Compare 3LC integration with ultralytics results
     # Segmentation results will be slightly different due to the 3lc mask storage format and conversion
     # back to polygons
-    atol = 0.1 if task == "segment" else 0
+    atol = 0.0
+    if task == "segment":
+        atol = 0.1
+    elif task == "pose":
+        atol = 0.1
     for k in results_ultralytics.results_dict.keys():
         assert np.isclose(results_ultralytics.results_dict[k], results_3lc.results_dict[k], atol=atol), (
             f"Results validation metrics 3LC different from Ultralytics for {k}"
@@ -1453,6 +1482,7 @@ def test_pose_flip_and_oks_overrides(mocker) -> None:
     """Verify that flip augmentation uses provided flip indices and loss uses provided OKS sigmas."""
     from ultralytics.data.augment import RandomFlip
     from ultralytics.utils.loss import KeypointLoss
+    from ultralytics.utils.metrics import kpt_iou
 
     from tlc_ultralytics.pose.loss import v8UnreducedPoseLoss
 
@@ -1461,13 +1491,14 @@ def test_pose_flip_and_oks_overrides(mocker) -> None:
     keypoint_loss_init_spy = mocker.spy(KeypointLoss, "__init__")
     keypoint_loss_call_spy = mocker.spy(KeypointLoss, "__call__")
     unreduced_keypoint_loss_call_spy = mocker.spy(v8UnreducedPoseLoss, "__call__")
+    kpt_iou_spy = mocker.patch("ultralytics.models.yolo.pose.val.kpt_iou", wraps=kpt_iou)
 
     # Settings with custom flip indices, OKS sigmas, and point/line properties.
     settings = Settings(
         project_name="test_pose_overrides_project",
         run_name="test_pose_overrides",
         collect_loss=True,
-        oks_sigmas=OKS_SIGMAS.tolist(),
+        oks_sigmas=OKS_SIGMAS.tolist(),  # Sigmas provided in Settings; will only be used for loss, not for kpt_iou
         flip_indices=list(range(17)),
         **COCO_POSE_SETTINGS_OVERRIDES,
     )
@@ -1513,7 +1544,12 @@ def test_pose_flip_and_oks_overrides(mocker) -> None:
         "flip_idx": settings.flip_indices,
     }
 
-    ## Tests for OKS sigmas - gilding the lily, but can't hurt to be sure.
+    ## Tests for OKS sigmas - Settings override should only affect loss, not kpt_iou or Table OKS sigmas.
+
+    # Assert that kpt_iou is called with the Table OKS sigmas
+    assert kpt_iou_spy.call_count == 9
+    for args in kpt_iou_spy.call_args_list:
+        assert np.allclose(args[1]["sigma"], [1 / 17] * 17)
 
     # Assert that KeypointLoss is instantiated with the provided OKS sigmas
     assert keypoint_loss_init_spy.call_count == 8

@@ -5,7 +5,6 @@ from tlc.core.builtins.constants import (
     BBS_2D,
     INSTANCES,
     INSTANCES_ADDITIONAL_DATA,
-    LINES,
     VERTICES_2D,
     X_MAX,
     X_MIN,
@@ -43,7 +42,6 @@ def get_or_create_pose_table(
         point_attributes=settings.point_attributes,
         line_attributes=settings.line_attributes,
         triangle_attributes=settings.triangle_attributes,
-        oks_sigmas=settings.oks_sigmas,
         flip_indices=settings.flip_indices,
     )
 

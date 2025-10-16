@@ -56,7 +56,7 @@ class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
     def set_model_attributes(self):
         """Set keypoints shape and attach dataset-provided OKS sigmas to the model if available."""
         super().set_model_attributes()
-        oks_sigmas = self.data.get("oks_sigmas")
+        oks_sigmas = self._settings.oks_sigmas or self.data.get("oks_sigmas")
         if oks_sigmas is not None:
             # Attach to model so TLCv8PoseLoss/v8UnreducedPoseLoss can pick it up
             self.model.oks_sigmas = oks_sigmas

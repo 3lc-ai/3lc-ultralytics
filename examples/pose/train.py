@@ -1,4 +1,4 @@
-from tlc.core import KeypointHelper
+from tlc import KeypointHelper
 from ultralytics.utils.metrics import OKS_SIGMA
 
 from tlc_ultralytics import YOLO, Settings

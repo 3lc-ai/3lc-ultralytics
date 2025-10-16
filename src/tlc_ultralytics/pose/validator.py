@@ -68,8 +68,8 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             line_attributes=self.data.get("line_attributes"),
             triangles=self.data.get("triangles"),
             triangle_attributes=self.data.get("triangle_attributes"),
-            include_per_instance_confidences=True,
-            include_per_point_confidences=self.kpt_shape[1] == 3,
+            include_per_instance_confidence=True,
+            include_per_point_confidence=self.kpt_shape[1] == 3,
             writable=False,
         )
 
@@ -152,8 +152,9 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
     def _prepare_loss_fn(self, model):
         loss_model = model.model if hasattr(model.model, "model") else model
         # Pass through dataset-provided OKS sigmas to the loss via model attribute for consistency
-        if self.data.get("oks_sigmas") is not None:
-            loss_model.oks_sigmas = self.data.get("oks_sigmas")
+        oks_sigmas = self._settings.oks_sigmas or self.data.get("oks_sigmas")
+        if oks_sigmas is not None:
+            loss_model.oks_sigmas = oks_sigmas
         self.loss_fn = v8UnreducedPoseLoss(loss_model, training=self._training)
 
     def _add_embeddings_hook(self, model) -> int:

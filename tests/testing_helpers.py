@@ -186,7 +186,7 @@ def check_pose_table_and_metrics_tables(table, metrics_table, overrides: dict[st
     assert table_lines == overrides["lines"]
     assert table_point_attributes == [{"internal_name": name} for name in overrides["point_attributes"]]
     assert table_line_attributes == [{"internal_name": name} for name in overrides["line_attributes"]]
-    assert table_oks_sigmas == [0.069] * 17
+    assert table_oks_sigmas == [1 / 17] * 17  # Default Table OKS sigmas, regardless of Settings overrides.
     assert table_flip_indices == list(range(17))
 
     # Fetch metrics table metadata.
