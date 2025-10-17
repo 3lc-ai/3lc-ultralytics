@@ -59,13 +59,15 @@ In the background, 3LC creates `tlc.Table`s for each split and a `tlc.Run`, whic
 
 ### Examples
 
-Check out the [examples directory](examples/) for complete training and metrics collection examples for each supported task:
+See the [examples directory](examples/) for runnable samples. Each task folder contains `create_tables.py`, `train.py`, and `collect.py`.
 
-- **Classification**: [examples/classify/train.py](examples/classify/train.py) and [examples/classify/collect.py](examples/classify/collect.py)
-- **Object Detection**: [examples/detect/train.py](examples/detect/train.py) and [examples/detect/collect.py](examples/detect/collect.py)
-- **Segmentation**: [examples/detect/train.py](examples/segment/train.py) and [examples/detect/collect.py](examples/segment/collect.py)
-- **Pose Estimation**: [examples/pose/train.py](examples/pose/train.py) and [examples/pose/collect.py](examples/pose/collect.py)
-- **Oriented Object Detection**: [examples/obb/train.py](examples/obb/train.py) and [examples/obb/collect.py](examples/obb/collect.py)
+| Task | Folder | Scripts |
+| --- | --- | --- |
+| Classification | `examples/classify/` | `create_tables.py`, `train.py`, `collect.py` |
+| Object Detection | `examples/detect/` | `create_tables.py`, `train.py`, `collect.py` |
+| Segmentation | `examples/segment/` | `create_tables.py`, `train.py`, `collect.py` |
+| Pose Estimation | `examples/pose/` | `create_tables.py`, `train.py`, `collect.py` |
+| Oriented Bounding Boxes | `examples/obb/` | `create_tables.py`, `train.py`, `collect.py` |
 
 ## Working with Datasets
 
