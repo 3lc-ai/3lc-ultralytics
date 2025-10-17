@@ -22,7 +22,7 @@ from tlc_ultralytics.constants import (
     TLC_COLORSTR,
     TRAINING_PHASE,
 )
-from tlc_ultralytics.engine.utils import _complete_label_column_name
+from tlc_ultralytics.engine.utils import _complete_label_column_name, _handle_deprecated_column_name
 from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import image_embeddings_schema, training_phase_schema
 
@@ -47,11 +47,30 @@ class TLCValidatorMixin(BaseValidator):
         **kwargs,
     ):
         self._run = run
-        self._image_column_name = image_column_name or self._default_image_column_name
-        self._label_column_name = _complete_label_column_name(label_column_name, self._default_label_column_name)
         # Settings can be passed as an argument directly to the validator, or as a keyword from the trainer
         self._settings = settings or kwargs.get("args", {}).pop("settings", None) or Settings()
+
+        self._settings.image_column_name = _handle_deprecated_column_name(
+            image_column_name,
+            self._settings.image_column_name,
+            self._default_image_column_name,
+            column_name="image_column_name",
+        )
+        self._settings.label_column_name = _handle_deprecated_column_name(
+            label_column_name,
+            self._settings.label_column_name,
+            self._default_label_column_name,
+            column_name="label_column_name",
+        )
+        self._settings.label_column_name = _complete_label_column_name(
+            self._settings.label_column_name,
+            self._default_label_column_name,
+        )
+
         self._training = training
+
+        if not training:
+            self._settings.verify(training=False)
 
         # Table is passed when doing validation only, not when training
         self._table = kwargs.get("args", {}).pop("table", None) if not training else None
@@ -70,8 +89,8 @@ class TLCValidatorMixin(BaseValidator):
             self.data = self.check_dataset(
                 self.args.data,
                 {self.args.split: self._table} if self._table is not None else None,
-                self._image_column_name,
-                self._label_column_name,
+                self._settings.image_column_name,
+                self._settings.label_column_name,
                 project_name=self._settings.project_name,
                 splits=(self.args.split,),
             )

@@ -40,8 +40,8 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
             exclude_zero=self._settings.exclude_zero_weight_collection,
             class_map=self.data["3lc_class_to_range"],
             split=self.args.split,
-            image_column_name=self._image_column_name,
-            label_column_name=self._label_column_name,
+            image_column_name=self._settings.image_column_name,
+            label_column_name=self._settings.label_column_name,
         )
 
     def postprocess(self, preds):

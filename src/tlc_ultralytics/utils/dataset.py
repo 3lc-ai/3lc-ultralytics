@@ -83,12 +83,17 @@ def check_tlc_dataset(  # noqa: C901
     """
     dataset_checker, table_creator, table_checker = get_dataset_functions(task)
 
-    if not tables and data is not None and data.endswith(".ndjson"):
-        raise ValueError(
-            "NDJson datasets are not yet supported in the YOLO integration. Create a tlc.Table from the ",
-            "data or convert it to a YOLO dataset and use `tlc.Table.from_yolo`. The NDJson format will be ",
-            "supported in the future.",
+    if not tables and not isinstance(data, (str, Path)):
+        msg = "`data` must be a string. If you are passing tables directly, use the `tables` argument instead."
+        raise ValueError(msg)
+
+    if not tables and isinstance(data, str) and data.endswith(".ndjson"):
+        msg = (
+            "Using NDJson datasets directly is not supported in the YOLO integration. Create a tlc.Table from the "
+            f'data with `tlc.Table.from_yolo_ndjson(ndjson_file="{data!s}", ...)` or convert it to a YOLO dataset and '
+            "use `tlc.Table.from_yolo(...)`."
         )
+        raise ValueError(msg)
 
     # If the data starts with the 3LC prefix, parse the YAML file and populate `tables`
     has_prefix = False
@@ -144,6 +149,7 @@ def check_tlc_dataset(  # noqa: C901
 
     else:
         # LOGGER.info(f"{TLC_COLORSTR}Using data directly from tables")
+        tables = tables.copy()
         _check_tables(tables)
 
         for key, table in tables.items():

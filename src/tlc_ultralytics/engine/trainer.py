@@ -1,16 +1,26 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import tlc
+import ultralytics
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
 from ultralytics.utils.metrics import smooth
 
-from tlc_ultralytics.constants import DEFAULT_TRAIN_RUN_DESCRIPTION, TLC_COLORSTR
-from tlc_ultralytics.engine.utils import _complete_label_column_name, _restore_random_state
+from tlc_ultralytics.constants import (
+    DEFAULT_TRAIN_RUN_DESCRIPTION,
+    TLC_COLORSTR,
+)
+from tlc_ultralytics.engine.utils import (
+    _complete_label_column_name,
+    _handle_deprecated_column_name,
+    _restore_random_state,
+)
 from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import reduce_embeddings
+from tlc_ultralytics.utils.generate_ddp import generate_ddp_command
 
 
 class TLCTrainerMixin(BaseTrainer):
@@ -21,63 +31,128 @@ class TLCTrainerMixin(BaseTrainer):
 
     def __init__(self, cfg=DEFAULT_CFG, overrides=None, _callbacks=None):
         LOGGER.info("Using 3LC Trainer 🌟")
-        self._settings = overrides.pop("settings", Settings())
-        self._settings.verify(training=True)
 
-        assert "data" in overrides or "tables" in overrides, (
-            "You must provide either a data path or tables to train with 3LC."
-        )
+        if RANK == -1:
+            # Settings
+            self._settings = overrides.pop("settings", Settings())
 
-        if "data" in overrides and not isinstance(overrides["data"], (str, Path)):
-            msg = (
-                "`data` must be a string or pathlib.Path. "
-                "If you are using `tlc.Table` objects, provide `tables` instead."
+            self._settings.image_column_name = _handle_deprecated_column_name(
+                overrides.pop("image_column_name", None),
+                self._settings.image_column_name,
+                self._default_image_column_name,
+                column_name="image_column_name",
             )
-            raise ValueError(msg)
+            self._settings.label_column_name = _handle_deprecated_column_name(
+                overrides.pop("label_column_name", None),
+                self._settings.label_column_name,
+                self._default_label_column_name,
+                column_name="label_column_name",
+            )
 
-        self._tables = overrides.pop("tables", None)
+            self._settings.label_column_name = _complete_label_column_name(
+                self._settings.label_column_name,
+                self._default_label_column_name,
+            )
 
-        # Column names
-        self._image_column_name = overrides.pop("image_column_name", self._default_image_column_name)
-        self._label_column_name = overrides.pop("label_column_name", self._default_label_column_name)
-        self._label_column_name = _complete_label_column_name(self._label_column_name, self._default_label_column_name)
+            self._settings.verify(training=True)
+
+            # Tables / data
+            if "data" not in overrides and "tables" not in overrides:
+                msg = "You must provide either `data` or `tables` to train with 3LC."
+                raise ValueError(msg)
+
+            if "data" in overrides and not isinstance(overrides["data"], (str, Path)):
+                msg = "`data` must be a string. If you are passing tables directly, use the `tables` argument instead."
+                raise ValueError(msg)
+
+            # Ensure tables is a dictionary of URLs to the table urls
+            tables = overrides.pop("tables", None)
+            if tables:
+                self._tables = self._handle_tables_argument(tables)
+            else:
+                self._tables = None
+
+        else:  # DDP worker nodes
+            try:
+                data = json.loads(overrides["data"])
+            except json.JSONDecodeError as e:
+                msg = f"RANK {RANK} expected `data` to be a JSON string with run url, settings and tables."
+                raise ValueError(msg) from e
+
+            for key in ("run_url", "settings"):
+                if key not in data:
+                    msg = f"RANK {RANK} expected `data` to contain a `{key}` key."
+                    raise ValueError(msg)
+
+            self._run = tlc.Run.from_url(data["run_url"])
+            self._settings = Settings(**data["settings"])
+            self._tables = data.get("tables", None)
+            overrides["data"] = data.get("data", "")
 
         super().__init__(cfg, overrides, _callbacks)
 
+        self._metrics_collection_epochs = set(self._settings.get_metrics_collection_epochs(self.epochs))
         self._train_validator = None
         self._train_equals_val_result = None
 
-        if RANK in {-1, 0}:
-            self._metrics_collection_epochs = set(self._settings.get_metrics_collection_epochs(self.epochs))
-
-            # Create a 3LC run
-            description = (
-                self._settings.run_description if self._settings.run_description else DEFAULT_TRAIN_RUN_DESCRIPTION
-            )
-
-            project_name = (
-                self._settings.project_name if self._settings.project_name else self.data["train"].project_name
-            )
-            try:
-                root_url = self._tables["train"].root
-            except Exception:
-                root_url = None
-
-            self._run = tlc.init(
-                project_name=project_name,
-                description=description,
-                run_name=self._settings.run_name,
-                root_url=root_url,
-            )
-
-            LOGGER.info(
-                f"{TLC_COLORSTR}Created run named '{self._run.url.parts[-1]}' in project {self._run.project_name}."
-            )
-
-            # Log parameters to 3LC
+        if RANK == -1:
+            self._create_run()
             self._log_3lc_parameters()
             self._run.set_status_running()
             self._print_metrics_collection_epochs()
+
+    def train(self):
+        """Override the train method to use custom generate_ddp_command function to serialize 3LC data in data
+        argument.
+        """
+        ultralytics.engine.trainer.generate_ddp_command = generate_ddp_command
+        super().train()
+        ultralytics.engine.trainer.generate_ddp_command = ultralytics.utils.dist.generate_ddp_command
+
+    def _serialize_state(self) -> str:
+        """Serialize the run url, settings and tables to a JSON string.
+
+        :returns: A JSON string with the run url, settings and table URLs.
+        """
+        return json.dumps(
+            {
+                "run_url": self._run.url.to_str(),
+                "settings": self._settings.to_dict(),
+                "data": self.args.data,
+                "tables": self._tables if self._tables else None,
+            }
+        )
+
+    def _create_run(self) -> None:
+        """Create a run."""
+        # Create a 3LC run
+        description = (
+            self._settings.run_description if self._settings.run_description else DEFAULT_TRAIN_RUN_DESCRIPTION
+        )
+
+        project_name = self._settings.project_name if self._settings.project_name else self.data["train"].project_name
+        self._run = tlc.init(
+            project_name=project_name,
+            description=description,
+            run_name=self._settings.run_name,
+        )
+
+        LOGGER.info(f"{TLC_COLORSTR}Created run named '{self._run.url.parts[-1]}' in project {self._run.project_name}.")
+
+    @staticmethod
+    def _handle_tables_argument(tables: dict[str, tlc.Table | str | Path | tlc.Url]) -> dict[str, str]:
+        """Handle the tables argument and return it as a dictionary of URLs (as strings) to the Tables."""
+        table_urls = {}
+
+        for k, v in tables.items():
+            if isinstance(v, tlc.Table):
+                table_urls[k] = v.url.to_str()
+            elif isinstance(v, (str, Path, tlc.Url)):
+                table_urls[k] = tlc.Url(v).to_str()
+            else:
+                raise ValueError(f"Invalid type {type(v)} for split {k} of tables provided directly.")
+
+        return table_urls
 
     def _log_3lc_parameters(self):
         """Log various data as parameters to the tlc.Run."""
