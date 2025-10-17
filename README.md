@@ -63,11 +63,11 @@ See the [examples directory](examples/) for runnable samples. Each task folder c
 
 | Task | Folder | Scripts |
 | --- | --- | --- |
-| Classification | `examples/classify/` | `create_tables.py`, `train.py`, `collect.py` |
-| Object Detection | `examples/detect/` | `create_tables.py`, `train.py`, `collect.py` |
-| Segmentation | `examples/segment/` | `create_tables.py`, `train.py`, `collect.py` |
-| Pose Estimation | `examples/pose/` | `create_tables.py`, `train.py`, `collect.py` |
-| Oriented Bounding Boxes | `examples/obb/` | `create_tables.py`, `train.py`, `collect.py` |
+| Classification | `examples/classify/` | [create_tables.py](examples/classify/create_tables.py), [train.py](examples/classify/train.py), [collect.py](examples/classify/collect.py) |
+| Object Detection | `examples/detect/` | [create_tables.py](examples/detect/create_tables.py), [train.py](examples/detect/train.py), [collect.py](examples/detect/collect.py) |
+| Segmentation | `examples/segment/` | [create_tables.py](examples/segment/create_tables.py), [train.py](examples/segment/train.py), [collect.py](examples/segment/collect.py) |
+| Pose Estimation | `examples/pose/` | [create_tables.py](examples/pose/create_tables.py), [train.py](examples/pose/train.py), [collect.py](examples/pose/collect.py) |
+| Oriented Bounding Boxes | `examples/obb/` | [create_tables.py](examples/obb/create_tables.py), [train.py](examples/obb/train.py), [collect.py](examples/obb/collect.py) |
 
 ## Working with Datasets
 
