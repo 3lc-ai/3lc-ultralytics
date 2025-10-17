@@ -42,7 +42,6 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
 
         # Desired fixed K from dataset config (default 17) for empty-case shapes
         kpt_shape = self.data.get("kpt_shape")
-
         instances = Keypoints2DInstances.from_row(label_column_value)
 
         # Image dimensions and raw arrays
@@ -53,7 +52,7 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
         kxy = instances.keypoints.astype(np.float32, copy=False)  # (N,K,2)
         vis = instances.keypoint_visibilities  # (N,K) or None
 
-        # Normalize keypoints to [0,1] (vectorized)
+        # Normalize keypoints to [0,1]
         kxy[..., 0] /= W
         kxy[..., 1] /= H
 
@@ -65,7 +64,7 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
         scale = np.array([W, H], dtype=np.float32)
         bboxes_arr = np.concatenate([(ctr_abs / scale), (wh_abs / scale)], axis=1).astype(np.float32)
 
-        # Handle empty vs non-empty in a straightforward way
+        # Handle empty vs non-empty
         if labels.size == 0:
             K_cfg = int(kpt_shape[0]) if kpt_shape else (int(kxy.shape[1]) if kxy.shape[1] > 0 else 17)
             cls_arr = np.zeros((0, 1), dtype=np.float32)
