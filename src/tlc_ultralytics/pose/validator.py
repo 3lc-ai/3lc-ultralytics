@@ -44,8 +44,8 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             task=self.args.task,
             classes=self.args.classes,
             fraction=1.0,
-            image_column_name=self._image_column_name,
-            label_column_name=self._label_column_name,
+            image_column_name=self._settings.image_column_name,
+            label_column_name=self._settings.label_column_name,
         )
 
     def init_metrics(self, model: torch.nn.Module) -> None:
