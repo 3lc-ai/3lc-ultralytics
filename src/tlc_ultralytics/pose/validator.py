@@ -93,14 +93,15 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             )
             h, w = batch["ori_shape"][i]
 
+            builder = Keypoints2DInstances.create_empty(
+                image_height=int(h),
+                image_width=int(w),
+                include_instance_confidences=True,
+            )
+
             # Filter out low confidence predictions
             mask = predicted_confidences > self._settings.conf_thres
             if not mask.any():
-                builder = Keypoints2DInstances.create_empty(
-                    image_height=int(h),
-                    image_width=int(w),
-                    include_instance_confidences=True,
-                )
                 predicted.append(builder.to_row())
                 continue
 
@@ -114,12 +115,6 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             ratio_pad = batch["ratio_pad"][i]
             scaled_bboxes = ops.scale_boxes(resized_shape, predicted_bboxes, ori_shape, ratio_pad)
             scaled_keypoints = ops.scale_coords(resized_shape, predicted_keypoints, ori_shape, ratio_pad)
-
-            builder = Keypoints2DInstances.create_empty(
-                image_height=int(h),
-                image_width=int(w),
-                include_instance_confidences=True,
-            )
 
             for j in range(len(predicted_keypoints)):
                 predicted_kpts = scaled_keypoints[j]
