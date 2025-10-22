@@ -4,8 +4,9 @@ from copy import deepcopy
 
 from ultralytics.models.yolo.pose.train import PoseTrainer
 from ultralytics.nn.tasks import PoseModel
+from ultralytics.utils import LOGGER
 
-from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME
+from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME, TLC_COLORSTR
 from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
 from tlc_ultralytics.pose.loss import TLCv8PoseLoss
 from tlc_ultralytics.pose.validator import TLCPoseValidator
@@ -79,3 +80,16 @@ class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
     def _process_metrics(self, metrics):
         detection_metrics = super()._process_metrics(metrics)
         return {metric_name.replace("(P)", "_pose"): value for metric_name, value in detection_metrics.items()}
+
+    def _print_task_specific_parameters(self):
+        """Print task-specific parameters to the console."""
+        table_sigmas = self.data.get("oks_sigmas")
+
+        if table_sigmas is not None:
+            table_sigmas_rounded = [round(x, 2) for x in table_sigmas]
+            LOGGER.info(f"{TLC_COLORSTR}Using OKS sigmas: {table_sigmas_rounded} from Table for evaluation")
+        if self._settings.oks_sigmas is not None:
+            settings_oks_rounded = [round(x, 2) for x in self._settings.oks_sigmas]
+            LOGGER.info(
+                f"{TLC_COLORSTR}Using overridden OKS sigmas: {settings_oks_rounded} from Settings for computing loss"
+            )

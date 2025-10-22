@@ -100,6 +100,7 @@ class TLCTrainerMixin(BaseTrainer):
             self._log_3lc_parameters()
             self._run.set_status_running()
             self._print_metrics_collection_epochs()
+            self._print_task_specific_parameters()
 
     def train(self):
         """Override the train method to use custom generate_ddp_command function to serialize 3LC data in data
@@ -188,6 +189,9 @@ class TLCTrainerMixin(BaseTrainer):
                 message = f"Metrics will be collected after training and after the following epochs: {epochs}"
 
         LOGGER.info(f"{TLC_COLORSTR}{message}")
+
+    def _print_task_specific_parameters(self):
+        """Print task-specific parameters to the console."""
 
     def get_dataset(self):
         raise NotImplementedError("Subclasses must implement this method.")

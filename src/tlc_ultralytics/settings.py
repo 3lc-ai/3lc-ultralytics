@@ -167,6 +167,13 @@ class Settings:
         if not hasattr(self, "_from_env"):
             self._from_env = False
 
+        # Convert oks sigmas
+        if self.oks_sigmas is not None:
+            import numpy as np
+
+            if isinstance(self.oks_sigmas, np.ndarray):  # just in case
+                self.oks_sigmas = self.oks_sigmas.astype(float).tolist()
+
     def to_dict(self) -> dict[str, Any]:
         """Convert the settings to a dictionary.
 

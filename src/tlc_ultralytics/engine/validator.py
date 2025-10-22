@@ -127,6 +127,12 @@ class TLCValidatorMixin(BaseValidator):
                     f"{TLC_COLORSTR}Created run named '{self._run.url.parts[-1]}' in project {self._run.project_name}."
                 )
 
+        if self.args.task == "pose" and not self._training:
+            table_sigmas = self.data.get("oks_sigmas")
+            if table_sigmas is not None:
+                table_sigmas_rounded = [round(x, 2) for x in table_sigmas]
+                LOGGER.info(f"{TLC_COLORSTR}Using OKS sigmas: {table_sigmas_rounded} from Table for validation")
+
         self.metrics.run_url = self._run.url
 
     def __call__(self, trainer=None, model=None):

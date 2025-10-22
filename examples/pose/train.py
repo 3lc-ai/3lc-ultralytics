@@ -14,8 +14,8 @@ if __name__ == "__main__":
         image_embeddings_reducer="umap",
         point_attributes=KeypointHelper.COCO_KEYPOINT_NAMES,
         lines=KeypointHelper.COCO_SKELETON,
-        oks_sigmas=OKS_SIGMA.tolist(),
         flip_indices=KeypointHelper.COCO_FLIP_INDICES,
+        oks_sigmas=OKS_SIGMA,
     )
 
     model.train(
