@@ -90,9 +90,11 @@ class TLCYOLODataset:
                 **kwargs,
             )
         else:
-            raise ValueError(
-                f"Unsupported task: {task} for TLCYOLODataset. Only 'segment', 'detect', 'pose', and 'obb' are supported."
+            msg = (
+                f"Unsupported task: {task} for TLCYOLODataset. "
+                "Only 'segment', 'detect', 'pose', and 'obb' are supported."
             )
+            raise ValueError(msg)
 
 
 class BaseTLCYOLODataset(TLCDatasetMixin, YOLODataset):

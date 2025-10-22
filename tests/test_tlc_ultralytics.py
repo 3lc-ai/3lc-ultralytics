@@ -15,7 +15,6 @@ import pytest
 import tlc
 from PIL import Image
 from testing_helpers import check_pose_table_and_metrics_tables, compare_dataset_values, plot_ultralytics
-from tlc.core.objects.tables.from_url.table_from_yolo import TableFromYolo
 from ultralytics.models.yolo import YOLO
 from ultralytics.models.yolo.detect import DetectionTrainer
 from ultralytics.models.yolo.obb import OBBTrainer
