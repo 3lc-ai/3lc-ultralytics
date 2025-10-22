@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.1.6] - 2025-10-22
+
 ### Added
 
 - Add support for the tasks Oriented Bounding Boxes (OBB) and Pose ([#32](https://github.com/3lc-ai/3lc-ultralytics/pull/32)). Check out the documentation for more details on how to get started!
