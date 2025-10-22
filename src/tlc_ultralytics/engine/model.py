@@ -6,7 +6,7 @@ import tlc
 import ultralytics
 from ultralytics.models import yolo
 from ultralytics.models.yolo.model import YOLO as YOLOBase
-from ultralytics.nn.tasks import ClassificationModel, DetectionModel, SegmentationModel
+from ultralytics.nn.tasks import ClassificationModel, DetectionModel, OBBModel, PoseModel, SegmentationModel
 from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.classify import (
@@ -15,10 +15,9 @@ from tlc_ultralytics.classify import (
 )
 from tlc_ultralytics.constants import DEFAULT_COLLECT_RUN_DESCRIPTION
 from tlc_ultralytics.detect import TLCDetectionTrainer, TLCDetectionValidator
-from tlc_ultralytics.segment import (
-    TLCSegmentationTrainer,
-    TLCSegmentationValidator,
-)
+from tlc_ultralytics.obb import TLCOBBTrainer, TLCOBBValidator
+from tlc_ultralytics.pose import TLCPoseTrainer, TLCPoseValidator
+from tlc_ultralytics.segment import TLCSegmentationTrainer, TLCSegmentationValidator
 from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import check_requirements, reduce_embeddings
 
@@ -71,6 +70,18 @@ class YOLO(YOLOBase):
                 "trainer": TLCSegmentationTrainer,
                 "validator": TLCSegmentationValidator,
                 "predictor": yolo.segment.SegmentationPredictor,
+            },
+            "pose": {
+                "model": PoseModel,
+                "trainer": TLCPoseTrainer,
+                "validator": TLCPoseValidator,
+                "predictor": yolo.pose.PosePredictor,
+            },
+            "obb": {
+                "model": OBBModel,
+                "trainer": TLCOBBTrainer,
+                "validator": TLCOBBValidator,
+                "predictor": yolo.obb.OBBPredictor,
             },
         }
 

@@ -1,15 +1,15 @@
 from copy import deepcopy
 
-from ultralytics.models.yolo.segment.train import SegmentationTrainer
+from ultralytics.models.yolo.obb.train import OBBTrainer
 
-from tlc_ultralytics.constants import SEGMENTATION_LABEL_COLUMN_NAME
+from tlc_ultralytics.constants import OBB_LABEL_COLUMN_NAME
 from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
-from tlc_ultralytics.segment.validator import TLCSegmentationValidator
+from tlc_ultralytics.obb.validator import TLCOBBValidator
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 
-class TLCSegmentationTrainer(SegmentationTrainer, TLCDetectionTrainer):
-    _default_label_column_name = SEGMENTATION_LABEL_COLUMN_NAME
+class TLCOBBTrainer(OBBTrainer, TLCDetectionTrainer):
+    _default_label_column_name = OBB_LABEL_COLUMN_NAME
 
     def get_dataset(self):
         # Parse yaml and create tables
@@ -20,7 +20,7 @@ class TLCSegmentationTrainer(SegmentationTrainer, TLCDetectionTrainer):
             self._settings.label_column_name,
             project_name=self._settings.project_name,
             splits=("train", "val"),
-            task="segment",
+            task="obb",
             settings=self._settings,
         )
 
@@ -33,7 +33,7 @@ class TLCSegmentationTrainer(SegmentationTrainer, TLCDetectionTrainer):
                 self._settings.label_column_name,
                 project_name=self._settings.project_name,
                 splits=("test",),
-                task="segment",
+                task="obb",
                 settings=self._settings,
             )
             self.data["test"] = data_test["test"]
@@ -42,7 +42,7 @@ class TLCSegmentationTrainer(SegmentationTrainer, TLCDetectionTrainer):
 
     def _process_metrics(self, metrics):
         detection_metrics = super()._process_metrics(metrics)
-        return {metric_name.replace("(M)", "_seg"): value for metric_name, value in detection_metrics.items()}
+        return detection_metrics
 
     def get_validator(self, dataloader=None):
         self.loss_names = "box_loss", "seg_loss", "cls_loss", "dfl_loss"
@@ -50,7 +50,7 @@ class TLCSegmentationTrainer(SegmentationTrainer, TLCDetectionTrainer):
         if not dataloader:
             dataloader = self.test_loader
 
-        return TLCSegmentationValidator(
+        return TLCOBBValidator(
             dataloader,
             save_dir=self.save_dir,
             args=deepcopy(self.args),

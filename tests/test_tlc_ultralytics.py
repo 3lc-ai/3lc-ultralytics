@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import json
 import logging
 import os
 import pathlib
+import random
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
@@ -13,12 +16,16 @@ import pandas as pd
 import pytest
 import tlc
 from PIL import Image
+from testing_helpers import check_pose_table_and_metrics_tables, compare_dataset_values, plot_ultralytics
 from ultralytics.models.yolo import YOLO
+from ultralytics.models.yolo.detect import DetectionTrainer
+from ultralytics.models.yolo.obb import OBBTrainer
+from ultralytics.models.yolo.pose import PoseTrainer
+from ultralytics.models.yolo.segment import SegmentationTrainer
 
 from tlc_ultralytics import YOLO as TLCYOLO
 from tlc_ultralytics import Settings
 from tlc_ultralytics.classify.trainer import TLCClassificationTrainer
-from tlc_ultralytics.classify.utils import tlc_check_cls_dataset
 from tlc_ultralytics.constants import (
     DEFAULT_COLLECT_RUN_DESCRIPTION,
     MAP,
@@ -32,11 +39,12 @@ from tlc_ultralytics.constants import (
 )
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
 from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
-from tlc_ultralytics.detect.utils import tlc_check_det_dataset
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
 from tlc_ultralytics.engine.utils import _complete_label_column_name
+from tlc_ultralytics.obb.trainer import TLCOBBTrainer
+from tlc_ultralytics.pose.trainer import TLCPoseTrainer
 from tlc_ultralytics.segment.trainer import TLCSegmentationTrainer
-from tlc_ultralytics.segment.utils import check_seg_table, tlc_check_seg_dataset
+from tlc_ultralytics.segment.utils import check_seg_table
 from tlc_ultralytics.utils import check_tlc_dataset
 
 DUMMY_IMAGE_FILE = Path(__file__).parent.parent / "src" / "tlc_ultralytics" / "_static" / "dashboard.png"
@@ -53,19 +61,58 @@ tlc.TableIndexingTable.instance().add_scan_url(
     }
 )
 
-TASK2DATASET = {"detect": "coco8.yaml", "classify": "imagenet10", "segment": "coco8-seg.yaml"}
-TASK2MODEL = {"detect": "yolo11n.pt", "classify": "yolo11n-cls.pt", "segment": "yolo11n-seg.pt"}
+TASK2DATASET = {
+    "detect": "coco8.yaml",
+    "classify": "imagenet10",
+    "segment": "coco8-seg.yaml",
+    "pose": "coco8-pose.yaml",
+    "obb": "dota8.yaml",
+}
+TASK2MODEL = {
+    "detect": "yolo11n.pt",
+    "classify": "yolo11n-cls.pt",
+    "segment": "yolo11n-seg.pt",
+    "pose": "yolo11n-pose.pt",
+    "obb": "yolo11n-obb.pt",
+}
 TASK2LABEL_COLUMN_NAME = {
     "detect": "bbs.bb_list.label",
     "classify": "label",
     "segment": "segmentations.instance_properties.label",
+    "pose": "keypoints_2d",
+    "obb": "oriented_bbs_2d",
 }
 TASK2PREDICTED_LABEL_COLUMN_NAME = {
     "detect": "bbs_predicted.bb_list.label",
     "classify": "predicted",
     "segment": "segmentations_predicted.instance_properties.label",
+    "pose": "keypoints_2d_predicted",
+    "obb": "oriented_bbs_2d_predicted",
 }
-TASK2TRAINER = {"detect": TLCDetectionTrainer, "classify": TLCClassificationTrainer, "segment": TLCSegmentationTrainer}
+TASK2TRAINER = {
+    "detect": TLCDetectionTrainer,
+    "classify": TLCClassificationTrainer,
+    "segment": TLCSegmentationTrainer,
+    "obb": TLCOBBTrainer,
+    "pose": TLCPoseTrainer,
+}
+
+TASK2ULTRALYTICS_TRAINER = {
+    "classify": PoseTrainer,
+    "obb": OBBTrainer,
+    "pose": PoseTrainer,
+    "segment": SegmentationTrainer,
+    "detect": DetectionTrainer,
+}
+
+COCO_POSE_SETTINGS_OVERRIDES = {
+    "points": tlc.KeypointHelper.COCO_KEYPOINT_DEFAULT_POSE,
+    "lines": tlc.KeypointHelper.COCO_SKELETON,
+    "point_attributes": [f"p{i}" for i in range(17)],
+    "line_attributes": [f"l{i}" for i in range(16)],
+}
+
+OKS_SIGMAS = np.array([0.069] * 17, dtype=np.float64)
 
 try:
     import umap  # noqa: F401
@@ -96,9 +143,25 @@ class CapturingHandler(logging.Handler):
         self.log_messages.append(self.format(record))
 
 
-@pytest.mark.parametrize("task", ["detect", "segment"])
-def test_training(task) -> None:
-    # End-to-end test of training for detection and segmentation
+def override_oks_sigmas(yaml_path: str) -> dict[str, str | int | dict[int, str | int] | list[str]]:
+    """Return coco8-pose.yaml contents overridden with the COCO oks_sigmas"""
+    from ultralytics.utils.metrics import OKS_SIGMA
+
+    return {
+        "train": "images/train",
+        "val": "images/val",
+        "test": None,
+        "kpt_shape": [17, 3],
+        "flip_idx": [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15],
+        "oks_sigmas": OKS_SIGMA.tolist(),
+        "names": {0: "person"},
+        "nc": 1,
+    }
+
+
+@pytest.mark.parametrize("task", ["detect", "segment", "pose", "obb"])
+def test_training(task: str) -> None:
+    # End-to-end test of training for detection, segmentation, pose, and obb
 
     # Capture ultralytics logger output specifically
     from ultralytics.utils import LOGGER
@@ -140,7 +203,15 @@ def test_training(task) -> None:
 
     # Run 3LC training and capture logs
     model_3lc = TLCYOLO(TASK2MODEL[task])
-    results_3lc = model_3lc.train(**overrides, settings=settings)
+    if task == "pose":
+        with patch(
+            "tlc.core.objects.tables.from_url.table_from_yolo._TableFromYolo._load_yaml",
+            side_effect=override_oks_sigmas,
+        ) as mocked_method:
+            results_3lc = model_3lc.train(**overrides, settings=settings)
+            assert mocked_method.called
+    else:
+        results_3lc = model_3lc.train(**overrides, settings=settings)
 
     assert results_3lc, "Detection training failed"
 
@@ -161,7 +232,11 @@ def test_training(task) -> None:
     # Compare 3LC integration with ultralytics results
     # Segmentation results will be slightly different due to the 3lc mask storage format and conversion
     # back to polygons
-    atol = 0.1 if task == "segment" else 0
+    atol = 0.0
+    if task == "segment":
+        atol = 0.1
+    elif task == "pose":
+        atol = 0.1
     for k in results_ultralytics.results_dict.keys():
         assert np.isclose(results_ultralytics.results_dict[k], results_3lc.results_dict[k], atol=atol), (
             f"Results validation metrics 3LC different from Ultralytics for {k}"
@@ -220,9 +295,19 @@ def test_training(task) -> None:
         assert category == "zebra", "Expected zebra as first prediction when epoch = 1 and example_id = 3"
 
     # model.predict() should work and be the same as vanilla ultralytics
-    assert all(model_ultralytics.predict(imgsz=320)[0].boxes.cls == model_3lc.predict(imgsz=320)[0].boxes.cls), (
-        "Predictions mismatch"
-    )
+    if task == "obb":
+        ultralytics_pred = model_ultralytics.predict(imgsz=320)[0]
+        tlc_pred = model_3lc.predict(imgsz=320)[0]
+        assert all(ultralytics_pred.obb.cls == tlc_pred.obb.cls), "Predictions mismatch"
+
+    else:
+        assert all(model_ultralytics.predict(imgsz=320)[0].boxes.cls == model_3lc.predict(imgsz=320)[0].boxes.cls), (
+            "Predictions mismatch"
+        )
+
+    if task == "pose":
+        # Pose does not collect per-class metrics (yet?!)
+        return
 
     per_class_metrics_tables = metrics_tables[PER_CLASS_METRICS_STREAM_NAME]
     # 6 = 2 epochs * 2 splits + 2 splits after training
@@ -729,29 +814,32 @@ def test_arbitrary_class_indices(task) -> None:  # noqa: C901
     predicted_label_column_name = TASK2PREDICTED_LABEL_COLUMN_NAME[task]
 
     if task == "detect":
-        data_dict = tlc_check_det_dataset(
+        data_dict = check_tlc_dataset(
             data=TASK2DATASET["detect"],
             tables=None,
             image_column_name="image",
             label_column_name=label_column_name,
             project_name=settings.project_name,
+            task="detect",
         )
     elif task == "classify":
-        data_dict = tlc_check_cls_dataset(
+        data_dict = check_tlc_dataset(
             data=TASK2DATASET["classify"],
             tables=None,
             image_column_name="image",
             label_column_name=label_column_name,
             project_name=settings.project_name,
+            task="classify",
         )
 
     elif task == "segment":
-        data_dict = tlc_check_seg_dataset(
+        data_dict = check_tlc_dataset(
             data=TASK2DATASET["segment"],
             tables=None,
             image_column_name="image",
             label_column_name=label_column_name,
             project_name=settings.project_name,
+            task="segment",
         )
 
     # Create edited tables where class indices are changed
@@ -905,6 +993,7 @@ def test_check_tlc_dataset_different_categories(train_classes, val_classes, desc
             },
             image_column_name="image",
             label_column_name="label",
+            task="classify",
         )
 
 
@@ -913,7 +1002,7 @@ def test_check_tlc_dataset_bad_tables() -> None:
     tables = {"train": [1, 2, 3], "val": [4, 5, 6]}
 
     with pytest.raises(ValueError):
-        check_tlc_dataset(data="", tables=tables, image_column_name="a", label_column_name="b")
+        check_tlc_dataset(data="", tables=tables, image_column_name="a", label_column_name="b", task="detect")
 
 
 def test_check_tlc_dataset_bad_url() -> None:
@@ -921,7 +1010,7 @@ def test_check_tlc_dataset_bad_url() -> None:
     tables = {"train": "some_url", "val": "some_other_url"}
 
     with pytest.raises(ValueError):
-        check_tlc_dataset(data="", tables=tables, image_column_name="a", label_column_name="b")
+        check_tlc_dataset(data="", tables=tables, image_column_name="a", label_column_name="b", task="detect")
 
 
 def test_small_segmentations() -> None:
@@ -1076,7 +1165,7 @@ def test_absolutize_image_url() -> None:
 def test_extra_metrics() -> None:
     """Test providing extra metrics callback and schemas work as expected"""
 
-    yolo_dataset_path, (table_train, table_val) = _create_test_image_and_table()
+    _yolo_dataset_path, (table_train, table_val) = _create_test_image_and_table()
 
     BATCH_SIZE = 2
 
@@ -1172,11 +1261,16 @@ def test_complete_label_column_name() -> None:
 
 
 @pytest.mark.parametrize("mode", ["train", "val"])
-def test_dataset_determinism(mode) -> None:
+@pytest.mark.parametrize("task", ["detect", "pose", "obb"])
+def test_dataset_determinism(mode, task) -> None:
     """Test that datasets are deterministic with the same seed across separate processes."""
     from dataset_determinism import _compare_dataset_rows, create_dataset_samples
 
-    rows_3lc, rows_ultralytics = create_dataset_samples(mode)
+    if task == "obb":
+        # FIXME: Some boxes are identical but rotated by pi/2 and w-h are swapped
+        pytest.skip("Known issue with obb in train mode")
+
+    rows_3lc, rows_ultralytics = create_dataset_samples(mode, task)
 
     assert len(rows_3lc) == len(rows_ultralytics), "Number of batches should be the same"
 
@@ -1185,7 +1279,8 @@ def test_dataset_determinism(mode) -> None:
 
 
 @pytest.mark.parametrize("mode", ["train", "val"])
-def test_dataset_determinism_with_random_tracking(mode) -> None:
+@pytest.mark.parametrize("task", ["detect", "pose", "obb"])
+def test_dataset_determinism_with_random_tracking(mode, task) -> None:
     """Test that datasets are deterministic and don't make unexpected random calls.
 
     This test spawns a subprocess, enables random tracking, and checks that no
@@ -1196,13 +1291,18 @@ def test_dataset_determinism_with_random_tracking(mode) -> None:
     import sys
     import tempfile
 
-    with tempfile.NamedTemporaryFile(suffix=".json", dir=TMP, delete=True) as temp_file:
-        output_file = temp_file.name
+    if task == "obb":
+        # FIXME: Known issue with obb in train mode
+        pytest.skip("Known issue with obb in train mode")
+
+    TMP.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=str(TMP)) as temp_dir:
+        output_file = (Path(temp_dir) / "output.json").as_posix()
         cmd = [
             sys.executable,
             "-c",
             "from dataset_determinism import create_dataset_samples_with_tracking;"
-            f"create_dataset_samples_with_tracking('{mode}', '{output_file}')",
+            f"create_dataset_samples_with_tracking('{mode}', '{task}', '{output_file}')",
         ]
         subprocess.run(cmd, check=True, cwd=str(Path(__file__).parent))
 
@@ -1404,3 +1504,151 @@ def _create_test_image_and_table() -> tuple[pathlib.Path, tuple[tlc.Table, tlc.T
     table_val = tlc.Table.from_yolo(yolo_dataset_file, "val", if_exists="overwrite", dataset_name="val")
 
     return yolo_dataset_file, (table_train, table_val)
+
+
+@pytest.mark.skip(reason="TODO: Fix test")
+def test_pose_flip_and_oks_overrides(mocker) -> None:
+    """Verify that flip augmentation uses provided flip indices and loss uses provided OKS sigmas."""
+    from ultralytics.data.augment import RandomFlip
+    from ultralytics.utils.loss import KeypointLoss
+    from ultralytics.utils.metrics import kpt_iou
+
+    from tlc_ultralytics.pose.loss import v8UnreducedPoseLoss
+
+    # Spies for the various components of the pose loss.
+    random_flip_spy = mocker.spy(RandomFlip, "__init__")
+    keypoint_loss_init_spy = mocker.spy(KeypointLoss, "__init__")
+    keypoint_loss_call_spy = mocker.spy(KeypointLoss, "__call__")
+    unreduced_keypoint_loss_call_spy = mocker.spy(v8UnreducedPoseLoss, "__call__")
+    kpt_iou_spy = mocker.patch("ultralytics.models.yolo.pose.val.kpt_iou", wraps=kpt_iou)
+
+    # Settings with custom flip indices, OKS sigmas, and point/line properties.
+    settings = Settings(
+        project_name="test_pose_overrides_project",
+        run_name="test_pose_overrides",
+        collect_loss=True,
+        oks_sigmas=OKS_SIGMAS.tolist(),  # Sigmas provided in Settings; will only be used for loss, not for kpt_iou
+        flip_indices=list(range(17)),
+        **COCO_POSE_SETTINGS_OVERRIDES,
+    )
+
+    overrides = {
+        "data": TASK2DATASET["pose"],
+        "model": TASK2MODEL["pose"],
+        "device": "cpu",
+        "epochs": 1,
+        "batch": 2,
+        "imgsz": 64,
+        "workers": 0,
+        "deterministic": True,
+        "seed": 0,
+        "flipud": 0.0,
+        "fliplr": 1.0,
+    }
+
+    model = TLCYOLO(TASK2MODEL["pose"])
+
+    model.train(settings=settings, **overrides)
+
+    ## Data / metrics checks
+
+    # Check the run, training table, and first metrics table are all correct
+    run = _get_run_from_settings(settings)
+    first_metrics_table = run.metrics_tables[0]
+    train_table = tlc.Table.from_url(first_metrics_table.get_foreign_table_url().to_absolute(first_metrics_table.url))
+    check_pose_table_and_metrics_tables(train_table, first_metrics_table, COCO_POSE_SETTINGS_OVERRIDES)
+
+    ## Tests for flip augmentation.
+
+    # Assert that RandomFlip is instantiated with the provided flip indices
+    assert random_flip_spy.call_count == 2
+    assert random_flip_spy.call_args_list[0][1] == {
+        "p": 0.0,
+        "direction": "vertical",
+        "flip_idx": settings.flip_indices,
+    }
+    assert random_flip_spy.call_args_list[1][1] == {
+        "p": 1.0,
+        "direction": "horizontal",
+        "flip_idx": settings.flip_indices,
+    }
+
+    ## Tests for OKS sigmas - Settings override should only affect loss, not kpt_iou or Table OKS sigmas.
+
+    # Assert that kpt_iou is called with the Table OKS sigmas
+    assert kpt_iou_spy.call_count == 9
+    for args in kpt_iou_spy.call_args_list:
+        assert np.allclose(args[1]["sigma"], [1 / 17] * 17)
+
+    # Assert that KeypointLoss is instantiated with the provided OKS sigmas
+    assert keypoint_loss_init_spy.call_count == 8
+    for call in [1, 3, 5, 7]:
+        # The other calls are from super.__init__, where other sigmas are used
+        call_kwargs = keypoint_loss_init_spy.call_args_list[call][1]
+        assert np.allclose(call_kwargs["sigmas"].numpy(), OKS_SIGMAS)
+
+    # Assert that keypoint loss is called with the provided OKS sigmas
+    assert keypoint_loss_call_spy.call_count != 0
+    for args in keypoint_loss_call_spy.call_args_list:
+        assert np.allclose(args[0][0].sigmas.numpy(), OKS_SIGMAS)
+
+    # Assert that unreduced keypoint loss is called with the provided OKS sigmas
+    assert unreduced_keypoint_loss_call_spy.call_count == 2
+    for arg in unreduced_keypoint_loss_call_spy.call_args_list:
+        assert np.allclose(arg[0][0].keypoint_loss.sigmas.numpy(), OKS_SIGMAS)
+
+    # Assert that the sigmas are set on the model and validators
+    assert np.allclose(model.trainer.model.criterion.keypoint_loss.sigmas.numpy(), OKS_SIGMAS)
+    assert np.allclose(model.trainer.validator.loss_fn.keypoint_loss.sigmas.numpy(), OKS_SIGMAS)
+    assert np.allclose(model.trainer.train_validator.loss_fn.keypoint_loss.sigmas.numpy(), OKS_SIGMAS)
+
+
+@pytest.mark.parametrize("task", ["pose", "obb", "detect", "segment"])
+@pytest.mark.parametrize("mode", ["train", "val"])
+def test_single_sample_equality(task: str, mode: str) -> None:
+    """Test that a single sample from the dataset is equal between 3LC and Ultralytics."""
+
+    if task == "segment" and mode == "train":
+        # FIXME: known issue with out of order instances in train mode for segment
+        pytest.skip("Fails because of out of order instances")
+
+    NUM_SAMPLES = 4
+    settings = Settings(project_name="test_dataset_determinism_mode_train")
+    overrides = {
+        "data": TASK2DATASET[task],
+        "model": TASK2MODEL[task],
+        "seed": 42,
+        "deterministic": True,
+    }
+
+    overrides_3lc = overrides.copy()
+    overrides_3lc["settings"] = settings
+
+    # Set up Ultralytics dataset
+    trainer_ultralytics = TASK2ULTRALYTICS_TRAINER[task](overrides=overrides)
+    trainer_ultralytics.model = None
+    dataset_ultralytics = trainer_ultralytics.build_dataset(trainer_ultralytics.data["train"], mode=mode, batch=1)
+
+    # Set up 3LC dataset
+    trainer_3lc = TASK2TRAINER[task](overrides=overrides_3lc)
+    trainer_3lc.model = None
+    dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=1)
+
+    plot = False  # Turn on to enable debug viz.
+
+    for i in range(NUM_SAMPLES):
+        if mode == "train":
+            # FIXME: known issue with random seed in train mode for obb and pose
+            # Samples will not be equal unless we explicitly seed before fetching data
+            random.seed(42)
+
+        sample_3lc = dataset_3lc[i]
+        if mode == "train":
+            random.seed(42)
+        sample_ultralytics = dataset_ultralytics[i]
+
+        if plot and i == 0:
+            plot_ultralytics(sample_3lc, "3LC")
+            plot_ultralytics(sample_ultralytics, "Ultralytics")
+
+        compare_dataset_values(sample_ultralytics, sample_3lc, task, mode)

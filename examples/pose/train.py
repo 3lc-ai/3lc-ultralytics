@@ -1,0 +1,26 @@
+from tlc import KeypointHelper
+from ultralytics.utils.metrics import OKS_SIGMA
+
+from tlc_ultralytics import YOLO, Settings
+
+if __name__ == "__main__":
+    model = YOLO("yolo11n-pose.pt")
+    settings = Settings(
+        image_embeddings_dim=2,
+        sampling_weights=False,
+        collect_loss=True,
+        run_name="3lc-yolo-pose-train-example-yolo11n",
+        project_name="3lc-yolo-examples",
+        image_embeddings_reducer="umap",
+        point_attributes=KeypointHelper.COCO_KEYPOINT_NAMES,
+        lines=KeypointHelper.COCO_SKELETON,
+        flip_indices=KeypointHelper.COCO_FLIP_INDICES,
+        oks_sigmas=OKS_SIGMA,
+    )
+
+    model.train(
+        data="coco8-pose.yaml",
+        settings=settings,
+        epochs=10,
+        workers=0,
+    )

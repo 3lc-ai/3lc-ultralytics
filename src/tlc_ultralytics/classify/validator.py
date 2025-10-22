@@ -7,12 +7,12 @@ import torch
 from ultralytics.models import yolo
 
 from tlc_ultralytics.classify.dataset import TLCClassificationDataset
-from tlc_ultralytics.classify.utils import tlc_check_cls_dataset
 from tlc_ultralytics.constants import (
     CLASSIFY_LABEL_COLUMN_NAME,
     IMAGE_COLUMN_NAME,
 )
 from tlc_ultralytics.engine.validator import TLCValidatorMixin
+from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 
 class TLCClassificationValidator(TLCValidatorMixin, yolo.classify.ClassificationValidator):
@@ -20,7 +20,7 @@ class TLCClassificationValidator(TLCValidatorMixin, yolo.classify.Classification
     _default_label_column_name = CLASSIFY_LABEL_COLUMN_NAME
 
     def check_dataset(self, *args, **kwargs):
-        return tlc_check_cls_dataset(*args, **kwargs)
+        return check_tlc_dataset(*args, task="classify", settings=self._settings, **kwargs)
 
     def build_dataset(self, table):
         return TLCClassificationDataset(

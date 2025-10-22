@@ -59,11 +59,15 @@ In the background, 3LC creates `tlc.Table`s for each split and a `tlc.Run`, whic
 
 ### Examples
 
-Check out the [examples directory](examples/) for complete training and metrics collection examples for each supported task:
+See the [examples directory](examples/) for runnable samples. Each task folder contains `create_tables.py`, `train.py`, and `collect.py`.
 
-- **Classification**: [examples/classify/train.py](examples/classify/train.py) and [examples/classify/collect.py](examples/classify/collect.py)
-- **Object Detection**: [examples/detect/train.py](examples/detect/train.py) and [examples/detect/collect.py](examples/detect/collect.py)
-- **Segmentation**: [examples/detect/train.py](examples/segment/train.py) and [examples/detect/collect.py](examples/segment/collect.py)
+| Task | Folder | Scripts |
+| --- | --- | --- |
+| Classification | `examples/classify/` | [create_tables.py](examples/classify/create_tables.py), [train.py](examples/classify/train.py), [collect.py](examples/classify/collect.py) |
+| Object Detection | `examples/detect/` | [create_tables.py](examples/detect/create_tables.py), [train.py](examples/detect/train.py), [collect.py](examples/detect/collect.py) |
+| Segmentation | `examples/segment/` | [create_tables.py](examples/segment/create_tables.py), [train.py](examples/segment/train.py), [collect.py](examples/segment/collect.py) |
+| Pose Estimation | `examples/pose/` | [create_tables.py](examples/pose/create_tables.py), [train.py](examples/pose/train.py), [collect.py](examples/pose/collect.py) |
+| Oriented Bounding Boxes | `examples/obb/` | [create_tables.py](examples/obb/create_tables.py), [train.py](examples/obb/train.py), [collect.py](examples/obb/collect.py) |
 
 ## Working with Datasets
 
@@ -166,12 +170,21 @@ In addition to tables created with `Table.from_yolo()` (which is called internal
 
 Working with instance segmentation in the 3LC integration is similar to object detection. If you are using `tlc.Table.from_yolo()` to create your tables, make sure to pass `task="segment"`, as the default is `"detect"`.
 
-### Unsupported Tasks
+For instance segmentation, you can provide `image_column_name` and `label_column_name` when calling `model.train()`, `model.val()` and `model.collect()` if you are providing your own table which has different column names to those expected by 3LC. Note that the `label_column_name` should be the path to the segmentation label field within the table schema, with the default being `"segmentations.instance_properties.label"` which points to the category labels for each segmentation instance.
 
-Some YOLO tasks can not yet be visualized in the 3LC Dashboard, but these are on the roadmap and will be made available in the future:
+### Pose Estimation
 
-- **Pose Estimation**: Not yet supported. Let us know on Discord if you would like this to be supported!
-- **OBB (Oriented Bounding Boxes)**: Not yet supported. Let us know on Discord if you would like this to be supported!
+When working with tables created with `tlc.Table.from_yolo()`, set `task="pose"`, to get the correct formats for pose estimation. If you are working with a custom table, some care must be taken to ensure the required data is present in the table, such as `kpt_shape`, `kpt_names`, `names`, `flip_idx` and information about keypoint connectivity, if any. A detailed example of using a custom table for pose estimation can be found in the [3lc-examples](https://github.com/3lc-ai/3lc-examples/blob/main/tutorials/1-create-tables/create-custom-keypoints-table.ipynb) repository.
+
+#### OKS Sigmas
+
+The OKS sigmas need special attention when working with 3LC Tables. Sigmas will always be present in the schema of pose-compatible tables, and they will receive the value `1/num_keypoints` if no override is provided, which is the same as vanilla ultralytics uses. Table-sigmas can be overridden by providing `oks_sigmas` in the YOLO-yaml file, or passing `oks_sigmas` to the constructor of `tlc.Table.from_yolo()` (or `Keypoints2DSchema()` if creating custom tables). Any sigmas provided in the `Settings` object will only be used for the weighting of the loss function, not for validation (keypoint IoU calculation). This is to avoid having multiple runs with different sigmas used for validation, which would lead to non-comparable metrics. If no sigmas are provided in the `Settings`, the Table sigmas will be used for both loss and validation.
+
+> WARNING ⚠️: If the keypoint shape of your dataset is (17, 3) (17 keypoints with visibility), ultralytics will automatically use the official COCO sigmas for validation (defined in `ultralytics.utils.metrics.OKS_SIGMA`). This default behaviour is disabled in the 3LC integration. If you want to use the official COCO sigmas, you must explicitly set `oks_sigmas` in the YOLO-yaml file, or pass it as a constructor argument to `tlc.Table.from_yolo()` (or `Keypoints2DSchema()` if creating custom tables).
+
+### Oriented Object Detection
+
+When working with tables created with `tlc.Table.from_yolo()`, set `task="obb"`, to get the correct formats for oriented object detection. Any custom OB-compatible table can be used for training/metrics collection. A detailed example of using a custom table for oriented object detection can be found in the [3lc-examples](https://github.com/3lc-ai/3lc-examples/blob/main/tutorials/1-create-tables/create-custom-obb-table.ipynb) repository.
 
 ## Metrics Collection Only
 

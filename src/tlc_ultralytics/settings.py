@@ -115,6 +115,30 @@ class Settings:
     label_column_name: str | None = field(default=None)
     """The name of the label column or full value path to the label. Default: None"""
 
+    points: list[float] | None = field(default=None)
+    """Default point locations for pose estimation. Should be relative to a unit square. Default: None"""
+
+    lines: list[int] | None = field(default=None)
+    """Lines for pose estimation. Default: None"""
+
+    triangles: list[int] | None = field(default=None)
+    """Triangles for pose estimation. Default: None"""
+
+    point_attributes: list[str] | None = field(default=None)
+    """Point attributes for pose estimation. Default: None"""
+
+    line_attributes: list[str] | None = field(default=None)
+    """Line attributes for pose estimation. Default: None"""
+
+    triangle_attributes: list[str] | None = field(default=None)
+    """Triangle attributes for pose estimation. Default: None"""
+
+    oks_sigmas: list[float] | None = field(default=None)
+    """OKS sigmas for pose estimation. Default: None"""
+
+    flip_indices: list[int] | None = field(default=None)
+    """Flip indices for pose estimation. Default: None"""
+
     @classmethod
     def from_env(cls) -> Settings:
         """Create a Settings instance from environment variables.
@@ -142,6 +166,13 @@ class Settings:
         # Mark as not created from environment variables
         if not hasattr(self, "_from_env"):
             self._from_env = False
+
+        # Convert oks sigmas
+        if self.oks_sigmas is not None:
+            import numpy as np
+
+            if isinstance(self.oks_sigmas, np.ndarray):  # just in case
+                self.oks_sigmas = self.oks_sigmas.astype(float).tolist()
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the settings to a dictionary.

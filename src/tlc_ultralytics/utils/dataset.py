@@ -2,12 +2,60 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from pathlib import Path
+from typing import Literal
 
 import tlc
 import yaml
+from tlc.core.builtins.constants import (
+    INSTANCES_ADDITIONAL_DATA,
+    LABEL,
+)
+from ultralytics.data.utils import check_cls_dataset, check_det_dataset
 from ultralytics.utils import LOGGER, colorstr
 
 from tlc_ultralytics.constants import TLC_COLORSTR, TLC_PREFIX
+from tlc_ultralytics.settings import Settings
+
+
+def get_dataset_functions(
+    task: Literal["detect", "segment", "pose", "classify", "obb"],
+) -> tuple[Callable, Callable, Callable]:
+    if task == "detect":
+        from tlc_ultralytics.detect.utils import (
+            check_det_table,
+            get_or_create_det_table,
+        )
+
+        dataset_checker = check_det_dataset
+        table_creator = get_or_create_det_table
+        table_checker = check_det_table
+    elif task == "segment":
+        from tlc_ultralytics.segment.utils import check_seg_table, get_or_create_seg_table
+
+        dataset_checker = check_det_dataset
+        table_creator = get_or_create_seg_table
+        table_checker = check_seg_table
+    elif task == "classify":
+        from tlc_ultralytics.classify.utils import check_cls_table, get_or_create_cls_table
+
+        dataset_checker = check_cls_dataset
+        table_creator = get_or_create_cls_table
+        table_checker = check_cls_table
+    elif task == "pose":
+        from tlc_ultralytics.pose.utils import check_pose_table, get_or_create_pose_table
+
+        dataset_checker = check_det_dataset
+        table_creator = get_or_create_pose_table
+        table_checker = check_pose_table
+    elif task == "obb":
+        from tlc_ultralytics.obb.utils import check_obb_table, get_or_create_obb_table
+
+        dataset_checker = check_det_dataset
+        table_creator = get_or_create_obb_table
+        table_checker = check_obb_table
+    else:
+        raise ValueError(f"Invalid task: {task}")
+    return dataset_checker, table_creator, table_checker
 
 
 def check_tlc_dataset(  # noqa: C901
@@ -15,11 +63,10 @@ def check_tlc_dataset(  # noqa: C901
     tables: dict[str, tlc.Table | tlc.Url | str] | None,
     image_column_name: str,
     label_column_name: str,
-    dataset_checker: Callable[[str], dict[str, object]] | None = None,
-    table_creator: Callable[[str, dict[str, object], str, str, str, str, str], tlc.Table] | None = None,
-    table_checker: Callable[[str, tlc.Table], bool] | None = None,
     project_name: str | None = None,
     splits: Iterable[str] | None = None,
+    task: Literal["detect", "segment", "pose", "classify"] | None = None,
+    settings: Settings | None = None,
 ) -> dict[str, tlc.Table | dict[float, str] | int]:
     """Get or create tables for YOLO datasets. data is ignored when tables is provided.
 
@@ -34,6 +81,7 @@ def check_tlc_dataset(  # noqa: C901
     :param splits: List of splits to parse.
     :return: Dictionary of tables and class names
     """
+    dataset_checker, table_creator, table_checker = get_dataset_functions(task)
 
     if not tables and not isinstance(data, (str, Path)):
         msg = "`data` must be a string. If you are passing tables directly, use the `tables` argument instead."
@@ -80,6 +128,7 @@ def check_tlc_dataset(  # noqa: C901
                         project_name=project_name,
                         dataset_name=dataset_name,
                         table_name=table_name,
+                        settings=settings,
                     )
 
                     # Get the latest version when inferring
@@ -134,14 +183,43 @@ def check_tlc_dataset(  # noqa: C901
 
     first_split = next(iter(tables.keys()))
 
-    names = tables[first_split].get_simple_value_map(label_column_name)
-    value_map = tables[first_split].get_value_map(label_column_name)
+    value_map = get_value_map_from_table(tables[first_split], label_column_name, task)
+    names = tlc.SchemaHelper.to_simple_value_map(value_map)
+    if task == "pose":
+        kpt_shape = tlc.KeypointHelper.get_keypoint_shape_from_table(tables[first_split], label_column_name)
+        flip_idx = tlc.KeypointHelper.get_flip_indices_from_table(tables[first_split], label_column_name)
+        keypoint_attributes = tlc.KeypointHelper.get_keypoint_attributes_from_table(
+            tables[first_split], label_column_name
+        )
+        lines = tlc.KeypointHelper.get_lines_from_table(tables[first_split], label_column_name)
+        line_attributes = tlc.KeypointHelper.get_line_attributes_from_table(tables[first_split], label_column_name)
+        triangles = tlc.KeypointHelper.get_triangles_from_table(tables[first_split], label_column_name)
+        triangle_attributes = tlc.KeypointHelper.get_triangle_attributes_from_table(
+            tables[first_split], label_column_name
+        )
+        oks_sigmas = tlc.KeypointHelper.get_oks_sigmas_from_table(tables[first_split], label_column_name)
+        points = tlc.KeypointHelper.get_points_from_table(tables[first_split], label_column_name)
+    else:
+        kpt_shape = [17, 3]  # yolo default
+        flip_idx, keypoint_attributes, lines, line_attributes, triangles, triangle_attributes, points = (
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
 
     if names is None:
         raise ValueError(f"Failed to get value map for table with Url: {tables[first_split].url}")
 
     for split, split_table in tables.items():
-        split_names = split_table.get_simple_value_map(label_column_name)
+        if split == first_split:
+            continue
+
+        split_value_map = get_value_map_from_table(split_table, label_column_name, task)
+        split_names = tlc.SchemaHelper.to_simple_value_map(split_value_map)
 
         if split_names is None:
             raise ValueError(f"Failed to get value map for table with Url: {tables[split].url}")
@@ -170,7 +248,7 @@ def check_tlc_dataset(  # noqa: C901
     names_yolo = dict(enumerate(names.values()))
     range_to_3lc_class = dict(enumerate(names))
 
-    return {
+    ret = {
         **tables,
         "names": names_yolo,
         "names_3lc": value_map,
@@ -178,7 +256,45 @@ def check_tlc_dataset(  # noqa: C901
         "range_to_3lc_class": range_to_3lc_class,
         "3lc_class_to_range": {v: k for k, v in range_to_3lc_class.items()},
         "channels": 3,  # TODO(Frederik): Read out channels from appropriate place and populate here
+        "kpt_shape": kpt_shape,
     }
+    if task == "pose":
+        if flip_idx is not None:
+            ret["flip_idx"] = flip_idx
+        if keypoint_attributes is not None:
+            ret["keypoint_attributes"] = keypoint_attributes
+        if lines is not None:
+            ret["lines"] = lines
+        if line_attributes is not None:
+            ret["line_attributes"] = line_attributes
+        if triangles is not None:
+            ret["triangles"] = triangles
+        if triangle_attributes is not None:
+            ret["triangle_attributes"] = triangle_attributes
+        if oks_sigmas is not None:
+            ret["oks_sigmas"] = oks_sigmas
+        if points is not None:
+            ret["points"] = points
+    return ret
+
+
+def get_value_map_from_table(
+    table: tlc.Table,
+    label_column_name: str,
+    task: Literal["detect", "segment", "pose", "classify", "obb"],
+) -> dict[int, str]:
+    if task == "pose":
+        try:
+            return table.rows_schema[label_column_name][INSTANCES_ADDITIONAL_DATA][LABEL].value.map
+        except Exception as e:
+            raise ValueError("Failed to get value map from table") from e
+    elif task == "obb":
+        try:
+            return table.rows_schema[label_column_name][INSTANCES_ADDITIONAL_DATA][LABEL].value.map
+        except Exception as e:
+            raise ValueError("Failed to get value map from table") from e
+    else:
+        return table.get_value_map(label_column_name)
 
 
 def parse_3lc_yaml_file(data_file: str) -> dict[str, tlc.Table]:

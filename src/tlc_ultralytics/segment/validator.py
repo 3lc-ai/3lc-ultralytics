@@ -9,7 +9,7 @@ from tlc_ultralytics.constants import (
     SEGMENTATION_LABEL_COLUMN_NAME,
 )
 from tlc_ultralytics.detect.validator import TLCDetectionValidator
-from tlc_ultralytics.segment.utils import tlc_check_seg_dataset
+from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 
 class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
@@ -17,7 +17,7 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
     _default_label_column_name = SEGMENTATION_LABEL_COLUMN_NAME
 
     def check_dataset(self, *args, **kwargs):
-        return tlc_check_seg_dataset(*args, **kwargs)
+        return check_tlc_dataset(*args, task="segment", settings=self._settings, **kwargs)
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         # TODO: Ensure class  mapping is the same as in input table

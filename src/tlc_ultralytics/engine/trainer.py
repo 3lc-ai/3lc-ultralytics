@@ -100,6 +100,7 @@ class TLCTrainerMixin(BaseTrainer):
             self._log_3lc_parameters()
             self._run.set_status_running()
             self._print_metrics_collection_epochs()
+            self._print_task_specific_parameters()
 
     def train(self):
         """Override the train method to use custom generate_ddp_command function to serialize 3LC data in data
@@ -189,6 +190,9 @@ class TLCTrainerMixin(BaseTrainer):
 
         LOGGER.info(f"{TLC_COLORSTR}{message}")
 
+    def _print_task_specific_parameters(self):
+        """Print task-specific parameters to the console."""
+
     def get_dataset(self):
         raise NotImplementedError("Subclasses must implement this method.")
 
@@ -272,7 +276,7 @@ class TLCTrainerMixin(BaseTrainer):
             self._run.set_status_completed()
 
     def _save_confidence_metrics(self):
-        if self.args.task not in ("detect", "segment"):
+        if self.args.task not in ("detect", "segment", "pose", "obb"):
             return
 
         try:
@@ -282,6 +286,24 @@ class TLCTrainerMixin(BaseTrainer):
                 self.validator.metrics.box.p_curve,  # (nc, 1000)
             ]
             names = ["F1_score", "Recall", "Precision"]
+            if self.args.task == "pose":
+                curves.extend(
+                    [
+                        self.validator.metrics.pose.f1_curve,
+                        self.validator.metrics.pose.r_curve,
+                        self.validator.metrics.pose.p_curve,
+                    ]
+                )
+                names.extend(["Pose_F1_score", "Pose_Recall", "Pose_Precision"])
+            if self.args.task == "segment":
+                curves.extend(
+                    [
+                        self.validator.metrics.seg.f1_curve,
+                        self.validator.metrics.seg.r_curve,
+                        self.validator.metrics.seg.p_curve,
+                    ]
+                )
+                names.extend(["Seg_F1_score", "Seg_Recall", "Seg_Precision"])
             px = self.validator.metrics.box.px  # (1000,) (linspace(0, 1)
 
             values = {}

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import tlc
+from tlc.core.builtins.constants.column_names import INSTANCES, INSTANCES_ADDITIONAL_DATA, LABEL, ORIENTED_BBS_2D
 
 from tlc_ultralytics.settings import Settings
 
 
-def get_or_create_seg_table(
+def get_or_create_obb_table(
     key: str,
     data_dict: dict[str, object],
     image_column_name: str,
@@ -19,7 +20,7 @@ def get_or_create_seg_table(
         dataset_yaml_file=data_dict["yaml_file"],
         split=key,
         override_split_path=data_dict[key],
-        task="segment",
+        task="obb",
         project_name=project_name,
         dataset_name=dataset_name,
         table_name=table_name,
@@ -29,7 +30,7 @@ def get_or_create_seg_table(
     )
 
 
-def check_seg_table(table: tlc.Table, image_column_name: str, label_column_name: str) -> None:
+def check_obb_table(table: tlc.Table, image_column_name: str, label_column_name: str) -> None:
     """Verify that the table is compatible with instance segmentation.
 
     :param table: The table to check.
@@ -37,36 +38,22 @@ def check_seg_table(table: tlc.Table, image_column_name: str, label_column_name:
     :param label_column_name: The value path of the label.
     :raises ValueError: If the table is not compatible with instance segmentation.
     """
-    row_schema = table.row_schema.values
-
+    row_schema = table.row_schema
     label_column_name = label_column_name.split(".")[0]
-
-    # Check that the schema is compatible with instance segmentation
     try:
-        # Schema checks
         assert image_column_name in row_schema, f"Image column '{image_column_name}' not found."
         assert label_column_name in row_schema, f"Label column '{label_column_name}' not found."
 
-        assert hasattr(row_schema[label_column_name], "sample_type"), (
-            f"Label column '{label_column_name}' does not have a sample type."
+        assert INSTANCES in row_schema[label_column_name], f"Label column '{label_column_name}' missing instances."
+        assert ORIENTED_BBS_2D in row_schema[label_column_name][INSTANCES], (
+            f"Label column '{label_column_name}' missing oriented bbs 2d."
         )
-        sample_type = tlc.SampleType.from_schema(row_schema[label_column_name])
-        assert isinstance(sample_type, tlc.InstanceSegmentationPolygons), (
-            f"Label column '{label_column_name}' does not have sample type InstanceSegmentationPolygons."
+        assert INSTANCES_ADDITIONAL_DATA in row_schema[label_column_name], (
+            f"Label column '{label_column_name}' missing instances additional data."
         )
-
-    except AssertionError as e:
-        msg = f"Schema validation failed for '{label_column_name}' column in table with URL {table.url}. {e!s}"
-        raise ValueError(msg) from e
-
-    # Check that the table data is compatible with its schema
-    try:
-        first_row = table[0]
-        sample_type.ensure_sample_valid(first_row[label_column_name])
-        assert image_column_name in first_row, (
-            f"Image column {image_column_name} not found in table with URL {table.url}"
+        assert LABEL in row_schema[label_column_name][INSTANCES_ADDITIONAL_DATA], (
+            f"Label column '{label_column_name}' missing label."
         )
-
     except (AssertionError, ValueError) as e:
         msg = f"Data validation failed for {label_column_name} column in table with URL {table.url}. {e!s}"
         raise ValueError(msg) from e

@@ -1,38 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-from pathlib import Path
-
 import tlc
 from tlc.client.torch.metrics.metrics_collectors.bounding_box_metrics_collector import (
     _TLCPredictedBoundingBox,
     _TLCPredictedBoundingBoxes,
 )
-from ultralytics.data.utils import check_det_dataset
 
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
-from tlc_ultralytics.utils import check_tlc_dataset
-
-
-def tlc_check_det_dataset(
-    data: str,
-    tables: dict[str, tlc.Table | tlc.Url | Path | str] | None,
-    image_column_name: str,
-    label_column_name: str,
-    project_name: str | None = None,
-    splits: Iterable[str] | None = None,
-) -> dict[str, tlc.Table | dict[float, str] | int]:
-    return check_tlc_dataset(
-        data,
-        tables,
-        image_column_name,
-        label_column_name,
-        dataset_checker=check_det_dataset,
-        table_creator=get_or_create_det_table,
-        table_checker=check_det_table,
-        project_name=project_name,
-        splits=splits,
-    )
+from tlc_ultralytics.settings import Settings
 
 
 def get_or_create_det_table(
@@ -43,6 +18,7 @@ def get_or_create_det_table(
     project_name: str,
     dataset_name: str,
     table_name: str,
+    settings: Settings | None = None,
 ) -> tlc.Table:
     """Get or create a detection table from a dataset dictionary.
 

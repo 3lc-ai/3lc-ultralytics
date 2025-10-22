@@ -4,7 +4,7 @@ from typing import Any, Callable, Literal
 
 import numpy as np
 import tlc
-from tlc.core.builtins.types.bounding_box import CenteredXYWHBoundingBox
+from tlc.core.data_formats.bounding_boxes import CenteredXYWHBoundingBox
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.data.utils import check_file_speeds, segments2boxes
 from ultralytics.utils import LOGGER, colorstr
@@ -44,6 +44,9 @@ class TLCYOLODataset:
         :param label_column_name: Name of the label column in the table
         :param **kwargs: Additional arguments passed to the dataset constructor
         """
+        from tlc_ultralytics.obb.dataset import TLCOBBDataset
+        from tlc_ultralytics.pose.dataset import TLCYOLOPoseDataset
+
         if task == "detect":
             return TLCYOLODetectionDataset(
                 table=table,
@@ -64,8 +67,34 @@ class TLCYOLODataset:
                 label_column_name=label_column_name,
                 **kwargs,
             )
+        elif task == "pose":
+            return TLCYOLOPoseDataset(
+                table=table,
+                data=data,
+                exclude_zero=exclude_zero,
+                class_map=class_map,
+                image_column_name=image_column_name,
+                label_column_name=label_column_name,
+                task="pose",
+                **kwargs,
+            )
+        elif task == "obb":
+            return TLCOBBDataset(
+                table=table,
+                data=data,
+                exclude_zero=exclude_zero,
+                class_map=class_map,
+                image_column_name=image_column_name,
+                label_column_name=label_column_name,
+                task="obb",
+                **kwargs,
+            )
         else:
-            raise ValueError(f"Unsupported task: {task} for TLCYOLODataset. Only 'segment' and 'detect' are supported.")
+            msg = (
+                f"Unsupported task: {task} for TLCYOLODataset. "
+                "Only 'segment', 'detect', 'pose', and 'obb' are supported."
+            )
+            raise ValueError(msg)
 
 
 class BaseTLCYOLODataset(TLCDatasetMixin, YOLODataset):
@@ -293,7 +322,7 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
         return {
             "im_file": im_file,
             "shape": (height, width),  # format: (height, width)
-            "cls": np.array(classes).reshape(-1, 1),
+            "cls": np.array(classes).astype(np.float32).reshape(-1, 1),
             "bboxes": bboxes,
             "segments": segments,
             "keypoints": None,
