@@ -6,6 +6,14 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Added
+
+- Add support for the tasks Oriented Bounding Boxes (OBB) and Pose ([#32](https://github.com/3lc-ai/3lc-ultralytics/pull/32)). Check out the documentation for more details on how to get started!
+
+### Changed
+
+- Increase the lower bound of the `3lc` dependency from `2.13.1` to `2.18.0`, and the upper bound from `2.17.0` to unbounded.
+
 ## [0.1.5] - 2025-10-07
 
 ### Changed
