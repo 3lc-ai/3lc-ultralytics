@@ -125,7 +125,6 @@ jobs:
       - name: Run tests
         run: |
           docker run \
-            -e "${{ secrets.VARIABLE_NAME }}=${{ secrets.VARIABLE_VALUE }}" \
             -e "${{ secrets.RUNTIME_NAME }}=${{ secrets.RUNTIME_VALUE }}" \
             -e "TLC_API_KEY=${{ secrets.TLC_API_KEY }}" \
             -v "$PWD:/app/3lc-ultralytics" \
