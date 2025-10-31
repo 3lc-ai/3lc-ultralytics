@@ -207,16 +207,14 @@ class Settings:
         )
         if self.image_embeddings_dim > 3:
             LOGGER.warning(
-                f"{TLC_COLORSTR}Image embeddings dimension {self.image_embeddings_dim} is greater than 3. While this "
-                "is supported, it will not be as useful for visualization in the 3LC Dashboard as two or three "
-                "dimensions."
+                f"{TLC_COLORSTR}Image embeddings dimension {self.image_embeddings_dim} is greater than 3. While "
+                "this is supported, it will not be as useful for visualization in the 3LC Dashboard as 2 or 3."
             )
 
         elif self.image_embeddings_dim == 1:
             LOGGER.warning(
-                f"{TLC_COLORSTR}Image embeddings dimension is 1 and points will be reduced "
-                "to a single line. Consider using two or three dimensions for better visualization in the 3LC "
-                "Dashboard."
+                f"{TLC_COLORSTR}Image embeddings dimension is one and points will be reduced to a single line. "
+                "Consider using 2 or 3 for better visualization in the 3LC Dashboard."
             )
 
         if self.image_embeddings_dim > 0:
