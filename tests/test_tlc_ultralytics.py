@@ -6,6 +6,7 @@ import os
 import pathlib
 import random
 from collections import defaultdict
+from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -163,11 +164,6 @@ def override_oks_sigmas(yaml_path: str) -> dict[str, str | int | dict[int, str |
 def test_training(task: str) -> None:
     # End-to-end test of training for detection, segmentation, pose, and obb
 
-    # Capture ultralytics logger output specifically
-    from ultralytics.utils import LOGGER
-
-    ultralytics_logger = LOGGER
-
     overrides = {
         "data": TASK2DATASET[task],
         "epochs": 2,
@@ -192,35 +188,20 @@ def test_training(task: str) -> None:
     model_ultralytics = YOLO(TASK2MODEL[task])
     results_ultralytics = model_ultralytics.train(**overrides)
 
-    # Create handler for 3LC run
-    tlc_handler = CapturingHandler()
-    tlc_handler.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(message)s")
-    tlc_handler.setFormatter(formatter)
-
-    # Add handler to ultralytics logger for 3LC run
-    ultralytics_logger.addHandler(tlc_handler)
-
     # Run 3LC training and capture logs
     model_3lc = TLCYOLO(TASK2MODEL[task])
-    if task == "pose":
-        with patch(
-            "tlc.core.objects.tables.from_url.table_from_yolo._TableFromYolo._load_yaml",
-            side_effect=override_oks_sigmas,
-        ) as mocked_method:
+    with capture_logs() as tlc_messages:
+        if task == "pose":
+            with patch(
+                "tlc.core.objects.tables.from_url.table_from_yolo._TableFromYolo._load_yaml",
+                side_effect=override_oks_sigmas,
+            ) as mocked_method:
+                results_3lc = model_3lc.train(**overrides, settings=settings)
+                assert mocked_method.called
+        else:
             results_3lc = model_3lc.train(**overrides, settings=settings)
-            assert mocked_method.called
-    else:
-        results_3lc = model_3lc.train(**overrides, settings=settings)
 
-    assert results_3lc, "Detection training failed"
-
-    # Clean up handlers
-    ultralytics_logger.removeHandler(tlc_handler)
-
-    # Get log records from 3LC run
-    tlc_records = tlc_handler.log_records
-    tlc_messages = [record.message for record in tlc_records]
+        assert results_3lc, "Detection training failed"
 
     msg = "Update with 'pip install -U ultralytics'"
 
@@ -1652,3 +1633,42 @@ def test_single_sample_equality(task: str, mode: str) -> None:
             plot_ultralytics(sample_ultralytics, "Ultralytics")
 
         compare_dataset_values(sample_ultralytics, sample_3lc, task, mode)
+
+def test_embeddings_dim_settings() -> None:
+
+    settings = Settings(image_embeddings_dim=-1, label_column_name="test")
+
+    with pytest.raises(AssertionError):
+        settings.verify(training=False)
+
+    for dim in [1,2,3,4]:
+        settings.image_embeddings_dim = dim
+
+        with capture_logs() as tlc_messages:
+            settings.verify(training=False)
+
+        if dim in [1, 4]:
+            assert len(tlc_messages) == 1
+        else:
+            assert len(tlc_messages) == 0
+
+@contextmanager
+def capture_logs(loglevel: int = logging.INFO):
+    # Capture ultralytics logger output specifically
+    from ultralytics.utils import LOGGER
+
+    ultralytics_logger = LOGGER
+
+    # Create handler for 3LC run
+    tlc_handler = CapturingHandler()
+    tlc_handler.setLevel(loglevel)
+    formatter = logging.Formatter("%(message)s")
+    tlc_handler.setFormatter(formatter)
+
+    # Add handler to ultralytics logger
+    ultralytics_logger.addHandler(tlc_handler)
+
+    try:
+        yield tlc_handler.log_messages
+    finally:
+        ultralytics_logger.removeHandler(tlc_handler)
