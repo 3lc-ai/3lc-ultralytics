@@ -202,9 +202,21 @@ class Settings:
         # Checks
         assert 0.0 <= self.conf_thres <= 1.0, f"Confidence threshold {self.conf_thres} is not in [0, 1]."
         assert self.max_det > 0, f"Maximum number of detections {self.max_det} is not positive."
-        assert self.image_embeddings_dim in (0, 2, 3), (
-            f"Invalid image embeddings dimension {self.image_embeddings_dim}."
+        assert self.image_embeddings_dim >= 0, (
+            f"Invalid image embeddings dimension {self.image_embeddings_dim}, must be non-negative."
         )
+        if self.image_embeddings_dim > 3:
+            LOGGER.warning(
+                f"{TLC_COLORSTR}Image embeddings dimension {self.image_embeddings_dim} is greater than 3. While "
+                "this is supported, it will not be as useful for visualization in the 3LC Dashboard as 2 or 3."
+            )
+
+        elif self.image_embeddings_dim == 1:
+            LOGGER.warning(
+                f"{TLC_COLORSTR}Image embeddings dimension is one and points will be reduced to a single line. "
+                "Consider using 2 or 3 for better visualization in the 3LC Dashboard."
+            )
+
         if self.image_embeddings_dim > 0:
             self._check_reducer_available()
 
