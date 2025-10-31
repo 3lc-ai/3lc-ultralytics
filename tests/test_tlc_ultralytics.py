@@ -1634,14 +1634,14 @@ def test_single_sample_equality(task: str, mode: str) -> None:
 
         compare_dataset_values(sample_ultralytics, sample_3lc, task, mode)
 
-def test_embeddings_dim_settings() -> None:
 
+def test_embeddings_dim_settings() -> None:
     settings = Settings(image_embeddings_dim=-1, label_column_name="test")
 
     with pytest.raises(AssertionError):
         settings.verify(training=False)
 
-    for dim in [1,2,3,4]:
+    for dim in [1, 2, 3, 4]:
         settings.image_embeddings_dim = dim
 
         with capture_logs() as tlc_messages:
@@ -1651,6 +1651,7 @@ def test_embeddings_dim_settings() -> None:
             assert len(tlc_messages) == 1
         else:
             assert len(tlc_messages) == 0
+
 
 @contextmanager
 def capture_logs(loglevel: int = logging.INFO):
