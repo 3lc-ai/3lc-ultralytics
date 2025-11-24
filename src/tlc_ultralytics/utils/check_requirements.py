@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+from importlib.metadata import PackageNotFoundError, metadata
 
 from packaging.specifiers import SpecifierSet
 from ultralytics.utils import LOGGER
@@ -15,7 +16,16 @@ def check_requirements(requirements_to_check: list[tuple[str, str]] = REQUIREMEN
     :param requirements_to_check: List of tuples of (package name, import name) of packages to check.
     :raises ImportError: If the requirements are not installed.
     """
-    tlc_ultralytics_requirements = importlib.metadata.metadata("3lc-ultralytics").json["requires_dist"]
+    try:
+        tlc_ultralytics_requirements = metadata("3lc-ultralytics").json["requires_dist"]
+    except PackageNotFoundError:
+        msg = (
+            "No version specifier found for '3lc-ultralytics', likely due to the integration not being installed. It "
+            "is recommended to install the integration from PyPI with `pip install 3lc-ultralytics` or equivalent, "
+            "or `pip install -e .` if installing from source."
+        )
+        LOGGER.warning(msg)
+        return
 
     for package_name, import_name in requirements_to_check:
         try:
