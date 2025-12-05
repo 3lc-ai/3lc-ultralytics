@@ -464,7 +464,10 @@ def test_metrics_collection_only(task) -> None:
     assert len(metrics_tables[PER_CLASS_METRICS_STREAM_NAME]) == 2, "Expected 2 per-class metrics tables (train, val)"
 
     metrics_table = metrics_tables["default_stream"][0]
-    assert all(len(row["bbs_predicted"]["bb_list"]) <= 3 for row in metrics_table)
+    if task == "detect":
+        assert all(len(row["bbs_predicted"]["bb_list"]) <= 3 for row in metrics_table)
+    else:
+        assert all(len(row["segmentations_predicted"]["instance_properties"]) <= 3 for row in metrics_table.table_rows)
 
     per_class_metrics_df = pd.concat(
         [m.to_pandas() for m in metrics_tables[PER_CLASS_METRICS_STREAM_NAME]],
