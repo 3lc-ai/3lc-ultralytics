@@ -21,6 +21,10 @@ class TLCDatasetMixin:
             "TLCDatasetMixin requires an attribute `table` which is a tlc.Table."
         )
 
+        if len(self.table) == 0:
+            msg = f"The Table with URL {self.table.url.to_str()} has no rows, provide a Table populated with data."
+            raise ValueError(msg)
+
     def __getitem__(self, index):
         """Get the item at the given index, add the example id to the sample for use in metrics collection."""
         example_id = self._index_to_example_id(index)
@@ -143,8 +147,20 @@ class TLCDatasetMixin:
             corrupt_example_ids = self._get_corrupt_example_ids_from_table(image_paths)
             self._save_cached_example_ids(cache_path, corrupt_example_ids)
 
+        if len(corrupt_example_ids) == len(image_paths):
+            msg = f"All images in the Table with URL {self.table.url.to_str()} are corrupt, can't use it."
+            raise ValueError(msg)
+
         # Filter out corrupt and zero-weight example IDs
         example_ids = self._filter_example_ids(image_paths, corrupt_example_ids)
+
+        if len(example_ids) == 0:
+            msg = (
+                "No valid images found after filtering corrupt and zero-weight images in the Table with URL "
+                f"{self.table.url.to_str()}. Please check the Table and ensure it contains valid images, or provide a "
+                "Table with valid images."
+            )
+            raise ValueError(msg)
 
         im_files, labels = [], []
         for example_id in example_ids:
