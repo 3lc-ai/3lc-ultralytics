@@ -152,9 +152,9 @@ class TLCDatasetMixin:
             raise ValueError(msg)
 
         # Filter out corrupt and zero-weight example IDs
-        example_ids = self._filter_example_ids(image_paths, corrupt_example_ids)
+        example_ids = list(self._filter_example_ids(image_paths, corrupt_example_ids))
 
-        if len(example_ids) == 0:
+        if not example_ids:
             msg = (
                 "No valid images found after filtering corrupt and zero-weight images in the Table with URL "
                 f"{self.table.url.to_str()}. Please check the Table and ensure it contains valid images, or provide a "
