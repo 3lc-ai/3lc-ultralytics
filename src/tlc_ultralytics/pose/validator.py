@@ -101,6 +101,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
 
             # Filter out low confidence predictions
             mask = predicted_confidences > self._settings.conf_thres
+            mask[self._settings.max_det :] = False
             if not mask.any():
                 predicted.append(builder.to_row())
                 continue

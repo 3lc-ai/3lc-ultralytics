@@ -439,7 +439,9 @@ def test_classify_training() -> None:
 @pytest.mark.parametrize("task", ["detect", "segment"])
 def test_metrics_collection_only(task) -> None:
     overrides = {"device": "cpu"}
-    settings = Settings(project_name=f"test_{task}_collect", run_name=f"test_{task}_collect", collect_loss=True)
+    settings = Settings(
+        project_name=f"test_{task}_collect", run_name=f"test_{task}_collect", collect_loss=True, max_det=3
+    )
     splits = ("train", "val")
 
     model = TLCYOLO(TASK2MODEL[task])
@@ -460,6 +462,9 @@ def test_metrics_collection_only(task) -> None:
     assert run.status == tlc.RUN_STATUS_COMPLETED, "Run status not set to completed after training"
     assert run.description == DEFAULT_COLLECT_RUN_DESCRIPTION, "Description mismatch"
     assert len(metrics_tables[PER_CLASS_METRICS_STREAM_NAME]) == 2, "Expected 2 per-class metrics tables (train, val)"
+
+    metrics_table = metrics_tables["default_stream"][0]
+    assert all(len(row["bbs_predicted"]["bb_list"]) <= 3 for row in metrics_table)
 
     per_class_metrics_df = pd.concat(
         [m.to_pandas() for m in metrics_tables[PER_CLASS_METRICS_STREAM_NAME]],

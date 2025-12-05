@@ -63,6 +63,7 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
 
             conf = pred["conf"]
             keep_indices = conf >= self._settings.conf_thres
+            keep_indices[self._settings.max_det :] = False
             if not torch.any(keep_indices):
                 height, width = pbatch["ori_shape"]
                 predicted_instances = {

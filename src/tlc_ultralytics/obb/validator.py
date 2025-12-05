@@ -58,6 +58,7 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
             )
             h, w = batch["ori_shape"][i]
             mask = predicted_confidences >= self._settings.conf_thres
+            mask[self._settings.max_det :] = False
 
             if len(pred) == 0 or not torch.any(mask):
                 predicted.append(

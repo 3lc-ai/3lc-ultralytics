@@ -89,6 +89,7 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
 
             # Filter out low confidence predictions
             mask = predicted_confidences > self._settings.conf_thres
+            mask[self._settings.max_det :] = False
             predicted_boxes = predicted_boxes[mask]
             predicted_confidences = predicted_confidences[mask].tolist()
             predicted_classes = predicted_classes[mask].tolist()
