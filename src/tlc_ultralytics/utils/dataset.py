@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from functools import partial
 from pathlib import Path
-from typing import Literal
+from typing import Literal, overload
 
 import tlc
 import yaml
@@ -11,7 +10,7 @@ from tlc.core.builtins.constants import (
     INSTANCES_ADDITIONAL_DATA,
     LABEL,
 )
-from ultralytics.data.utils import check_cls_dataset, check_det_dataset
+from ultralytics.data.utils import check_det_dataset
 from ultralytics.utils import LOGGER, colorstr
 
 from tlc_ultralytics.constants import TLC_COLORSTR, TLC_PREFIX
@@ -21,7 +20,6 @@ from tlc_ultralytics.settings import Settings
 def get_dataset_functions(
     task: Literal["detect", "segment", "pose", "classify", "obb"],
 ) -> tuple[Callable, Callable, Callable]:
-    table_creator = partial(create_tables_from_yaml_file, task=task)
     if task == "detect":
         from tlc_ultralytics.detect.utils import check_det_table
 
@@ -33,10 +31,11 @@ def get_dataset_functions(
         dataset_checker = check_det_dataset
         table_checker = check_seg_table
     elif task == "classify":
-        from tlc_ultralytics.classify.utils import check_cls_table, get_or_create_cls_table
+        from ultralytics.data.utils import check_cls_dataset
+
+        from tlc_ultralytics.classify.utils import check_cls_table
 
         dataset_checker = check_cls_dataset
-        table_creator = get_or_create_cls_table
         table_checker = check_cls_table
     elif task == "pose":
         from tlc_ultralytics.pose.utils import check_pose_table
@@ -50,7 +49,7 @@ def get_dataset_functions(
         table_checker = check_obb_table
     else:
         raise ValueError(f"Invalid task: {task}")
-    return dataset_checker, table_creator, table_checker
+    return dataset_checker, table_checker
 
 
 def check_tlc_dataset(  # noqa: C901
@@ -76,7 +75,7 @@ def check_tlc_dataset(  # noqa: C901
     :param splits: List of splits to parse.
     :return: Dictionary of tables and class names
     """
-    dataset_checker, table_creator, table_checker = get_dataset_functions(task)
+    dataset_checker, table_checker = get_dataset_functions(task)
 
     if not tables and not isinstance(data, (str, Path)):
         msg = "`data` must be a string. If you are passing tables directly, use the `tables` argument instead."
@@ -98,40 +97,50 @@ def check_tlc_dataset(  # noqa: C901
         tables = parse_3lc_yaml_file(data)
 
     if tables is None:
-        tables = {}
-
-        data_dict = dataset_checker(data)
-
-        # Get or create tables
+        project_name = project_name or settings.project_name or Path(data).stem
         splits = splits or ("train", "val", "test", "minival")
 
-        for key in splits:
-            if data_dict.get(key):
-                try:
-                    project_name = project_name or settings.project_name or Path(data).stem
-                    table = table_creator(
-                        key,
-                        data_dict,
-                        image_column_name=image_column_name,
-                        label_column_name=label_column_name,
-                        project_name=project_name,
-                    )
+        tables = {}
+        if task == "classify":
+            from tlc_ultralytics.classify.utils import get_or_create_cls_table
 
-                    # Get the latest version when inferring
-                    tables[key] = table.latest()
+            data_dict = dataset_checker(data)
 
-                    if tables[key] != table:
-                        LOGGER.info(
-                            f"{colorstr(key)}: Using latest version of table from {data}: "
-                            f"{table.url} -> {tables[key].url}"
+            for key in splits:
+                if data_dict.get(key):
+                    try:
+                        table = get_or_create_cls_table(
+                            key,
+                            data_dict,
+                            image_column_name=image_column_name,
+                            label_column_name=label_column_name,
+                            project_name=project_name,
+                            dataset_name=key,
+                            table_name="initial",
+                            settings=settings,
                         )
-                    else:
-                        LOGGER.info(f"{colorstr(key)}: Using initial version of table from {data}: {tables[key].url}")
+                        tables[key] = table
 
-                except Exception as e:
-                    LOGGER.warning(
-                        f"{colorstr(key)}: Failed to read or create table for split {key} from {data}: {e!s}"
-                    )
+                    except Exception as e:
+                        LOGGER.warning(
+                            f"{colorstr(key)}: Failed to read or create table for split {key} from {data}: {e!s}"
+                        )
+
+        elif task in ["detect", "segment", "pose", "obb"]:
+
+            tables = create_tables_from_yaml_file(data, task, splits=splits, project_name=project_name)
+
+        # Get the latest version when inferring
+        for key, table in tables.items():
+            tables[key] = table.latest()
+
+            if tables[key] != table:
+                LOGGER.info(
+                    f"{colorstr(key)}: Using latest version of table from {data}: "
+                    f"{table.url} -> {tables[key].url}"
+                )
+            else:
+                LOGGER.info(f"{colorstr(key)}: Using initial version of table from {data}: {tables[key].url}")
 
     else:
         # LOGGER.info(f"{TLC_COLORSTR}Using data directly from tables")
@@ -337,9 +346,10 @@ def _check_tables(tables: object):
             )
             raise ValueError(msg)
 
+@overload
 def create_tables_from_yaml_file(
     dataset: str,
-    task: Literal["detect", "segment", "pose", "obb"],
+    task: Literal["detect", "segment", "obb"],
     autodownload: bool = True,
     project_name: str | None = None,
     root_url: str | None = None,
@@ -349,14 +359,95 @@ def create_tables_from_yaml_file(
 ) -> dict[str, tlc.Table]:
     """Create one tlc.Table for each split defined in a YOLO dataset YAML file.
 
+    When a split is defined by a list of locations, one tlc.Table is created for each location and then joined to form
+    a single tlc.Table for the split.
+
     :param dataset: The path to the dataset or dataset descriptor (like a YAML file).
     :param task: The task to create the tables for.
-    :param autodownload: Whether to automatically download the dataset if not found.
+    :param autodownload: Whether to automatically download the dataset if not found, with a download script defined in
+       the YAML file. Forwarded to `ultralytics.data.utils.check_det_dataset`.
+    :param project_name: The name of the project to create the tables for.
+    :param root_url: The root URL of the project to create the tables for.
+    :param create_project_alias: Whether to create a project level alias for image paths in the tables, using the
+    resolved YOLO dataset `path` as the value.
+    :param splits: The splits to create the tables for.
+    :param kwargs: Additional keyword arguments to pass to the table creator.
+    :returns: A dictionary of tables, keyed by split.
+    """
+
+@overload
+def create_tables_from_yaml_file(
+    dataset: str,
+    task: Literal["pose"],
+    autodownload: bool = True,
+    project_name: str | None = None,
+    root_url: str | None = None,
+    create_project_alias: bool = True,
+    splits: Iterable[str] | None = ("train", "val", "test", "minival"),
+    kpt_shape: tuple[int, int] | None = None,
+    points: list[float] | None = None,
+    point_attributes: tlc.ValueMapLike | None = None,
+    lines: list[int] | None = None,
+    line_attributes: tlc.ValueMapLike | None = None,
+    triangles: list[int] | None = None,
+    triangle_attributes: tlc.ValueMapLike | None = None,
+    flip_indices: list[int] | None = None,
+    oks_sigmas: list[float] | None = None,
+    **kwargs,
+) -> dict[str, tlc.Table]:
+    """Create one tlc.Table for each split defined in a YOLO dataset YAML file.
+
+    When a split is defined by a list of locations, one tlc.Table is created for each location and then joined to form
+    a single tlc.Table for the split.
+
+    :param dataset: The path to the dataset or dataset descriptor (like a YAML file).
+    :param task: The task to create the tables for.
+    :param autodownload: Whether to automatically download the dataset if not found, with a download script defined in
+       the YAML file. Forwarded to `ultralytics.data.utils.check_det_dataset`.
+    :param project_name: The name of the project to create the tables for.
+    :param root_url: The root URL of the project to create the tables for.
+    :param create_project_alias: Whether to create a project level alias for image paths in the tables, using the
+    resolved YOLO dataset `path` as the value.
+    :param splits: The splits to create the tables for.
+    :param kpt_shape: The shape of the keypoints.
+    :param points: The points of the keypoints.
+    :param point_attributes: The attributes of the points.
+    :param lines: The lines of the keypoints.
+    :param line_attributes: The attributes of the lines.
+    :param triangles: The triangles of the keypoints.
+    :param triangle_attributes: The attributes of the triangles.
+    :param flip_indices: The flip indices of the keypoints.
+    :param oks_sigmas: The oks sigmas of the keypoints.
+    :param kwargs: Additional keyword arguments to pass to the table creator.
+    :returns: A dictionary of tables, keyed by split.
+    """
+
+def create_tables_from_yaml_file(
+    dataset: str,
+    task: Literal["detect", "segment", "pose", "obb"],
+    autodownload: bool = True,
+    project_name: str | None = None,
+    root_url: str | None = None,
+    create_project_alias: bool = True,
+    splits: Iterable[str] | None = ("train", "val", "test", "minival"),
+    if_exists: Literal["raise", "reuse", "rename", "overwrite"] = "reuse",
+    **kwargs,
+) -> dict[str, tlc.Table]:
+    """Create one tlc.Table for each split defined in a YOLO dataset YAML file.
+
+    When a split is defined by a list of locations, one tlc.Table is created for each location and then joined to form
+    a single tlc.Table for the split.
+
+    :param dataset: The path to the dataset or dataset descriptor (like a YAML file).
+    :param task: The task to create the tables for.
+    :param autodownload: Whether to automatically download the dataset if not found, with a download script defined in
+       the YAML file. Forwarded to `ultralytics.data.utils.check_det_dataset`.
     :param project_name: The name of the project to create the tables for.
     :param root_url: The root URL of the project to create the tables for.
     :param create_project_alias: Whether to create a project level alias for image paths in the tables, using the
        resolved YOLO dataset `path` as the value.
     :param splits: The splits to create the tables for.
+    :param if_exists: The if exists option to pass to the table creator.
     :param kwargs: Additional keyword arguments to pass to the table creator.
     :returns: A dictionary of tables, keyed by split.
     """
@@ -364,17 +455,33 @@ def create_tables_from_yaml_file(
     # Parse the YAML file and resolve the paths
     data_dict = check_det_dataset(dataset, autodownload=autodownload)
 
-    # Create one tlc.Table for each split
+    # Fast-track when the result table already exists
     tables = {}
+    for split in splits:
+        final_table_url = tlc.Url.create_table_url(project_name, split, "initial")
+
+        if final_table_url.exists():
+            if if_exists == "raise":
+                msg = f"Table already exists at URL: {final_table_url}, and `if_exists` is set to `raise`."
+                raise FileExistsError(msg)
+            elif if_exists == "reuse":
+                # Reuse the existing table, no need to create new one
+                # (this is for backward compatibility with Tables created with `Table.from_yolo`)
+                # and to avoid considering recreating part tables and joining them
+                table = tlc.Table.from_url(final_table_url)
+                tables[split] = table
+                continue
+
+    project_name = project_name or Path(dataset).stem
     project_url = tlc.Url.create_project_url(project_name, root_url)
     project_name = project_url.name
 
     if create_project_alias and data_dict.get("path"):
-        token = f"{project_name.replace('-', '_').upper()}_DATASET_PATH"
+        token = f"{Path(dataset).stem.replace('-', '_').replace(' ', '_').upper()}_DATASET_PATH"
         try:
             tlc.register_project_url_alias(
                 token,
-                path=data_dict["path"],
+                path=data_dict["path"].absolute(),
                 project=project_name,
                 root=root_url,
                 force=False
@@ -385,12 +492,43 @@ def create_tables_from_yaml_file(
         except ValueError as e:
             candidate = f"{token}={data_dict['path']}"
             msg = (
-                f"Failed to create project level alias {candidate}, it already exists. Either remove the alias or set "
-                "`create_project_alias=False` to skip creating the alias."
+                f"Failed to create project level alias {candidate}, it already exists with a different path. Either "
+                "remove the alias or set `create_project_alias=False` to skip creating the alias."
             )
             raise ValueError(msg) from e
 
     categories = data_dict.get("names")
+
+    if task == "pose":
+        _pose_key_mapping = {
+            "kpt_shape": "kpt_shape",
+            "points": "points",
+            "point_attributes": "point_attributes",
+            "lines": "lines",
+            "line_attributes": "line_attributes",
+            "triangles": "triangles",
+            "triangle_attributes": "triangle_attributes",
+            "flip_indices": "flip_idx",
+            "oks_sigmas": "oks_sigmas",
+        }
+
+        for kwargs_key, yaml_key in _pose_key_mapping.items():
+            kwargs[kwargs_key] = kwargs.get(kwargs_key, None) or data_dict.get(yaml_key, None)
+
+        _required_kwargs = ["kpt_shape", "flip_indices"]
+
+        for required_kwarg in _required_kwargs:
+            if kwargs[required_kwarg] is None:
+                if required_kwarg != _pose_key_mapping[required_kwarg]:
+                    text = f"the `{_pose_key_mapping[required_kwarg]}` field"
+                else:
+                    text = ""
+                msg = (
+                    f"`{required_kwarg}` is required for pose estimation, either through the `{required_kwarg}` "
+                    f"argument or {text} in the YAML file."
+                )
+                raise ValueError(msg)
+
 
     for split in splits:
         split_paths = data_dict.get(split)
@@ -402,15 +540,16 @@ def create_tables_from_yaml_file(
             split_paths = [split_paths]
 
         split_tables = []
-        for split_part in split_paths:
-            part_name = Path(split_part).name
+        for i, split_part in enumerate(split_paths):
+            table_name = "initial" if len(split_paths) == 1 else f"initial-{i}"
             table = tlc.Table.from_yolo_url(
                 split_part,
                 categories=categories,
                 task=task,
                 project_name=project_name,
                 dataset_name=split,
-                table_name=f"initial-{part_name}",
+                table_name=table_name,
+                if_exists=if_exists,
                 **kwargs,
             )
             split_tables.append(table)
@@ -420,6 +559,7 @@ def create_tables_from_yaml_file(
                 split_tables,
                 project_name=project_name,
                 dataset_name=split,
+                if_exists=if_exists,
                 table_name="initial",
             )
         else:

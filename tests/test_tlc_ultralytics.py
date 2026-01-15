@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import tlc
+import yaml
 from PIL import Image
 from testing_helpers import check_pose_table_and_metrics_tables, compare_dataset_values, plot_ultralytics
 from ultralytics.models.yolo import YOLO
@@ -144,13 +145,16 @@ class CapturingHandler(logging.Handler):
         self.log_messages.append(self.format(record))
 
 
-def override_oks_sigmas(yaml_path: str) -> dict[str, str | int | dict[int, str | int] | list[str]]:
+def override_oks_sigmas() -> None:
     """Return coco8-pose.yaml contents overridden with the COCO oks_sigmas"""
+    from ultralytics.data.utils import check_det_dataset
     from ultralytics.utils.metrics import OKS_SIGMA
 
-    return {
-        "train": "images/train",
-        "val": "images/val",
+    data = check_det_dataset("coco8-pose.yaml")
+
+    yaml_data = {
+        "train": data["train"],
+        "val": data["val"],
         "test": None,
         "kpt_shape": [17, 3],
         "flip_idx": [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15],
@@ -158,6 +162,8 @@ def override_oks_sigmas(yaml_path: str) -> dict[str, str | int | dict[int, str |
         "names": {0: "person"},
         "nc": 1,
     }
+
+    (TMP / "coco8-pose.yaml").write_text(yaml.safe_dump(yaml_data))
 
 
 @pytest.mark.parametrize("task", ["detect", "segment", "pose", "obb"])
@@ -176,6 +182,10 @@ def test_training(task: str) -> None:
         "workers": 0,
     }
 
+    if task == "pose":
+        override_oks_sigmas()
+        overrides["data"] = str(TMP / "coco8-pose.yaml")
+
     settings = Settings(
         collection_epoch_start=1,
         collect_loss=True,
@@ -191,15 +201,7 @@ def test_training(task: str) -> None:
     # Run 3LC training and capture logs
     model_3lc = TLCYOLO(TASK2MODEL[task])
     with capture_logs() as tlc_messages:
-        if task == "pose":
-            with patch(
-                "tlc.core.objects.tables.from_url.table_from_yolo._TableFromYolo._load_yaml",
-                side_effect=override_oks_sigmas,
-            ) as mocked_method:
-                results_3lc = model_3lc.train(**overrides, settings=settings)
-                assert mocked_method.called
-        else:
-            results_3lc = model_3lc.train(**overrides, settings=settings)
+        results_3lc = model_3lc.train(**overrides, settings=settings)
 
         assert results_3lc, "Detection training failed"
 
@@ -1594,7 +1596,7 @@ def test_single_sample_equality(task: str, mode: str) -> None:
         pytest.skip("Fails because of out of order instances")
 
     NUM_SAMPLES = 4
-    settings = Settings(project_name="test_dataset_determinism_mode_train")
+    settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}_task_{task}")
     overrides = {
         "data": TASK2DATASET[task],
         "model": TASK2MODEL[task],
