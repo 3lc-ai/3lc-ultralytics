@@ -313,31 +313,37 @@ class TLCTrainerMixin(BaseTrainer):
             return
 
         try:
+            # curves_results format: [[px, py_curve, x_label, y_label], ...]
+            # For DetMetrics: [PR, F1, Precision, Recall] (indices 0-3 for box)
+            # For SegmentMetrics: box curves + seg curves (indices 4-7 for seg)
+            # For PoseMetrics: box curves + pose curves (indices 4-7 for pose)
+            box_curves = self.validator.metrics.box.curves_results
+            px = box_curves[1][0]  # x values (confidence) from F1 curve
+
             curves = [
-                self.validator.metrics.box.f1_curve,  # (nc, 1000)
-                self.validator.metrics.box.r_curve,  # (nc, 1000)
-                self.validator.metrics.box.p_curve,  # (nc, 1000)
+                box_curves[1][1],  # F1 curve
+                box_curves[3][1],  # Recall curve
+                box_curves[2][1],  # Precision curve
             ]
             names = ["F1_score", "Recall", "Precision"]
+
             if self.args.task == "pose":
-                curves.extend(
-                    [
-                        self.validator.metrics.pose.f1_curve,
-                        self.validator.metrics.pose.r_curve,
-                        self.validator.metrics.pose.p_curve,
-                    ]
-                )
+                pose_curves = self.validator.metrics.pose.curves_results
+                curves.extend([
+                    pose_curves[1][1],  # Pose F1
+                    pose_curves[3][1],  # Pose Recall
+                    pose_curves[2][1],  # Pose Precision
+                ])
                 names.extend(["Pose_F1_score", "Pose_Recall", "Pose_Precision"])
+
             if self.args.task == "segment":
-                curves.extend(
-                    [
-                        self.validator.metrics.seg.f1_curve,
-                        self.validator.metrics.seg.r_curve,
-                        self.validator.metrics.seg.p_curve,
-                    ]
-                )
+                seg_curves = self.validator.metrics.seg.curves_results
+                curves.extend([
+                    seg_curves[1][1],  # Seg F1
+                    seg_curves[3][1],  # Seg Recall
+                    seg_curves[2][1],  # Seg Precision
+                ])
                 names.extend(["Seg_F1_score", "Seg_Recall", "Seg_Precision"])
-            px = self.validator.metrics.box.px  # (1000,) (linspace(0, 1)
 
             values = {}
             for py, name in zip(curves, names):
