@@ -4,7 +4,7 @@ import numpy as np
 import tlc
 import ultralytics
 from ultralytics.engine.validator import BaseValidator
-from ultralytics.utils import LOGGER, colorstr
+from ultralytics.utils import LOGGER, RANK, colorstr
 
 from tlc_ultralytics.constants import (
     DEFAULT_COLLECT_RUN_DESCRIPTION,
@@ -164,8 +164,12 @@ class TLCValidatorMixin(BaseValidator):
             ultralytics.engine.validator.check_det_dataset = ultralytics.data.utils.check_det_dataset
             ultralytics.engine.validator.check_cls_dataset = ultralytics.data.utils.check_cls_dataset
 
-        self._write_per_class_metrics_tables()
-        self._post_validation()
+        # Only write metrics on RANK 0 (or single-GPU mode)
+        # In DDP mode, validation data is split across GPUs, but 3LC metrics
+        # collection only happens on RANK 0 to avoid duplicate/partial metrics
+        if RANK in {-1, 0}:
+            self._write_per_class_metrics_tables()
+            self._post_validation()
 
         return out
 
@@ -223,7 +227,17 @@ class TLCValidatorMixin(BaseValidator):
 
     @execute_when_collecting
     def _update_metrics(self, preds, batch):
-        """Update 3LC metrics with common and task-specific metrics"""
+        """Update 3LC metrics with common and task-specific metrics.
+
+        Note: In DDP mode, 3LC per-sample metrics are only collected on RANK 0.
+        This means metrics will only be collected for the samples validated on RANK 0,
+        not the full dataset. For full per-sample metrics in DDP mode, a future
+        implementation could gather metrics from all GPUs.
+        """
+        # Skip metrics collection on worker GPUs in DDP mode
+        if RANK not in {-1, 0}:
+            return
+
         batch_size = self._infer_batch_size(preds, batch)
 
         batch_metrics = {
@@ -248,6 +262,10 @@ class TLCValidatorMixin(BaseValidator):
     @execute_when_collecting
     def _pre_validation(self, model):
         """Prepare the validator for metrics collection"""
+        # Skip metrics setup on worker GPUs in DDP mode
+        if RANK not in {-1, 0}:
+            return
+
         column_schemas = {}
         column_schemas.update(self._get_metrics_schemas())  # Add task-specific metrics schema
 

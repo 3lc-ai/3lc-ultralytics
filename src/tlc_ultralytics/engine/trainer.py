@@ -110,6 +110,27 @@ class TLCTrainerMixin(BaseTrainer):
         super().train()
         ultralytics.engine.trainer.generate_ddp_command = ultralytics.utils.dist.generate_ddp_command
 
+    def _setup_train(self):
+        """Override to ensure RANK 0 validates the full dataset for 3LC metrics collection.
+
+        In DDP mode, Ultralytics now splits validation data across GPUs. To ensure complete
+        3LC per-sample metrics coverage, we recreate the test_loader on RANK 0 with rank=-1
+        (non-distributed) so it validates all samples.
+        """
+        super()._setup_train()
+
+        # If 3LC metrics collection is enabled and we're in DDP mode on RANK 0,
+        # recreate test_loader with rank=-1 to validate the full dataset
+        if RANK == 0 and not self._settings.collection_disable:
+            batch_size = self.batch_size // max(self.world_size, 1)
+            self.test_loader = self.get_dataloader(
+                self.data.get("val") or self.data.get("test"),
+                batch_size=batch_size if self.args.task == "obb" else batch_size * 2,
+                rank=-1,  # Full dataset, not distributed
+                mode="val",
+            )
+            LOGGER.info(f"{TLC_COLORSTR}Using non-distributed validation on RANK 0 for complete 3LC metrics coverage.")
+
     def _serialize_state(self) -> str:
         """Serialize the run url, settings and tables to a JSON string.
 
