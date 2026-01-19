@@ -85,7 +85,7 @@ def check_tlc_dataset(  # noqa: C901
         msg = (
             "Using NDJson datasets directly is not supported in the YOLO integration. Create a tlc.Table from the "
             f'data with `tlc.Table.from_yolo_ndjson(ndjson_file="{data!s}", ...)` or convert it to a YOLO dataset and '
-            "use `tlc.Table.from_yolo(...)`."
+            "use `tlc.Table.from_yolo_url(...)` or tlc_ultralytics.create_tables_from_yaml_file(...)."
         )
         raise ValueError(msg)
 
