@@ -241,6 +241,8 @@ class TLCTrainerMixin(BaseTrainer):
                     mode="val",
                 )
                 self._train_validator = self.get_validator(dataloader=train_validator_dataloader)
+                # Mark as single-rank validation to skip distributed gather_stats in DDP mode
+                self._train_validator._single_rank_validation = True
             return self._train_validator
         else:
             return None

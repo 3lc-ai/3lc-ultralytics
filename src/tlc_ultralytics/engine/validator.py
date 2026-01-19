@@ -81,6 +81,7 @@ class TLCValidatorMixin(BaseValidator):
         self._seen = None
         self._final_validation = False
         self._hook_handles = []
+        self._single_rank_validation = False  # Set True to skip distributed gather_stats
 
         super().__init__(*args, **kwargs)
 
@@ -172,6 +173,18 @@ class TLCValidatorMixin(BaseValidator):
             self._post_validation()
 
         return out
+
+    def gather_stats(self):
+        """Override to skip distributed gathering when doing single-rank validation.
+
+        In DDP mode, the train_validator runs only on RANK 0 to collect 3LC metrics
+        on the full training set. In this case, we skip the distributed gather_stats
+        since other ranks aren't participating in this validation.
+        """
+        if self._single_rank_validation:
+            # Skip distributed operations - this validator runs on a single rank only
+            return
+        super().gather_stats()
 
     def get_desc(self):
         """Add the split name next to the validation description"""
