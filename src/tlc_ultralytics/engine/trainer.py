@@ -277,18 +277,18 @@ class TLCTrainerMixin(BaseTrainer):
         """Perform normal final validation with metrics collection on the val set, after first doing metrics collection
         on the train set.
         """
-        if RANK not in {-1, 0}:
-            return
+        # Train validator only exists on RANK 0 (or single-GPU mode)
+        if RANK in {-1, 0}:
+            if not self._settings.collection_val_only and not self._settings.collection_disable:
+                if self.best.exists() and not self._train_equals_val():
+                    with _restore_random_state():
+                        self.train_validator._final_validation = True
+                        self.train_validator._epoch = self.epoch
+                        self.train_validator.data = self.data
+                        self.train_validator(model=self.best)
 
-        if not self._settings.collection_val_only and not self._settings.collection_disable:
-            if self.best.exists() and not self._train_equals_val():
-                with _restore_random_state():
-                    self.train_validator._final_validation = True
-                    self.train_validator._epoch = self.epoch
-                    self.train_validator.data = self.data
-                    self.train_validator(model=self.best)
+            self.validator._final_validation = True
 
-        self.validator._final_validation = True
         super().final_eval()
         self._save_confidence_metrics()
 
