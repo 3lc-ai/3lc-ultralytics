@@ -277,6 +277,9 @@ class TLCTrainerMixin(BaseTrainer):
         """Perform normal final validation with metrics collection on the val set, after first doing metrics collection
         on the train set.
         """
+        if RANK not in {-1, 0}:
+            return
+
         if not self._settings.collection_val_only and not self._settings.collection_disable:
             if self.best.exists() and not self._train_equals_val():
                 with _restore_random_state():
