@@ -122,7 +122,7 @@ class TLCDatasetMixin:
             "corrupt_example_ids": corrupt_example_ids,
         }
 
-        cache_url.write(json.dumps(content, indent=2), mode="s")
+        cache_url.write_text(json.dumps(content, indent=2))
 
     def _get_rows_from_table(self) -> tuple[list[str], list[Any]]:
         """Get the rows from the table and return a list of example ids, excluding zero weight and corrupt images.

@@ -5,17 +5,18 @@ from copy import deepcopy
 from ultralytics.models.yolo.pose.train import PoseTrainer
 from ultralytics.nn.tasks import PoseModel
 from ultralytics.utils import LOGGER
+from ultralytics.utils.loss import E2ELoss
 
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME, TLC_COLORSTR
 from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
-from tlc_ultralytics.pose.loss import TLCv8PoseLoss
+from tlc_ultralytics.pose.loss import TLCPoseLoss26, TLCv8PoseLoss
 from tlc_ultralytics.pose.validator import TLCPoseValidator
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 
-# Monkeypatch Ultralytics PoseModel to use TLCv8PoseLoss which respects dataset oks_sigmas
+# Monkeypatch Ultralytics PoseModel to use TLC pose losses which respect dataset oks_sigmas
 def _tlc_pose_init_criterion(self):
-    return TLCv8PoseLoss(self)
+    return E2ELoss(self, TLCPoseLoss26) if getattr(self, "end2end", False) else TLCv8PoseLoss(self)
 
 
 # Apply the monkeypatch once at import time

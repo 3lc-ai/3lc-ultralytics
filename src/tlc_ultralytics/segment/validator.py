@@ -19,6 +19,12 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
     def check_dataset(self, *args, **kwargs):
         return check_tlc_dataset(*args, task="segment", settings=self._settings, **kwargs)
 
+    def init_metrics(self, model):
+        """Initialize metrics and use native mask processing for full-size masks."""
+        super().init_metrics(model)
+        # Always use native mask processing for 3LC to get full-size masks
+        self.process = ops.process_mask_native
+
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         # TODO: Ensure class  mapping is the same as in input table
         instance_properties_structure = {
@@ -34,19 +40,6 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
 
         return {tlc.PREDICTED_SEGMENTATIONS: segment_sample_type.schema}
 
-    def postprocess(self, preds: list[torch.Tensor]) -> list[dict[str, torch.Tensor]]:
-        """Post-process predictions. Use native mask processing to get full-size masks with higher accuracy.
-        These are later used to compute COCO masks which are collected in the 3LC Run.
-
-        preds: Predictions passed to the validator postprocess method.
-        returns: Predictions with full-size masks, to be used by Ultralytics and 3LC metrics collection."""
-
-        prev_process = self.process
-        self.process = ops.process_mask_native
-        preds = SegmentationValidator.postprocess(self, preds)
-        self.process = prev_process
-
-        return preds
 
     def _compute_3lc_metrics(self, preds, batch) -> dict[str, list[dict[str, any]]]:
         """Compute 3LC metrics for instance segmentation.
@@ -83,13 +76,13 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
             predicted_labels = [self.data["range_to_3lc_class"][int(p)] for p in pred_cls]
             predicted_masks = pred["masks"].clone()[keep_indices]
 
-            # Get masks in resized dimensions
-            coco_masks = torch.as_tensor(predicted_masks, dtype=torch.uint8)
-            coco_masks = ops.scale_image(
-                coco_masks.permute(1, 2, 0).contiguous().cpu().numpy(),
+            # Get masks in resized dimensions (scale_masks expects (N, C, H, W) tensor)
+            coco_masks = ops.scale_masks(
+                predicted_masks[None],  # (N_masks, H, W) -> (1, N_masks, H, W)
                 pbatch["ori_shape"],
                 ratio_pad=pbatch["ratio_pad"],
-            )
+            )[0].byte().cpu().numpy()
+            coco_masks = np.transpose(coco_masks, (1, 2, 0))  # (N_masks, H, W) -> (H, W, N_masks)
 
             predicted_instances = {
                 tlc.IMAGE_HEIGHT: pbatch["ori_shape"][0],

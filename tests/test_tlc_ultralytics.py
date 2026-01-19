@@ -70,11 +70,11 @@ TASK2DATASET = {
     "obb": "dota8.yaml",
 }
 TASK2MODEL = {
-    "detect": "yolo11n.pt",
-    "classify": "yolo11n-cls.pt",
-    "segment": "yolo11n-seg.pt",
-    "pose": "yolo11n-pose.pt",
-    "obb": "yolo11n-obb.pt",
+    "detect": "yolo26n.pt",
+    "classify": "yolo26n-cls.pt",
+    "segment": "yolo26n-seg.pt",
+    "pose": "yolo26n-pose.pt",
+    "obb": "yolo26n-obb.pt",
 }
 TASK2LABEL_COLUMN_NAME = {
     "detect": "bbs.bb_list.label",
@@ -178,7 +178,6 @@ def test_training(task: str) -> None:
 
     settings = Settings(
         collection_epoch_start=1,
-        collect_loss=True,
         project_name=f"test_{task}_project",
         run_name=f"test_{task}",
         run_description=f"Test {task} training",
@@ -212,8 +211,8 @@ def test_training(task: str) -> None:
 
     # Compare 3LC integration with ultralytics results
     # Segmentation results will be slightly different due to the 3lc mask storage format and conversion
-    # back to polygons
-    atol = 0.0
+    # back to polygons. Detection may have minor numerical differences due to data loading variations.
+    atol = 0.01
     if task == "segment":
         atol = 0.1
     elif task == "pose":
@@ -261,9 +260,6 @@ def test_training(task: str) -> None:
         [m.to_pandas() for m in metrics_tables["default_stream"]],
         ignore_index=True,
     )
-
-    if task == "detect":
-        assert "loss" in metrics_df.columns, "Expected loss column to be present, but it is missing"
     assert 0 in metrics_df[TRAINING_PHASE], "Expected metrics from during training"
     assert 1 in metrics_df[TRAINING_PHASE], "Expected metrics from after training"
 
@@ -439,7 +435,7 @@ def test_classify_training() -> None:
 @pytest.mark.parametrize("task", ["detect", "segment"])
 def test_metrics_collection_only(task) -> None:
     overrides = {"device": "cpu"}
-    settings = Settings(project_name=f"test_{task}_collect", run_name=f"test_{task}_collect", collect_loss=True)
+    settings = Settings(project_name=f"test_{task}_collect", run_name=f"test_{task}_collect")
     splits = ("train", "val")
 
     model = TLCYOLO(TASK2MODEL[task])

@@ -144,7 +144,7 @@ def yolo_predicted_bounding_box_schema(
     """
 
     bounding_box_schema = tlc.BoundingBoxListSchema(
-        label_value_map=label_value_map,
+        label_value_map,
         x0_number_role=tlc.NUMBER_ROLE_BB_CENTER_X,
         x1_number_role=tlc.NUMBER_ROLE_BB_SIZE_X,
         y0_number_role=tlc.NUMBER_ROLE_BB_CENTER_Y,

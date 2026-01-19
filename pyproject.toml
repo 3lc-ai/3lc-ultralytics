@@ -8,9 +8,9 @@ authors = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-    "3lc>=2.18.0",
+    "3lc>=2.18.0,<3.0.0",
     "pacmap>=0.8.0",
-    "ultralytics>=8.3.169,<8.3.193",
+    "ultralytics>=8.4.0,<=8.4.6",
 ]
 
 [build]

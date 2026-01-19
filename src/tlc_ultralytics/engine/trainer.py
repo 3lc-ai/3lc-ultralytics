@@ -168,6 +168,13 @@ class TLCTrainerMixin(BaseTrainer):
             "3LC/val_url": val_url,  # 3LC table used for validation
             **{f"3LC/{k}": v for k, v in vars(self._settings).items()},  # 3LC settings
         }
+
+        parameters = {
+            key: value
+            if not isinstance(value, Path) else value.as_posix()
+            for key, value in parameters.items()
+        }
+
         self._run.set_parameters(parameters)
 
     def _print_metrics_collection_epochs(self):

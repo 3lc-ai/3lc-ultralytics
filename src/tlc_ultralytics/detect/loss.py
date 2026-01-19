@@ -74,13 +74,24 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
         :param batch: Batch data
         :return: Dictionary containing unreduced losses
         """
-        feats = preds[1] if isinstance(preds, (list, tuple)) else preds
-        pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
-            (self.reg_max * 4, self.nc), 1
-        )
+        # Handle different prediction formats:
+        # - Old format: preds is tuple (tensor, list_of_feats) or list_of_feats
+        # - New format: preds is dict with 'boxes', 'scores', 'feats' keys
+        preds_dict = preds[1] if isinstance(preds, (list, tuple)) else preds
 
-        pred_scores = pred_scores.permute(0, 2, 1).contiguous()
-        pred_distri = pred_distri.permute(0, 2, 1).contiguous()
+        if isinstance(preds_dict, dict) and "boxes" in preds_dict:
+            # New format: boxes/scores are already computed
+            pred_distri = preds_dict["boxes"].permute(0, 2, 1).contiguous()
+            pred_scores = preds_dict["scores"].permute(0, 2, 1).contiguous()
+            feats = preds_dict["feats"]
+        else:
+            # Old format: need to compute from raw features
+            feats = preds_dict
+            pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
+                (self.reg_max * 4, self.nc), 1
+            )
+            pred_scores = pred_scores.permute(0, 2, 1).contiguous()
+            pred_distri = pred_distri.permute(0, 2, 1).contiguous()
 
         dtype = pred_scores.dtype
         batch_size = pred_scores.shape[0]
