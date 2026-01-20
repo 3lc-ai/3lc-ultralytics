@@ -264,11 +264,7 @@ class TLCTrainerMixin(BaseTrainer):
         result = super().validate()
 
         # In DDP mode, run separate full validation on RANK 0 for complete 3LC metrics coverage
-        if (
-            RANK == 0
-            and not self._settings.collection_disable
-            and self.epoch + 1 in self._metrics_collection_epochs
-        ):
+        if RANK == 0 and not self._settings.collection_disable and self.epoch + 1 in self._metrics_collection_epochs:
             with _restore_random_state():
                 self.val_metrics_collector(trainer=self)
 
@@ -334,60 +330,29 @@ class TLCTrainerMixin(BaseTrainer):
         if self.args.task not in ("detect", "segment", "pose", "obb"):
             return
 
-        def get_curves_from_metric(metric):
-            """Extract F1, Recall, Precision curves and px from a Metric object.
-
-            Handles both old API (direct attributes) and new API (curves_results).
-            Returns (px, f1_curve, r_curve, p_curve) or None if curves unavailable.
-            """
-            # Try new API first (curves_results)
-            if hasattr(metric, "curves_results"):
-                try:
-                    cr = metric.curves_results
-                    # Format: [[px, py, xlabel, ylabel], ...] with order [PR, F1, P, R]
-                    return cr[1][0], cr[1][1], cr[3][1], cr[2][1]  # px, f1, recall, precision
-                except (IndexError, AttributeError, TypeError):
-                    pass
-
-            # Try old API (direct attributes)
-            if hasattr(metric, "f1_curve") and hasattr(metric, "px"):
-                try:
-                    return metric.px, metric.f1_curve, metric.r_curve, metric.p_curve
-                except AttributeError:
-                    pass
-
-            return None
-
         try:
-            box_data = get_curves_from_metric(self.validator.metrics.box)
-            if box_data is None:
-                LOGGER.warning(TLC_COLORSTR + "Confidence curves not available, skipping confidence metrics.")
-                return
+            # curves_results format: [[px, py_curve, x_label, y_label], ...]
+            # Order: [PR, F1, Precision, Recall] (indices 0-3)
+            box_curves = self.validator.metrics.box.curves_results
+            px = box_curves[1][0]  # x values (confidence) from F1 curve
 
-            px, f1_curve, r_curve, p_curve = box_data
-            curves = [f1_curve, r_curve, p_curve]
+            curves = [box_curves[1][1], box_curves[3][1], box_curves[2][1]]  # F1, Recall, Precision
             names = ["F1_score", "Recall", "Precision"]
 
             if self.args.task == "pose":
-                pose_data = get_curves_from_metric(self.validator.metrics.pose)
-                if pose_data:
-                    _, pose_f1, pose_r, pose_p = pose_data
-                    curves.extend([pose_f1, pose_r, pose_p])
-                    names.extend(["Pose_F1_score", "Pose_Recall", "Pose_Precision"])
+                pose_curves = self.validator.metrics.pose.curves_results
+                curves.extend([pose_curves[1][1], pose_curves[3][1], pose_curves[2][1]])
+                names.extend(["Pose_F1_score", "Pose_Recall", "Pose_Precision"])
 
             if self.args.task == "segment":
-                seg_data = get_curves_from_metric(self.validator.metrics.seg)
-                if seg_data:
-                    _, seg_f1, seg_r, seg_p = seg_data
-                    curves.extend([seg_f1, seg_r, seg_p])
-                    names.extend(["Seg_F1_score", "Seg_Recall", "Seg_Precision"])
+                seg_curves = self.validator.metrics.seg.curves_results
+                curves.extend([seg_curves[1][1], seg_curves[3][1], seg_curves[2][1]])
+                names.extend(["Seg_F1_score", "Seg_Recall", "Seg_Precision"])
 
             values = {}
             for py, name in zip(curves, names):
                 y = smooth(py.mean(0), 0.05)
-                best_val = y.max()
-                best_conf = px[y.argmax()]
-                values[f"3LC/{name}"] = {"best_val": best_val, "best_conf": best_conf}
+                values[f"3LC/{name}"] = {"best_val": y.max(), "best_conf": px[y.argmax()]}
 
             self._run.set_parameters(values)
         except Exception as e:
