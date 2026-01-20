@@ -265,6 +265,10 @@ class TLCValidatorMixin(BaseValidator):
             training_phase = 1 if self._final_validation else 0
             batch_metrics[TRAINING_PHASE] = [training_phase] * batch_size
 
+        # Add DDP rank for distributed validation debugging
+        if RANK >= 0:
+            batch_metrics["ddp_rank"] = [RANK] * batch_size
+
         self._metrics_writer.add_batch(batch_metrics)
         self._seen += batch_size
 
@@ -290,6 +294,14 @@ class TLCValidatorMixin(BaseValidator):
 
         if self._epoch is not None:
             column_schemas[TRAINING_PHASE] = training_phase_schema()
+
+        # Add DDP rank column for distributed validation debugging
+        if RANK >= 0:
+            column_schemas["ddp_rank"] = tlc.Schema(
+                value=tlc.Int32Value(),
+                description="DDP rank that processed this sample",
+                default_visible=False,
+            )
 
         # Only RANK 0 (or single GPU) updates run status
         if RANK in {-1, 0}:
