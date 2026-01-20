@@ -93,7 +93,6 @@ class TLCTrainerMixin(BaseTrainer):
 
         self._metrics_collection_epochs = set(self._settings.get_metrics_collection_epochs(self.epochs))
         self._train_validator = None
-        self._val_metrics_collector = None
         self._train_equals_val_result = None
 
         if RANK == -1:
@@ -210,47 +209,30 @@ class TLCTrainerMixin(BaseTrainer):
 
     @property
     def train_validator(self):
-        if RANK in {-1, 0}:
-            if not self._train_validator:
-                train_validator_dataloader = self.get_dataloader(
-                    self.data["train"],
-                    batch_size=self.batch_size if self.args.task == "obb" else self.batch_size * 2,
-                    rank=-1,
-                    mode="val",
-                )
-                self._train_validator = self.get_validator(dataloader=train_validator_dataloader)
-                # Mark as single-rank validation to skip distributed gather_stats in DDP mode
-                self._train_validator._single_rank_validation = True
-            return self._train_validator
-        else:
-            return None
+        """Validator for collecting 3LC metrics on the training set.
 
-    @property
-    def val_metrics_collector(self):
-        """Validator for collecting 3LC metrics on the full validation set.
-
-        Only exists on RANK 0 in DDP mode. Uses non-distributed dataloader
-        to ensure all samples are validated for complete 3LC metrics coverage.
+        In DDP mode, uses distributed dataloader so each GPU validates its portion.
+        Metrics are gathered to RANK 0 in the validator's _post_validation.
         """
-        if RANK in {-1, 0}:
-            if not self._val_metrics_collector:
-                val_dataloader = self.get_dataloader(
-                    self.data.get("val") or self.data.get("test"),
-                    batch_size=self.batch_size if self.args.task == "obb" else self.batch_size * 2,
-                    rank=-1,
-                    mode="val",
-                )
-                self._val_metrics_collector = self.get_validator(dataloader=val_dataloader)
-                # Mark as single-rank validation to skip distributed gather_stats in DDP mode
-                self._val_metrics_collector._single_rank_validation = True
-            return self._val_metrics_collector
-        else:
-            return None
+        if not self._train_validator:
+            train_validator_dataloader = self.get_dataloader(
+                self.data["train"],
+                batch_size=self.batch_size if self.args.task == "obb" else self.batch_size * 2,
+                rank=RANK,  # Distributed in DDP mode
+                mode="val",
+            )
+            self._train_validator = self.get_validator(dataloader=train_validator_dataloader)
+        return self._train_validator
 
     def validate(self):
-        """Perform validation with 3LC metrics collection, also on the training data, if applicable."""
+        """Perform validation with 3LC metrics collection, also on the training data, if applicable.
 
+        In DDP mode, train_validator uses distributed validation - each GPU validates its portion
+        and metrics are gathered to RANK 0. The regular validation (super().validate()) also
+        gathers 3LC metrics from all ranks.
+        """
         # Validate on the training set, unless the training and validation sets are identical
+        # All ranks participate in DDP mode for distributed metrics collection
         if (
             not self._settings.collection_disable
             and not self._settings.collection_val_only
@@ -261,14 +243,8 @@ class TLCTrainerMixin(BaseTrainer):
                 self.train_validator(trainer=self)
 
         # Validate on the validation/test set like usual
-        result = super().validate()
-
-        # In DDP mode, run separate full validation on RANK 0 for complete 3LC metrics coverage
-        if RANK == 0 and not self._settings.collection_disable and self.epoch + 1 in self._metrics_collection_epochs:
-            with _restore_random_state():
-                self.val_metrics_collector(trainer=self)
-
-        return result
+        # In DDP mode, 3LC metrics are gathered from all ranks in the validator
+        return super().validate()
 
     def _train_equals_val(self):
         if self._train_equals_val_result is not None:
@@ -283,33 +259,25 @@ class TLCTrainerMixin(BaseTrainer):
         return self._train_equals_val_result
 
     def final_eval(self):
-        """Perform normal final validation with metrics collection on the val set, after first doing metrics collection
-        on the train set.
-        """
-        # Train validator only exists on RANK 0 (or single-GPU mode)
-        if RANK in {-1, 0}:
-            if not self._settings.collection_val_only and not self._settings.collection_disable:
-                if self.best.exists() and not self._train_equals_val():
-                    with _restore_random_state():
-                        self.train_validator._final_validation = True
-                        self.train_validator._epoch = self.epoch
-                        self.train_validator.data = self.data
-                        self.train_validator(model=self.best)
+        """Perform final validation with metrics collection on both train and val sets.
 
-            # In single-GPU mode, use normal validator for 3LC metrics
-            # In DDP mode, we'll use val_metrics_collector instead (after super().final_eval())
-            if RANK == -1:
-                self.validator._final_validation = True
+        In DDP mode, uses distributed validation - each GPU validates its portion
+        and metrics are gathered to RANK 0.
+        """
+        # Final validation on training set (all ranks participate in DDP mode)
+        if not self._settings.collection_val_only and not self._settings.collection_disable:
+            if self.best.exists() and not self._train_equals_val():
+                with _restore_random_state():
+                    self.train_validator._final_validation = True
+                    self.train_validator._epoch = self.epoch
+                    self.train_validator.data = self.data
+                    self.train_validator(model=self.best)
+
+        # Mark validator for final validation (all ranks, so gathering works correctly)
+        if not self._settings.collection_disable:
+            self.validator._final_validation = True
 
         super().final_eval()
-
-        # In DDP mode, run separate full validation on RANK 0 for complete 3LC metrics coverage
-        if RANK == 0 and not self._settings.collection_disable:
-            with _restore_random_state():
-                self.val_metrics_collector._final_validation = True
-                self.val_metrics_collector._epoch = self.epoch
-                self.val_metrics_collector.data = self.data
-                self.val_metrics_collector(model=self.best)
 
         if RANK in {-1, 0}:
             self._save_confidence_metrics()
