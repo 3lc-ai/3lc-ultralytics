@@ -40,7 +40,6 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
 
         return {tlc.PREDICTED_SEGMENTATIONS: segment_sample_type.schema}
 
-
     def _compute_3lc_metrics(self, preds, batch) -> dict[str, list[dict[str, any]]]:
         """Compute 3LC metrics for instance segmentation.
 
@@ -77,11 +76,16 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
             predicted_masks = pred["masks"].clone()[keep_indices]
 
             # Get masks in resized dimensions (scale_masks expects (N, C, H, W) tensor)
-            coco_masks = ops.scale_masks(
-                predicted_masks[None],  # (N_masks, H, W) -> (1, N_masks, H, W)
-                pbatch["ori_shape"],
-                ratio_pad=pbatch["ratio_pad"],
-            )[0].byte().cpu().numpy()
+            coco_masks = (
+                ops.scale_masks(
+                    predicted_masks[None],  # (N_masks, H, W) -> (1, N_masks, H, W)
+                    pbatch["ori_shape"],
+                    ratio_pad=pbatch["ratio_pad"],
+                )[0]
+                .byte()
+                .cpu()
+                .numpy()
+            )
             coco_masks = np.transpose(coco_masks, (1, 2, 0))  # (N_masks, H, W) -> (H, W, N_masks)
 
             predicted_instances = {

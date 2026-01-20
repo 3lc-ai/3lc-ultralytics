@@ -43,7 +43,7 @@ def create_sampler(
 
     elif mode == "val":
         # Exclude zero weight is handled in the dataset for validation.
-        # Note: In DDP mode, RANK 0 validates the full dataset (non-distributed)
-        # for complete 3LC metrics coverage, so distributed=True here is fine.
+        # Note: In DDP mode, validation is distributed across GPUs. 3LC per-sample
+        # metrics are only collected on RANK 0's portion of the data.
         return None
     return sampler

@@ -93,6 +93,7 @@ class TLCTrainerMixin(BaseTrainer):
 
         self._metrics_collection_epochs = set(self._settings.get_metrics_collection_epochs(self.epochs))
         self._train_validator = None
+        self._val_metrics_collector = None
         self._train_equals_val_result = None
 
         if RANK == -1:
@@ -109,27 +110,6 @@ class TLCTrainerMixin(BaseTrainer):
         ultralytics.engine.trainer.generate_ddp_command = generate_ddp_command
         super().train()
         ultralytics.engine.trainer.generate_ddp_command = ultralytics.utils.dist.generate_ddp_command
-
-    def _setup_train(self):
-        """Override to ensure RANK 0 validates the full dataset for 3LC metrics collection.
-
-        In DDP mode, Ultralytics now splits validation data across GPUs. To ensure complete
-        3LC per-sample metrics coverage, we recreate the test_loader on RANK 0 with rank=-1
-        (non-distributed) so it validates all samples.
-        """
-        super()._setup_train()
-
-        # If 3LC metrics collection is enabled and we're in DDP mode on RANK 0,
-        # recreate test_loader with rank=-1 to validate the full dataset
-        if RANK == 0 and not self._settings.collection_disable:
-            batch_size = self.batch_size // max(self.world_size, 1)
-            self.test_loader = self.get_dataloader(
-                self.data.get("val") or self.data.get("test"),
-                batch_size=batch_size if self.args.task == "obb" else batch_size * 2,
-                rank=-1,  # Full dataset, not distributed
-                mode="val",
-            )
-            LOGGER.info(f"{TLC_COLORSTR}Using non-distributed validation on RANK 0 for complete 3LC metrics coverage.")
 
     def _serialize_state(self) -> str:
         """Serialize the run url, settings and tables to a JSON string.
@@ -245,6 +225,28 @@ class TLCTrainerMixin(BaseTrainer):
         else:
             return None
 
+    @property
+    def val_metrics_collector(self):
+        """Validator for collecting 3LC metrics on the full validation set.
+
+        Only exists on RANK 0 in DDP mode. Uses non-distributed dataloader
+        to ensure all samples are validated for complete 3LC metrics coverage.
+        """
+        if RANK in {-1, 0}:
+            if not self._val_metrics_collector:
+                val_dataloader = self.get_dataloader(
+                    self.data.get("val") or self.data.get("test"),
+                    batch_size=self.batch_size if self.args.task == "obb" else self.batch_size * 2,
+                    rank=-1,
+                    mode="val",
+                )
+                self._val_metrics_collector = self.get_validator(dataloader=val_dataloader)
+                # Mark as single-rank validation to skip distributed gather_stats in DDP mode
+                self._val_metrics_collector._single_rank_validation = True
+            return self._val_metrics_collector
+        else:
+            return None
+
     def validate(self):
         """Perform validation with 3LC metrics collection, also on the training data, if applicable."""
 
@@ -259,7 +261,18 @@ class TLCTrainerMixin(BaseTrainer):
                 self.train_validator(trainer=self)
 
         # Validate on the validation/test set like usual
-        return super().validate()
+        result = super().validate()
+
+        # In DDP mode, run separate full validation on RANK 0 for complete 3LC metrics coverage
+        if (
+            RANK == 0
+            and not self._settings.collection_disable
+            and self.epoch + 1 in self._metrics_collection_epochs
+        ):
+            with _restore_random_state():
+                self.val_metrics_collector(trainer=self)
+
+        return result
 
     def _train_equals_val(self):
         if self._train_equals_val_result is not None:
@@ -287,12 +300,23 @@ class TLCTrainerMixin(BaseTrainer):
                         self.train_validator.data = self.data
                         self.train_validator(model=self.best)
 
-            self.validator._final_validation = True
+            # In single-GPU mode, use normal validator for 3LC metrics
+            # In DDP mode, we'll use val_metrics_collector instead (after super().final_eval())
+            if RANK == -1:
+                self.validator._final_validation = True
 
         super().final_eval()
-        self._save_confidence_metrics()
+
+        # In DDP mode, run separate full validation on RANK 0 for complete 3LC metrics coverage
+        if RANK == 0 and not self._settings.collection_disable:
+            with _restore_random_state():
+                self.val_metrics_collector._final_validation = True
+                self.val_metrics_collector._epoch = self.epoch
+                self.val_metrics_collector.data = self.data
+                self.val_metrics_collector(model=self.best)
 
         if RANK in {-1, 0}:
+            self._save_confidence_metrics()
             if self._settings.image_embeddings_dim > 0:
                 train_url = self.data["train"].url
                 val_url = self.data["val"].url if "val" in self.data else self.data["test"].url
