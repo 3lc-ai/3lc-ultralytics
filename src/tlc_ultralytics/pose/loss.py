@@ -23,7 +23,7 @@ class v8UnreducedPoseLoss(v8PoseLoss):
         self.bbox_loss = UnreducedBboxLoss(self.reg_max)
         self.training = training
 
-    def __call__(self, preds, batch) -> dict[str, torch.Tensor]: # noqa: C901
+    def __call__(self, preds, batch) -> dict[str, torch.Tensor]:  # noqa: C901
         """Calculate unreduced losses for box, cls, dfl, pose (kpts), and kobj.
 
         Returns a dict of tensors shaped (batch, num_anchors) for each component.
