@@ -181,6 +181,7 @@ def test_training(task: str) -> None:
         project_name=f"test_{task}_project",
         run_name=f"test_{task}",
         run_description=f"Test {task} training",
+        collect_loss=True,
     )
 
     # Run ultralytics training and capture logs
@@ -260,6 +261,8 @@ def test_training(task: str) -> None:
         [m.to_pandas() for m in metrics_tables["default_stream"]],
         ignore_index=True,
     )
+    if task == "detect":
+        assert "loss" in metrics_df.columns, "Expected loss column to be present, but it is missing"
     assert 0 in metrics_df[TRAINING_PHASE], "Expected metrics from during training"
     assert 1 in metrics_df[TRAINING_PHASE], "Expected metrics from after training"
 
@@ -435,7 +438,7 @@ def test_classify_training() -> None:
 @pytest.mark.parametrize("task", ["detect", "segment"])
 def test_metrics_collection_only(task) -> None:
     overrides = {"device": "cpu"}
-    settings = Settings(project_name=f"test_{task}_collect", run_name=f"test_{task}_collect")
+    settings = Settings(project_name=f"test_{task}_collect", run_name=f"test_{task}_collect", collect_loss=True)
     splits = ("train", "val")
 
     model = TLCYOLO(TASK2MODEL[task])

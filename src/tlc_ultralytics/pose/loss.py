@@ -3,6 +3,7 @@ from __future__ import annotations
 import torch
 import torch.nn.functional as F
 from ultralytics.utils.loss import KeypointLoss, PoseLoss26, v8PoseLoss
+from ultralytics.utils.metrics import bbox_iou
 from ultralytics.utils.ops import xyxy2xywh
 
 from tlc_ultralytics.detect.loss import UnreducedBboxLoss
@@ -27,15 +28,41 @@ class v8UnreducedPoseLoss(v8PoseLoss):
 
         Returns a dict of tensors shaped (batch, num_anchors) for each component.
         """
-        feats, pred_kpts = preds if isinstance(preds[0], list) else preds[1]
-        pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
-            (self.reg_max * 4, self.nc), 1
-        )
+        # Handle different prediction formats
+        preds_dict = preds[1] if isinstance(preds, (list, tuple)) else preds
 
-        # B, grids, ..
-        pred_scores = pred_scores.permute(0, 2, 1).contiguous()  # (B, A, C)
-        pred_distri = pred_distri.permute(0, 2, 1).contiguous()  # (B, A, 4*reg_max or 4)
-        pred_kpts = pred_kpts.permute(0, 2, 1).contiguous()  # (B, A, K*kdim)
+        # Handle YOLO26 end2end format
+        if isinstance(preds_dict, dict) and "one2many" in preds_dict:
+            if preds_dict["one2many"]:
+                preds_dict = preds_dict["one2many"]
+            else:
+                preds_dict = preds_dict["one2one"]
+
+        if isinstance(preds_dict, dict) and "boxes" in preds_dict:
+            # New format with dict
+            boxes_tensor = preds_dict["boxes"]
+            pred_scores = preds_dict["scores"].permute(0, 2, 1).contiguous()
+            feats = preds_dict["feats"]
+            pred_kpts = preds_dict["kpts"].permute(0, 2, 1).contiguous()
+
+            # Check if boxes is distribution or decoded
+            if boxes_tensor.shape[1] == 4:
+                # YOLO26: boxes are decoded, no distribution
+                pred_distri = None
+                pred_bboxes_decoded = boxes_tensor.permute(0, 2, 1).contiguous()
+            else:
+                pred_distri = boxes_tensor.permute(0, 2, 1).contiguous()
+                pred_bboxes_decoded = None
+        else:
+            # Old format: feats and kpts tuple
+            feats, pred_kpts = preds if isinstance(preds[0], list) else preds[1]
+            pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
+                (self.reg_max * 4, self.nc), 1
+            )
+            pred_scores = pred_scores.permute(0, 2, 1).contiguous()
+            pred_distri = pred_distri.permute(0, 2, 1).contiguous()
+            pred_kpts = pred_kpts.permute(0, 2, 1).contiguous()
+            pred_bboxes_decoded = None
 
         dtype = pred_scores.dtype
         batch_size = pred_scores.shape[0]
@@ -49,8 +76,11 @@ class v8UnreducedPoseLoss(v8PoseLoss):
         gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0.0)
 
-        # Pboxes and keypoints
-        pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # (B, A, 4)
+        # Pboxes - use decoded boxes if available (YOLO26), otherwise decode from distribution
+        if pred_bboxes_decoded is not None:
+            pred_bboxes = pred_bboxes_decoded
+        else:
+            pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # (B, A, 4)
         pred_kpts = self.kpts_decode(anchor_points, pred_kpts.view(batch_size, -1, *self.kpt_shape))  # (B, A, K, D)
 
         # Assignment
@@ -71,17 +101,27 @@ class v8UnreducedPoseLoss(v8PoseLoss):
         dfl_loss_full = torch.zeros_like(cls_loss)
         if fg_mask.sum():
             target_bboxes /= stride_tensor
-            box_loss, dfl_loss = self.bbox_loss(
-                pred_distri,
-                pred_bboxes,
-                anchor_points,
-                target_bboxes,
-                target_scores,
-                max(target_scores.sum(), 1),
-                fg_mask,
-            )
-            box_loss_full[fg_mask] = box_loss.to(cls_loss.dtype).squeeze()
-            dfl_loss_full[fg_mask] = dfl_loss.to(cls_loss.dtype).squeeze()
+
+            if pred_distri is not None:
+                # Standard loss with DFL (YOLO11 and older)
+                box_loss, dfl_loss = self.bbox_loss(
+                    pred_distri,
+                    pred_bboxes,
+                    anchor_points,
+                    target_bboxes,
+                    target_scores,
+                    max(target_scores.sum(), 1),
+                    fg_mask,
+                )
+                box_loss_full[fg_mask] = box_loss.to(cls_loss.dtype).squeeze()
+                dfl_loss_full[fg_mask] = dfl_loss.to(cls_loss.dtype).squeeze()
+            else:
+                # YOLO26 end2end: no distribution available, use IoU loss only
+                weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
+                iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
+                box_loss = (1.0 - iou) * weight
+                box_loss_full[fg_mask] = box_loss.to(cls_loss.dtype).squeeze()
+                # dfl_loss_full stays zeros for end2end models
 
         # Keypoints losses (pose and kobj), per-anchor on fg positions
         pose_loss_full = torch.zeros_like(cls_loss)
