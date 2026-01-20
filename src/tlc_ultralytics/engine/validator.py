@@ -298,6 +298,7 @@ class TLCValidatorMixin(BaseValidator):
         # Add DDP rank column for distributed validation debugging
         if RANK >= 0:
             column_schemas["ddp_rank"] = tlc.Schema(
+                display_name="DDP rank",
                 value=tlc.Int32Value(),
                 description="DDP rank that processed this sample",
                 default_visible=False,
