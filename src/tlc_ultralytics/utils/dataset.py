@@ -378,28 +378,6 @@ def _resolve_pose_kwargs(data_dict: dict, kwargs: dict) -> None:
             raise ValueError(msg)
 
 
-def _create_project_alias(dataset: str, data_dict: dict, project_name: str, root_url: str | None) -> None:
-    """Create a project-level alias for the dataset path."""
-    if not data_dict.get("path"):
-        return
-
-    token = f"{Path(dataset).stem.replace('-', '_').replace(' ', '_').upper()}_DATASET_PATH"
-    project_url = tlc.Url.create_project_url(project_name, root_url)
-
-    try:
-        tlc.register_project_url_alias(
-            token, path=data_dict["path"].absolute(), project=project_name, root=root_url, force=False
-        )
-        LOGGER.info(f"{TLC_COLORSTR}Created project level alias {token}={data_dict['path']} in project {project_url}")
-    except ValueError as e:
-        candidate = f"{token}={data_dict['path']}"
-        msg = (
-            f"Failed to create project level alias {candidate}, it already exists with a different path. Either "
-            "remove the alias or set `create_project_alias=False` to skip creating the alias."
-        )
-        raise ValueError(msg) from e
-
-
 def _create_split_table(
     split: str,
     split_paths: str | list[str],
@@ -544,7 +522,6 @@ def create_tables_from_yaml_file(
     autodownload: bool = True,
     project_name: str | None = None,
     root_url: str | None = None,
-    create_project_alias: bool = True,
     splits: Iterable[str] = ("train", "val", "test", "minival"),
     if_exists: Literal["raise", "reuse", "rename", "overwrite"] = "reuse",
     **kwargs,
@@ -560,8 +537,6 @@ def create_tables_from_yaml_file(
        the YAML file. Forwarded to `ultralytics.data.utils.check_det_dataset`.
     :param project_name: The name of the project to create the tables for.
     :param root_url: The root URL of the project to create the tables for.
-    :param create_project_alias: Whether to create a project level alias for image paths in the tables, using the
-       resolved YOLO dataset `path` as the value.
     :param splits: The splits to create the tables for.
     :param if_exists: The if exists option to pass to the table creator.
     :param kwargs: Additional keyword arguments to pass to the table creator.
@@ -581,9 +556,6 @@ def create_tables_from_yaml_file(
     project_name = project_name or Path(dataset).stem
     project_url = tlc.Url.create_project_url(project_name, root_url)
     project_name = project_url.name
-
-    if create_project_alias:
-        _create_project_alias(dataset, data_dict, project_name, root_url)
 
     if task == "pose":
         _resolve_pose_kwargs(data_dict, kwargs)

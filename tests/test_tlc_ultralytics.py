@@ -378,6 +378,7 @@ def test_classify_training() -> None:
     # Imagenet should get special treatment with label display name overrides
     input_table = tlc.Table.from_url(run.url / run.constants["inputs"][0]["input_table_url"])
     value_map = input_table.get_value_map("label")
+    assert value_map is not None, "Expected value map to be not None"
     assert all(v.display_name for v in value_map.values()), "Expected display names for all classes"
     display_names = {v.display_name for v in value_map.values()}
     assert display_names == {
@@ -731,7 +732,7 @@ def test_train_no_weight_column_in_table(task) -> None:
     # Test that training with a table that has no weight column works
     model = TLCYOLO(TASK2MODEL[task])
 
-    settings = Settings(project_name="test_train_no_weight_column_in_table")
+    settings = Settings(project_name=f"test_train_no_weight_column_in_table_{task}")
     model.train(data=TASK2DATASET[task], settings=settings, epochs=1, device="cpu", workers=0)
     table = model.trainer.data["train"]
 
@@ -742,11 +743,13 @@ def test_train_no_weight_column_in_table(task) -> None:
 
     # Should fail to train with weights enabled on table with no weight column
     with pytest.raises(ValueError):
-        settings = Settings(project_name="test_train_no_weight_column_in_table", sampling_weights=True)
+        settings = Settings(project_name=f"test_train_no_weight_column_in_table_{task}", sampling_weights=True)
         model.train(tables=tables, settings=settings, workers=0, epochs=1, device="cpu")
 
     # Should collect with exclusion enabled and no weight column
-    settings = Settings(project_name="test_train_no_weight_column_in_table", exclude_zero_weight_collection=True)
+    settings = Settings(
+        project_name=f"test_train_no_weight_column_in_table_{task}", exclude_zero_weight_collection=True
+    )
     model.collect(tables=tables, settings=settings, workers=0, device="cpu")
 
 
