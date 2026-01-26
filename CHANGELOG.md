@@ -6,6 +6,11 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Changed
+
+- Increase the lowest supported Python version from `3.9` to `3.10`.
+- Replace usage of deprecated `Table.from_yolo()` with `Table.from_yolo_url()`, implemented in `tlc_ultralytics.create_tables_from_yaml_file()`. This should be used instead of `Table.from_yolo()` to create tables from each split of a YOLO dataset YAML file.
+
 ## [0.1.6] - 2025-10-22
 
 ### Added
