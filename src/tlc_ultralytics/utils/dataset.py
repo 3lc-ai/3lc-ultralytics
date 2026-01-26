@@ -127,7 +127,6 @@ def check_tlc_dataset(  # noqa: C901
                         )
 
         elif task in ["detect", "segment", "pose", "obb"]:
-
             tables = create_tables_from_yaml_file(data, task, splits=splits, project_name=project_name)
 
         # Get the latest version when inferring
@@ -136,8 +135,7 @@ def check_tlc_dataset(  # noqa: C901
 
             if tables[key] != table:
                 LOGGER.info(
-                    f"{colorstr(key)}: Using latest version of table from {data}: "
-                    f"{table.url} -> {tables[key].url}"
+                    f"{colorstr(key)}: Using latest version of table from {data}: {table.url} -> {tables[key].url}"
                 )
             else:
                 LOGGER.info(f"{colorstr(key)}: Using initial version of table from {data}: {tables[key].url}")
@@ -346,6 +344,122 @@ def _check_tables(tables: object):
             )
             raise ValueError(msg)
 
+
+def _resolve_pose_kwargs(data_dict: dict, kwargs: dict) -> None:
+    """Resolve pose-specific kwargs from the YAML data dict and function arguments.
+
+    Modifies kwargs in-place to include pose-specific parameters.
+    """
+    _pose_key_mapping = {
+        "kpt_shape": "kpt_shape",
+        "points": "points",
+        "point_attributes": "point_attributes",
+        "lines": "lines",
+        "line_attributes": "line_attributes",
+        "triangles": "triangles",
+        "triangle_attributes": "triangle_attributes",
+        "flip_indices": "flip_idx",
+        "oks_sigmas": "oks_sigmas",
+    }
+
+    for kwargs_key, yaml_key in _pose_key_mapping.items():
+        kwargs[kwargs_key] = kwargs.get(kwargs_key, None) or data_dict.get(yaml_key, None)
+
+    _required_kwargs = ["kpt_shape", "flip_indices"]
+
+    for required_kwarg in _required_kwargs:
+        if kwargs[required_kwarg] is None:
+            yaml_key = _pose_key_mapping[required_kwarg]
+            text = f"the `{yaml_key}` field" if required_kwarg != yaml_key else ""
+            msg = (
+                f"`{required_kwarg}` is required for pose estimation, either through the `{required_kwarg}` "
+                f"argument or {text} in the YAML file."
+            )
+            raise ValueError(msg)
+
+
+def _create_project_alias(dataset: str, data_dict: dict, project_name: str, root_url: str | None) -> None:
+    """Create a project-level alias for the dataset path."""
+    if not data_dict.get("path"):
+        return
+
+    token = f"{Path(dataset).stem.replace('-', '_').replace(' ', '_').upper()}_DATASET_PATH"
+    project_url = tlc.Url.create_project_url(project_name, root_url)
+
+    try:
+        tlc.register_project_url_alias(
+            token, path=data_dict["path"].absolute(), project=project_name, root=root_url, force=False
+        )
+        LOGGER.info(f"{TLC_COLORSTR}Created project level alias {token}={data_dict['path']} in project {project_url}")
+    except ValueError as e:
+        candidate = f"{token}={data_dict['path']}"
+        msg = (
+            f"Failed to create project level alias {candidate}, it already exists with a different path. Either "
+            "remove the alias or set `create_project_alias=False` to skip creating the alias."
+        )
+        raise ValueError(msg) from e
+
+
+def _create_split_table(
+    split: str,
+    split_paths: str | list[str],
+    categories: dict,
+    task: str,
+    project_name: str,
+    if_exists: str,
+    **kwargs,
+) -> tlc.Table:
+    """Create a table for a single split, joining multiple paths if necessary."""
+    if not isinstance(split_paths, list):
+        split_paths = [split_paths]
+
+    split_tables = []
+    for i, split_part in enumerate(split_paths):
+        table_name = "initial" if len(split_paths) == 1 else f"initial-{i}"
+        table = tlc.Table.from_yolo_url(
+            split_part,
+            categories=categories,
+            task=task,
+            project_name=project_name,
+            dataset_name=split,
+            table_name=table_name,
+            if_exists=if_exists,
+            **kwargs,
+        )
+        split_tables.append(table)
+
+    if len(split_tables) > 1:
+        return tlc.Table.join_tables(
+            split_tables,
+            project_name=project_name,
+            dataset_name=split,
+            if_exists=if_exists,
+            table_name="initial",
+        )
+    return split_tables[0]
+
+
+def _get_existing_table(
+    project_name: str | None,
+    split: str,
+    if_exists: Literal["raise", "reuse", "rename", "overwrite"],
+) -> tlc.Table | None:
+    """Check if a table already exists and return it if if_exists is 'reuse'."""
+    final_table_url = tlc.Url.create_table_url(project_name, split, "initial")
+
+    if not final_table_url.exists():
+        return None
+
+    if if_exists == "raise":
+        msg = f"Table already exists at URL: {final_table_url}, and `if_exists` is set to `raise`."
+        raise FileExistsError(msg)
+
+    if if_exists == "reuse":
+        return tlc.Table.from_url(final_table_url)
+
+    return None
+
+
 @overload
 def create_tables_from_yaml_file(
     dataset: str,
@@ -374,6 +488,7 @@ def create_tables_from_yaml_file(
     :param kwargs: Additional keyword arguments to pass to the table creator.
     :returns: A dictionary of tables, keyed by split.
     """
+
 
 @overload
 def create_tables_from_yaml_file(
@@ -422,6 +537,7 @@ def create_tables_from_yaml_file(
     :returns: A dictionary of tables, keyed by split.
     """
 
+
 def create_tables_from_yaml_file(
     dataset: str,
     task: Literal["detect", "segment", "pose", "obb"],
@@ -429,7 +545,7 @@ def create_tables_from_yaml_file(
     project_name: str | None = None,
     root_url: str | None = None,
     create_project_alias: bool = True,
-    splits: Iterable[str] | None = ("train", "val", "test", "minival"),
+    splits: Iterable[str] = ("train", "val", "test", "minival"),
     if_exists: Literal["raise", "reuse", "rename", "overwrite"] = "reuse",
     **kwargs,
 ) -> dict[str, tlc.Table]:
@@ -451,120 +567,36 @@ def create_tables_from_yaml_file(
     :param kwargs: Additional keyword arguments to pass to the table creator.
     :returns: A dictionary of tables, keyed by split.
     """
-
-    # Parse the YAML file and resolve the paths
     data_dict = check_det_dataset(dataset, autodownload=autodownload)
 
-    # Fast-track when the result table already exists
+    # Fast-track: reuse existing tables when if_exists="reuse"
+    # Note: uses project_name before defaulting to maintain original behavior
     tables = {}
     for split in splits:
-        final_table_url = tlc.Url.create_table_url(project_name, split, "initial")
+        existing_table = _get_existing_table(project_name, split, if_exists)
+        if existing_table is not None:
+            tables[split] = existing_table
 
-        if final_table_url.exists():
-            if if_exists == "raise":
-                msg = f"Table already exists at URL: {final_table_url}, and `if_exists` is set to `raise`."
-                raise FileExistsError(msg)
-            elif if_exists == "reuse":
-                # Reuse the existing table, no need to create new one
-                # (this is for backward compatibility with Tables created with `Table.from_yolo`)
-                # and to avoid considering recreating part tables and joining them
-                table = tlc.Table.from_url(final_table_url)
-                tables[split] = table
-                continue
-
+    # Set up project name (after fast-track check)
     project_name = project_name or Path(dataset).stem
     project_url = tlc.Url.create_project_url(project_name, root_url)
     project_name = project_url.name
 
-    if create_project_alias and data_dict.get("path"):
-        token = f"{Path(dataset).stem.replace('-', '_').replace(' ', '_').upper()}_DATASET_PATH"
-        try:
-            tlc.register_project_url_alias(
-                token,
-                path=data_dict["path"].absolute(),
-                project=project_name,
-                root=root_url,
-                force=False
-            )
-            LOGGER.info(
-                f"{TLC_COLORSTR}Created project level alias {token}={data_dict['path']} in project {project_url}"
-            )
-        except ValueError as e:
-            candidate = f"{token}={data_dict['path']}"
-            msg = (
-                f"Failed to create project level alias {candidate}, it already exists with a different path. Either "
-                "remove the alias or set `create_project_alias=False` to skip creating the alias."
-            )
-            raise ValueError(msg) from e
+    if create_project_alias:
+        _create_project_alias(dataset, data_dict, project_name, root_url)
+
+    if task == "pose":
+        _resolve_pose_kwargs(data_dict, kwargs)
 
     categories = data_dict.get("names")
 
-    if task == "pose":
-        _pose_key_mapping = {
-            "kpt_shape": "kpt_shape",
-            "points": "points",
-            "point_attributes": "point_attributes",
-            "lines": "lines",
-            "line_attributes": "line_attributes",
-            "triangles": "triangles",
-            "triangle_attributes": "triangle_attributes",
-            "flip_indices": "flip_idx",
-            "oks_sigmas": "oks_sigmas",
-        }
-
-        for kwargs_key, yaml_key in _pose_key_mapping.items():
-            kwargs[kwargs_key] = kwargs.get(kwargs_key, None) or data_dict.get(yaml_key, None)
-
-        _required_kwargs = ["kpt_shape", "flip_indices"]
-
-        for required_kwarg in _required_kwargs:
-            if kwargs[required_kwarg] is None:
-                if required_kwarg != _pose_key_mapping[required_kwarg]:
-                    text = f"the `{_pose_key_mapping[required_kwarg]}` field"
-                else:
-                    text = ""
-                msg = (
-                    f"`{required_kwarg}` is required for pose estimation, either through the `{required_kwarg}` "
-                    f"argument or {text} in the YAML file."
-                )
-                raise ValueError(msg)
-
-
     for split in splits:
+        if split in tables:
+            continue
         split_paths = data_dict.get(split)
-
         if split_paths is None:
             continue
-
-        if not isinstance(split_paths, list):
-            split_paths = [split_paths]
-
-        split_tables = []
-        for i, split_part in enumerate(split_paths):
-            table_name = "initial" if len(split_paths) == 1 else f"initial-{i}"
-            table = tlc.Table.from_yolo_url(
-                split_part,
-                categories=categories,
-                task=task,
-                project_name=project_name,
-                dataset_name=split,
-                table_name=table_name,
-                if_exists=if_exists,
-                **kwargs,
-            )
-            split_tables.append(table)
-
-        if len(split_tables) > 1:
-            tables[split] = tlc.Table.join_tables(
-                split_tables,
-                project_name=project_name,
-                dataset_name=split,
-                if_exists=if_exists,
-                table_name="initial",
-            )
-        else:
-            tables[split] = split_tables[0]
-
+        tables[split] = _create_split_table(split, split_paths, categories, task, project_name, if_exists, **kwargs)
         LOGGER.info(f"{TLC_COLORSTR}Created table for split {split} with URL: {tables[split].url}")
 
     return tables
