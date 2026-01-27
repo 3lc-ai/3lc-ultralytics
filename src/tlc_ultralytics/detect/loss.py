@@ -70,6 +70,9 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
     def __call__(self, preds, batch) -> dict[str, torch.Tensor]:
         """Calculate unreduced losses for box, cls and dfl.
 
+        Note: This loss function only supports non-end2end models (YOLO11 and older).
+        YOLO26 (end2end) models are filtered out at the validator level.
+
         :param preds: Model predictions
         :param batch: Batch data
         :return: Dictionary containing unreduced losses
@@ -78,35 +81,13 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
         # - Old format: preds is tuple (tensor, list_of_feats) or list_of_feats
         # - YOLO11+ format: preds[1] is dict with 'boxes', 'scores', 'feats' keys
         #   where 'boxes' is distribution tensor (reg_max*4 channels)
-        # - YOLO26 (end2end) format: preds[1] is dict with 'one2many'/'one2one' keys,
-        #   where 'boxes' is already decoded (4 channels)
         preds_dict = preds[1] if isinstance(preds, (list, tuple)) else preds
-
-        # Handle YOLO26 end2end format: use 'one2many' branch for loss computation during training,
-        # or 'one2one' branch for fused models during validation
-        is_end2end = isinstance(preds_dict, dict) and "one2many" in preds_dict
-        if is_end2end:
-            # Prefer one2many (training), fall back to one2one (fused/inference)
-            if preds_dict["one2many"]:
-                preds_dict = preds_dict["one2many"]
-            else:
-                preds_dict = preds_dict["one2one"]
 
         if isinstance(preds_dict, dict) and "boxes" in preds_dict:
             # New format: boxes/scores from dict
-            boxes_tensor = preds_dict["boxes"]
+            pred_distri = preds_dict["boxes"].permute(0, 2, 1).contiguous()
             pred_scores = preds_dict["scores"].permute(0, 2, 1).contiguous()
             feats = preds_dict["feats"]
-
-            # Check if boxes is distribution (YOLO11: reg_max*4 channels) or decoded (YOLO26: 4 channels)
-            if boxes_tensor.shape[1] == 4:
-                # YOLO26 end2end: boxes are already decoded, no distribution available
-                pred_distri = None
-                pred_bboxes_decoded = boxes_tensor.permute(0, 2, 1).contiguous()
-            else:
-                # YOLO11+: boxes is the distribution tensor
-                pred_distri = boxes_tensor.permute(0, 2, 1).contiguous()
-                pred_bboxes_decoded = None
         else:
             # Old format: need to compute from raw features
             feats = preds_dict
@@ -115,7 +96,6 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
             )
             pred_scores = pred_scores.permute(0, 2, 1).contiguous()
             pred_distri = pred_distri.permute(0, 2, 1).contiguous()
-            pred_bboxes_decoded = None
 
         dtype = pred_scores.dtype
         batch_size = pred_scores.shape[0]
@@ -131,11 +111,8 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
         gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0.0)
 
-        # Pboxes - use decoded boxes if available (YOLO26), otherwise decode from distribution
-        if pred_bboxes_decoded is not None:
-            pred_bboxes = pred_bboxes_decoded
-        else:
-            pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
+        # Pboxes
+        pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
 
         _, target_bboxes, target_scores, fg_mask, _ = self.assigner(
             pred_scores.detach().sigmoid(),
@@ -157,26 +134,17 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
         if fg_mask.sum():
             target_bboxes /= stride_tensor
 
-            if pred_distri is not None:
-                # Standard loss with DFL (YOLO11 and older)
-                box_loss, dfl_loss = self.bbox_loss(
-                    pred_distri,
-                    pred_bboxes,
-                    anchor_points,
-                    target_bboxes,
-                    target_scores,
-                    target_scores_sum,
-                    fg_mask,
-                )
-                box_loss_full[fg_mask] = box_loss.to(cls_loss.dtype).squeeze()
-                dfl_loss_full[fg_mask] = dfl_loss.to(cls_loss.dtype).squeeze()
-            else:
-                # YOLO26 end2end: no distribution available, use IoU loss only
-                weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
-                iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
-                box_loss = (1.0 - iou) * weight
-                box_loss_full[fg_mask] = box_loss.to(cls_loss.dtype).squeeze()
-                # dfl_loss_full stays zeros for end2end models
+            box_loss, dfl_loss = self.bbox_loss(
+                pred_distri,
+                pred_bboxes,
+                anchor_points,
+                target_bboxes,
+                target_scores,
+                target_scores_sum,
+                fg_mask,
+            )
+            box_loss_full[fg_mask] = box_loss.to(cls_loss.dtype).squeeze()
+            dfl_loss_full[fg_mask] = dfl_loss.to(cls_loss.dtype).squeeze()
 
         losses = {
             "cls_loss": cls_loss,

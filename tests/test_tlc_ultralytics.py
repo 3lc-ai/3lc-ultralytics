@@ -413,9 +413,7 @@ def test_detect_yolo26_disables_per_sample_loss() -> None:
     assert results, "YOLO26 detection training failed"
 
     # Check that a warning was logged about disabling loss collection
-    loss_warning_found = any(
-        "Per-sample loss collection is not supported for YOLO26" in msg for msg in log_messages
-    )
+    loss_warning_found = any("Per-sample loss collection is not supported for YOLO26" in msg for msg in log_messages)
     assert loss_warning_found, "Expected warning about YOLO26 loss collection not being supported"
 
     run = _get_run_from_settings(settings)
