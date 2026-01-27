@@ -29,29 +29,13 @@ class v8UnreducedPoseLoss(v8PoseLoss):
     ) -> dict[str, torch.Tensor]:
         """Calculate unreduced losses for box, cls, dfl, pose (kpts), and kobj.
 
-        Note: This loss function only supports non-end2end models (YOLO11 and older).
-        YOLO26 (end2end) models are filtered out at the validator level.
-
         Returns a dict of tensors shaped (batch, num_anchors) for each component.
         """
-        # Handle different prediction formats
         preds_dict = preds[1] if isinstance(preds, (list, tuple)) else preds
-
-        if isinstance(preds_dict, dict) and "boxes" in preds_dict:
-            # New format with dict
-            pred_distri = preds_dict["boxes"].permute(0, 2, 1).contiguous()
-            pred_scores = preds_dict["scores"].permute(0, 2, 1).contiguous()
-            feats = preds_dict["feats"]
-            pred_kpts = preds_dict["kpts"].permute(0, 2, 1).contiguous()
-        else:
-            # Old format: feats and kpts tuple
-            feats, pred_kpts = preds if isinstance(preds[0], list) else preds[1]
-            pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
-                (self.reg_max * 4, self.nc), 1
-            )
-            pred_scores = pred_scores.permute(0, 2, 1).contiguous()
-            pred_distri = pred_distri.permute(0, 2, 1).contiguous()
-            pred_kpts = pred_kpts.permute(0, 2, 1).contiguous()
+        pred_distri = preds_dict["boxes"].permute(0, 2, 1).contiguous()
+        pred_scores = preds_dict["scores"].permute(0, 2, 1).contiguous()
+        feats = preds_dict["feats"]
+        pred_kpts = preds_dict["kpts"].permute(0, 2, 1).contiguous()
 
         dtype = pred_scores.dtype
         batch_size = pred_scores.shape[0]

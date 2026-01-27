@@ -70,32 +70,14 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
     def __call__(self, preds, batch) -> dict[str, torch.Tensor]:
         """Calculate unreduced losses for box, cls and dfl.
 
-        Note: This loss function only supports non-end2end models (YOLO11 and older).
-        YOLO26 (end2end) models are filtered out at the validator level.
-
         :param preds: Model predictions
         :param batch: Batch data
         :return: Dictionary containing unreduced losses
         """
-        # Handle different prediction formats:
-        # - Old format: preds is tuple (tensor, list_of_feats) or list_of_feats
-        # - YOLO11+ format: preds[1] is dict with 'boxes', 'scores', 'feats' keys
-        #   where 'boxes' is distribution tensor (reg_max*4 channels)
         preds_dict = preds[1] if isinstance(preds, (list, tuple)) else preds
-
-        if isinstance(preds_dict, dict) and "boxes" in preds_dict:
-            # New format: boxes/scores from dict
-            pred_distri = preds_dict["boxes"].permute(0, 2, 1).contiguous()
-            pred_scores = preds_dict["scores"].permute(0, 2, 1).contiguous()
-            feats = preds_dict["feats"]
-        else:
-            # Old format: need to compute from raw features
-            feats = preds_dict
-            pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
-                (self.reg_max * 4, self.nc), 1
-            )
-            pred_scores = pred_scores.permute(0, 2, 1).contiguous()
-            pred_distri = pred_distri.permute(0, 2, 1).contiguous()
+        pred_distri = preds_dict["boxes"].permute(0, 2, 1).contiguous()
+        pred_scores = preds_dict["scores"].permute(0, 2, 1).contiguous()
+        feats = preds_dict["feats"]
 
         dtype = pred_scores.dtype
         batch_size = pred_scores.shape[0]
