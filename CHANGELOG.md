@@ -12,8 +12,7 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Changed
 
-- Increase the lower bound of the supported Python version from `3.9` to `3.10` ([#45](https://github.com/3lc-ai/3lc-ultralytics/pull/45)).
-- Increase the supported `ultralytics` version range from `>=8.3.169,<8.3.193` to `>=8.4.0,<8.4.8`, enabling support for YOLO26 models ([#45](https://github.com/3lc-ai/3lc-ultralytics/pull/45)). Per-sample loss collection is for now not supported for YOLO26 models.
+- Increase the supported `ultralytics` version range from `>=8.3.169,<8.3.193` to `>=8.4.0,<8.4.7`, enabling support for YOLO26 models ([#45](https://github.com/3lc-ai/3lc-ultralytics/pull/45)). Per-sample loss collection is for now not supported for YOLO26 models.
 - Allow any nonnegative image embeddings dimension ([#40](https://github.com/3lc-ai/3lc-ultralytics/pull/40)).
 - Add handling for dependency version check when `3lc-ultralytics` is executed from source without being installed ([#41](https://github.com/3lc-ai/3lc-ultralytics/pull/41)).
 
