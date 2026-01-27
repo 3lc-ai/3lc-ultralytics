@@ -82,7 +82,6 @@ class TLCValidatorMixin(BaseValidator):
         self._seen = None
         self._final_validation = False
         self._hook_handles = []
-        self._single_rank_validation = False  # Set True to skip distributed gather_stats
 
         super().__init__(*args, **kwargs)
 
@@ -175,18 +174,6 @@ class TLCValidatorMixin(BaseValidator):
         self._post_validation()
 
         return out
-
-    def gather_stats(self):
-        """Override to skip distributed gathering when doing single-rank validation.
-
-        In DDP mode, the train_validator runs only on RANK 0 to collect 3LC metrics
-        on the full training set. In this case, we skip the distributed gather_stats
-        since other ranks aren't participating in this validation.
-        """
-        if self._single_rank_validation:
-            # Skip distributed operations - this validator runs on a single rank only
-            return
-        super().gather_stats()
 
     def get_desc(self):
         """Add the split name next to the validation description"""
@@ -329,8 +316,7 @@ class TLCValidatorMixin(BaseValidator):
         input_table_url = self.dataloader.dataset.table.url.to_str()
 
         # Gather metrics from all ranks to RANK 0 in DDP mode
-        # Skip gathering if this is a single-rank validation (e.g., train_validator)
-        if RANK >= 0 and not self._single_rank_validation:
+        if RANK >= 0:
             world_size = dist.get_world_size()
             gathered_metrics_infos = [None] * world_size if RANK == 0 else None
             gathered_input_urls = [None] * world_size if RANK == 0 else None
@@ -348,7 +334,7 @@ class TLCValidatorMixin(BaseValidator):
                 # Collect unique input table URLs (should all be the same in distributed validation)
                 input_table_urls = list(set(gathered_input_urls))
         else:
-            # Single GPU or single-rank validation
+            # Single GPU mode (RANK == -1)
             input_table_urls = [input_table_url]
 
         # Only RANK 0 (or single GPU) updates the run
