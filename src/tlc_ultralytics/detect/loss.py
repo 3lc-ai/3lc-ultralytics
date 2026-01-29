@@ -74,13 +74,10 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
         :param batch: Batch data
         :return: Dictionary containing unreduced losses
         """
-        feats = preds[1] if isinstance(preds, (list, tuple)) else preds
-        pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
-            (self.reg_max * 4, self.nc), 1
-        )
-
-        pred_scores = pred_scores.permute(0, 2, 1).contiguous()
-        pred_distri = pred_distri.permute(0, 2, 1).contiguous()
+        preds_dict = preds[1] if isinstance(preds, (list, tuple)) else preds
+        pred_distri = preds_dict["boxes"].permute(0, 2, 1).contiguous()
+        pred_scores = preds_dict["scores"].permute(0, 2, 1).contiguous()
+        feats = preds_dict["feats"]
 
         dtype = pred_scores.dtype
         batch_size = pred_scores.shape[0]
@@ -118,6 +115,7 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
         dfl_loss_full = torch.zeros_like(cls_loss)
         if fg_mask.sum():
             target_bboxes /= stride_tensor
+
             box_loss, dfl_loss = self.bbox_loss(
                 pred_distri,
                 pred_bboxes,

@@ -9,9 +9,9 @@ from tlc.core.builtins.constants import KEYPOINTS_2D_PREDICTED
 from tlc.core.builtins.schemas import Keypoints2DSchema
 from tlc.core.data_formats import Keypoints2DInstances
 from ultralytics.models.yolo.pose.val import PoseValidator
-from ultralytics.utils import ops
+from ultralytics.utils import LOGGER, ops
 
-from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME
+from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME, TLC_COLORSTR
 from tlc_ultralytics.engine.validator import TLCValidatorMixin
 from tlc_ultralytics.pose.dataset import TLCYOLOPoseDataset
 from tlc_ultralytics.pose.loss import v8UnreducedPoseLoss
@@ -146,11 +146,24 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
 
     def _prepare_loss_fn(self, model):
         loss_model = model.model if hasattr(model.model, "model") else model
-        # Pass through dataset-provided OKS sigmas to the loss via model attribute for consistency
-        oks_sigmas = self._settings.oks_sigmas or self.data.get("oks_sigmas")
-        if oks_sigmas is not None:
-            loss_model.oks_sigmas = oks_sigmas
-        self.loss_fn = v8UnreducedPoseLoss(loss_model, training=self._training)
+
+        # Check if this is a YOLO26 (end2end) model - per-sample loss is not supported for these
+        is_end2end = getattr(loss_model.model[-1], "end2end", False) if hasattr(loss_model, "model") else False
+
+        if is_end2end and self._settings.collect_loss:
+            LOGGER.warning(
+                f"{TLC_COLORSTR}Per-sample loss collection is not supported for YOLO26 (end2end) models. "
+                "Disabling loss collection for this run."
+            )
+            self._settings.collect_loss = False
+            return
+
+        if self._settings.collect_loss:
+            # Pass through dataset-provided OKS sigmas to the loss via model attribute for consistency
+            oks_sigmas = self._settings.oks_sigmas or self.data.get("oks_sigmas")
+            if oks_sigmas is not None:
+                loss_model.oks_sigmas = oks_sigmas
+            self.loss_fn = v8UnreducedPoseLoss(loss_model, training=self._training)
 
     def _add_embeddings_hook(self, model) -> int:
         if hasattr(model.model, "model"):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 import torch.nn.functional as F
-from ultralytics.utils.loss import KeypointLoss, v8PoseLoss
+from ultralytics.utils.loss import KeypointLoss, PoseLoss26, v8PoseLoss
 from ultralytics.utils.ops import xyxy2xywh
 
 from tlc_ultralytics.detect.loss import UnreducedBboxLoss
@@ -22,20 +22,20 @@ class v8UnreducedPoseLoss(v8PoseLoss):
         self.bbox_loss = UnreducedBboxLoss(self.reg_max)
         self.training = training
 
-    def __call__(self, preds, batch) -> dict[str, torch.Tensor]:
+    def __call__(
+        self,
+        preds: dict[str, torch.Tensor] | tuple[torch.Tensor, dict[str, torch.Tensor]],
+        batch: dict[str, torch.Tensor],
+    ) -> dict[str, torch.Tensor]:
         """Calculate unreduced losses for box, cls, dfl, pose (kpts), and kobj.
 
         Returns a dict of tensors shaped (batch, num_anchors) for each component.
         """
-        feats, pred_kpts = preds if isinstance(preds[0], list) else preds[1]
-        pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
-            (self.reg_max * 4, self.nc), 1
-        )
-
-        # B, grids, ..
-        pred_scores = pred_scores.permute(0, 2, 1).contiguous()  # (B, A, C)
-        pred_distri = pred_distri.permute(0, 2, 1).contiguous()  # (B, A, 4*reg_max or 4)
-        pred_kpts = pred_kpts.permute(0, 2, 1).contiguous()  # (B, A, K*kdim)
+        preds_dict = preds[1] if isinstance(preds, (list, tuple)) else preds
+        pred_distri = preds_dict["boxes"].permute(0, 2, 1).contiguous()
+        pred_scores = preds_dict["scores"].permute(0, 2, 1).contiguous()
+        feats = preds_dict["feats"]
+        pred_kpts = preds_dict["kpts"].permute(0, 2, 1).contiguous()
 
         dtype = pred_scores.dtype
         batch_size = pred_scores.shape[0]
@@ -49,7 +49,7 @@ class v8UnreducedPoseLoss(v8PoseLoss):
         gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0.0)
 
-        # Pboxes and keypoints
+        # Pboxes
         pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # (B, A, 4)
         pred_kpts = self.kpts_decode(anchor_points, pred_kpts.view(batch_size, -1, *self.kpt_shape))  # (B, A, K, D)
 
@@ -71,6 +71,7 @@ class v8UnreducedPoseLoss(v8PoseLoss):
         dfl_loss_full = torch.zeros_like(cls_loss)
         if fg_mask.sum():
             target_bboxes /= stride_tensor
+
             box_loss, dfl_loss = self.bbox_loss(
                 pred_distri,
                 pred_bboxes,
@@ -176,8 +177,23 @@ class TLCv8PoseLoss(v8PoseLoss):
     configure the `KeypointLoss`. Falls back to the default behavior otherwise.
     """
 
-    def __init__(self, model):
-        super().__init__(model)
+    def __init__(self, model, tal_topk: int = 10, tal_topk2: int | None = None):
+        super().__init__(model, tal_topk, tal_topk2)
+        oks_sigmas = getattr(model, "oks_sigmas", None)
+        if oks_sigmas is not None:
+            sigmas_tensor = torch.as_tensor(oks_sigmas, device=self.device, dtype=torch.float32)
+            self.keypoint_loss = KeypointLoss(sigmas=sigmas_tensor)
+
+
+class TLCPoseLoss26(PoseLoss26):
+    """PoseLoss26 that prefers dataset-provided OKS sigmas when available.
+
+    If the attached model has an attribute `oks_sigmas` (list/ndarray/tensor), use it to
+    configure the `KeypointLoss`. Falls back to the default behavior otherwise.
+    """
+
+    def __init__(self, model, tal_topk: int = 10, tal_topk2: int | None = None):
+        super().__init__(model, tal_topk, tal_topk2)
         oks_sigmas = getattr(model, "oks_sigmas", None)
         if oks_sigmas is not None:
             sigmas_tensor = torch.as_tensor(oks_sigmas, device=self.device, dtype=torch.float32)

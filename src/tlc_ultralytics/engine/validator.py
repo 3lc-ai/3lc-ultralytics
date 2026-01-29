@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 import tlc
+import torch.distributed as dist
 import ultralytics
 from ultralytics.engine.validator import BaseValidator
-from ultralytics.utils import LOGGER, colorstr
+from ultralytics.utils import LOGGER, RANK, colorstr
 
 from tlc_ultralytics.constants import (
     DEFAULT_COLLECT_RUN_DESCRIPTION,
@@ -164,7 +165,12 @@ class TLCValidatorMixin(BaseValidator):
             ultralytics.engine.validator.check_det_dataset = ultralytics.data.utils.check_det_dataset
             ultralytics.engine.validator.check_cls_dataset = ultralytics.data.utils.check_cls_dataset
 
-        self._write_per_class_metrics_tables()
+        # Per-class metrics only on RANK 0 (uses aggregate metrics from gather_stats)
+        if RANK in {-1, 0}:
+            self._write_per_class_metrics_tables()
+
+        # All ranks call _post_validation to participate in distributed gathering
+        # (the method handles RANK checks internally for the actual run updates)
         self._post_validation()
 
         return out
@@ -223,7 +229,11 @@ class TLCValidatorMixin(BaseValidator):
 
     @execute_when_collecting
     def _update_metrics(self, preds, batch):
-        """Update 3LC metrics with common and task-specific metrics"""
+        """Update 3LC metrics with common and task-specific metrics.
+
+        In DDP mode, each rank collects metrics for its portion of the data.
+        These are gathered to RANK 0 in _post_validation.
+        """
         batch_size = self._infer_batch_size(preds, batch)
 
         batch_metrics = {
@@ -242,12 +252,19 @@ class TLCValidatorMixin(BaseValidator):
             training_phase = 1 if self._final_validation else 0
             batch_metrics[TRAINING_PHASE] = [training_phase] * batch_size
 
+        # Add DDP rank for distributed validation debugging
+        if RANK >= 0:
+            batch_metrics["ddp_rank"] = [RANK] * batch_size
+
         self._metrics_writer.add_batch(batch_metrics)
         self._seen += batch_size
 
     @execute_when_collecting
     def _pre_validation(self, model):
-        """Prepare the validator for metrics collection"""
+        """Prepare the validator for metrics collection.
+
+        In DDP mode, each rank prepares its own metrics writer.
+        """
         column_schemas = {}
         column_schemas.update(self._get_metrics_schemas())  # Add task-specific metrics schema
 
@@ -265,7 +282,18 @@ class TLCValidatorMixin(BaseValidator):
         if self._epoch is not None:
             column_schemas[TRAINING_PHASE] = training_phase_schema()
 
-        self._run.set_status_collecting()
+        # Add DDP rank column for distributed validation debugging
+        if RANK >= 0:
+            column_schemas["ddp_rank"] = tlc.Schema(
+                display_name="DDP rank",
+                value=tlc.Int32Value(),
+                description="DDP rank that processed this sample",
+                default_visible=False,
+            )
+
+        # Only RANK 0 (or single GPU) updates run status
+        if RANK in {-1, 0}:
+            self._run.set_status_collecting()
 
         self._metrics_writer = tlc.MetricsTableWriter(
             run_url=self._run.url,
@@ -277,27 +305,58 @@ class TLCValidatorMixin(BaseValidator):
 
     @execute_when_collecting
     def _post_validation(self):
-        """Clean up the validator after one validation pass"""
-        # Write metrics data to 3LC run
+        """Clean up the validator after one validation pass.
+
+        In DDP mode, gathers metrics_infos and input table URLs from all ranks
+        to RANK 0, which then updates the run with all collected data.
+        """
+        # Each rank finalizes its own metrics writer
         self._metrics_writer.finalize()
         metrics_infos = self._metrics_writer.get_written_metrics_infos()
-        self._run.update_metrics(metrics_infos)
+        input_table_url = self.dataloader.dataset.table.url.to_str()
 
-        self._run.add_input_table(self.dataloader.dataset.table.url)
+        # Gather metrics from all ranks to RANK 0 in DDP mode
+        if RANK >= 0:
+            world_size = dist.get_world_size()
+            gathered_metrics_infos = [None] * world_size if RANK == 0 else None
+            gathered_input_urls = [None] * world_size if RANK == 0 else None
 
-        # Improve memory usage - don't cache metrics data
-        for metrics_info in metrics_infos:
-            tlc.ObjectRegistry._delete_object_from_caches(tlc.Url(metrics_info["url"]).to_absolute(self._run.url))
+            dist.gather_object(metrics_infos, gathered_metrics_infos, dst=0)
+            dist.gather_object(input_table_url, gathered_input_urls, dst=0)
 
-        self._run.set_status_running()
+            if RANK == 0:
+                # Flatten metrics_infos from all ranks
+                all_metrics_infos = []
+                for rank_metrics in gathered_metrics_infos:
+                    all_metrics_infos.extend(rank_metrics)
+                metrics_infos = all_metrics_infos
 
-        # Remove hook handles
+                # Collect unique input table URLs (should all be the same in distributed validation)
+                input_table_urls = list(set(gathered_input_urls))
+        else:
+            # Single GPU mode (RANK == -1)
+            input_table_urls = [input_table_url]
+
+        # Only RANK 0 (or single GPU) updates the run
+        if RANK in {-1, 0}:
+            self._run.update_metrics(metrics_infos)
+
+            for url in input_table_urls:
+                self._run.add_input_table(tlc.Url(url))
+
+            # Improve memory usage - don't cache metrics data
+            for metrics_info in metrics_infos:
+                tlc.ObjectRegistry._delete_object_from_caches(tlc.Url(metrics_info["url"]).to_absolute(self._run.url))
+
+            self._run.set_status_running()
+
+        # Remove hook handles (all ranks)
         if self._settings.image_embeddings_dim > 0:
             for handle in self._hook_handles:
                 handle.remove()
             self._hook_handles.clear()
 
-        # Reset state
+        # Reset state (all ranks)
         self._seen = None
         self._training_phase = None
         self._final_validation = None
