@@ -264,7 +264,7 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
         :param label_column_name: The name of the label column in the table
         :returns: The segment type ("absolute" or "relative")
         """
-        column_name, _instances_name, _ = label_column_name.split(".")
+        column_name, _instances_name, _label_key = label_column_name.split(".")
 
         try:
             rles_schema_value = table.rows_schema.values[column_name].values["rles"].value

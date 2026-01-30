@@ -8,8 +8,20 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Changed
 
-- Increase the lowest supported Python version from `3.9` to `3.10`.
 - Replace usage of deprecated `Table.from_yolo()` with `Table.from_yolo_url()`, implemented in `tlc_ultralytics.create_tables_from_yaml_file()`. This should be used instead of `Table.from_yolo()` to create tables from each split of a YOLO dataset YAML file.
+- To support the latest version of `3lc` with `Table.from_yolo_url()`, increase the lowest supported Python version from `3.9` to `3.10`.
+
+## [0.1.7] - 2026-01-30
+
+### Added
+
+- Raise when no data ends up in a dataset split ([#43](https://github.com/3lc-ai/3lc-ultralytics/pull/43)).
+
+### Changed
+
+- Increase the supported `ultralytics` version range from `>=8.3.169,<8.3.193` to `>=8.4.0,<8.4.7`, enabling support for YOLO26 models ([#45](https://github.com/3lc-ai/3lc-ultralytics/pull/45)). Per-sample loss collection is for now not supported for YOLO26 models.
+- Allow any nonnegative image embeddings dimension ([#40](https://github.com/3lc-ai/3lc-ultralytics/pull/40)).
+- Add handling for dependency version check when `3lc-ultralytics` is executed from source without being installed ([#41](https://github.com/3lc-ai/3lc-ultralytics/pull/41)).
 
 ## [0.1.6] - 2025-10-22
 

@@ -36,11 +36,15 @@ class YOLO(YOLOBase):
         """Train the model."""
 
         # Patch the check_pip_update_available function to avoid prompting for an update
-        def check_pip_update_avaliable_return_false():
+        def check_pip_update_available_return_false():
             return False
 
         ultralytics_check_pip_update_available = ultralytics.utils.checks.check_pip_update_available
-        ultralytics.utils.checks.check_pip_update_available = check_pip_update_avaliable_return_false
+        ultralytics.utils.checks.check_pip_update_available = check_pip_update_available_return_false
+
+        # Ensure 'model' key exists in overrides (may be cleared after previous train() call)
+        if "model" not in self.overrides:
+            self.overrides["model"] = self.model_name
 
         output = super().train(*args, **kwargs)
 

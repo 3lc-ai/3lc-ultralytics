@@ -42,9 +42,8 @@ def create_sampler(
                 raise ValueError(f"Error creating sampler for table {table.url}") from e
 
     elif mode == "val":
-        if distributed:
-            raise NotImplementedError("Distributed validation and exclusion by weight is not yet supported.")
-
-        # Exclude zero weight is handled in the dataset for validation
+        # Exclude zero weight is handled in the dataset for validation.
+        # Note: In DDP mode, validation is distributed across GPUs. 3LC per-sample
+        # metrics are only collected on RANK 0's portion of the data.
         return None
     return sampler

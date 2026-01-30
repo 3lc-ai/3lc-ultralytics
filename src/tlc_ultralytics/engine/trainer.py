@@ -168,6 +168,11 @@ class TLCTrainerMixin(BaseTrainer):
             "3LC/val_url": val_url,  # 3LC table used for validation
             **{f"3LC/{k}": v for k, v in vars(self._settings).items()},  # 3LC settings
         }
+
+        parameters = {
+            key: value if not isinstance(value, Path) else value.as_posix() for key, value in parameters.items()
+        }
+
         self._run.set_parameters(parameters)
 
     def _print_metrics_collection_epochs(self):
@@ -204,23 +209,30 @@ class TLCTrainerMixin(BaseTrainer):
 
     @property
     def train_validator(self):
-        if RANK in {-1, 0}:
-            if not self._train_validator:
-                train_validator_dataloader = self.get_dataloader(
-                    self.data["train"],
-                    batch_size=self.batch_size if self.args.task == "obb" else self.batch_size * 2,
-                    rank=-1,
-                    mode="val",
-                )
-                self._train_validator = self.get_validator(dataloader=train_validator_dataloader)
-            return self._train_validator
-        else:
-            return None
+        """Validator for collecting 3LC metrics on the training set.
+
+        In DDP mode, uses distributed dataloader so each GPU validates its portion.
+        Metrics are gathered to RANK 0 in the validator's _post_validation.
+        """
+        if not self._train_validator:
+            train_validator_dataloader = self.get_dataloader(
+                self.data["train"],
+                batch_size=self.batch_size if self.args.task == "obb" else self.batch_size * 2,
+                rank=RANK,  # Distributed in DDP mode
+                mode="val",
+            )
+            self._train_validator = self.get_validator(dataloader=train_validator_dataloader)
+        return self._train_validator
 
     def validate(self):
-        """Perform validation with 3LC metrics collection, also on the training data, if applicable."""
+        """Perform validation with 3LC metrics collection, also on the training data, if applicable.
 
+        In DDP mode, train_validator uses distributed validation - each GPU validates its portion
+        and metrics are gathered to RANK 0. The regular validation (super().validate()) also
+        gathers 3LC metrics from all ranks.
+        """
         # Validate on the training set, unless the training and validation sets are identical
+        # All ranks participate in DDP mode for distributed metrics collection
         if (
             not self._settings.collection_disable
             and not self._settings.collection_val_only
@@ -231,6 +243,7 @@ class TLCTrainerMixin(BaseTrainer):
                 self.train_validator(trainer=self)
 
         # Validate on the validation/test set like usual
+        # In DDP mode, 3LC metrics are gathered from all ranks in the validator
         return super().validate()
 
     def _train_equals_val(self):
@@ -246,9 +259,12 @@ class TLCTrainerMixin(BaseTrainer):
         return self._train_equals_val_result
 
     def final_eval(self):
-        """Perform normal final validation with metrics collection on the val set, after first doing metrics collection
-        on the train set.
+        """Perform final validation with metrics collection on both train and val sets.
+
+        In DDP mode, uses distributed validation - each GPU validates its portion
+        and metrics are gathered to RANK 0.
         """
+        # Final validation on training set (all ranks participate in DDP mode)
         if not self._settings.collection_val_only and not self._settings.collection_disable:
             if self.best.exists() and not self._train_equals_val():
                 with _restore_random_state():
@@ -257,11 +273,14 @@ class TLCTrainerMixin(BaseTrainer):
                     self.train_validator.data = self.data
                     self.train_validator(model=self.best)
 
-        self.validator._final_validation = True
+        # Mark validator for final validation (all ranks, so gathering works correctly)
+        if not self._settings.collection_disable:
+            self.validator._final_validation = True
+
         super().final_eval()
-        self._save_confidence_metrics()
 
         if RANK in {-1, 0}:
+            self._save_confidence_metrics()
             if self._settings.image_embeddings_dim > 0:
                 train_url = self.data["train"].url
                 val_url = self.data["val"].url if "val" in self.data else self.data["test"].url
@@ -280,38 +299,28 @@ class TLCTrainerMixin(BaseTrainer):
             return
 
         try:
-            curves = [
-                self.validator.metrics.box.f1_curve,  # (nc, 1000)
-                self.validator.metrics.box.r_curve,  # (nc, 1000)
-                self.validator.metrics.box.p_curve,  # (nc, 1000)
-            ]
+            # curves_results format: [[px, py_curve, x_label, y_label], ...]
+            # Order: [PR, F1, Precision, Recall] (indices 0-3)
+            box_curves = self.validator.metrics.box.curves_results
+            px = box_curves[1][0]  # x values (confidence) from F1 curve
+
+            curves = [box_curves[1][1], box_curves[3][1], box_curves[2][1]]  # F1, Recall, Precision
             names = ["F1_score", "Recall", "Precision"]
+
             if self.args.task == "pose":
-                curves.extend(
-                    [
-                        self.validator.metrics.pose.f1_curve,
-                        self.validator.metrics.pose.r_curve,
-                        self.validator.metrics.pose.p_curve,
-                    ]
-                )
+                pose_curves = self.validator.metrics.pose.curves_results
+                curves.extend([pose_curves[1][1], pose_curves[3][1], pose_curves[2][1]])
                 names.extend(["Pose_F1_score", "Pose_Recall", "Pose_Precision"])
+
             if self.args.task == "segment":
-                curves.extend(
-                    [
-                        self.validator.metrics.seg.f1_curve,
-                        self.validator.metrics.seg.r_curve,
-                        self.validator.metrics.seg.p_curve,
-                    ]
-                )
+                seg_curves = self.validator.metrics.seg.curves_results
+                curves.extend([seg_curves[1][1], seg_curves[3][1], seg_curves[2][1]])
                 names.extend(["Seg_F1_score", "Seg_Recall", "Seg_Precision"])
-            px = self.validator.metrics.box.px  # (1000,) (linspace(0, 1)
 
             values = {}
             for py, name in zip(curves, names):
                 y = smooth(py.mean(0), 0.05)
-                best_val = y.max()
-                best_conf = px[y.argmax()]
-                values[f"3LC/{name}"] = {"best_val": best_val, "best_conf": best_conf}
+                values[f"3LC/{name}"] = {"best_val": y.max(), "best_conf": px[y.argmax()]}
 
             self._run.set_parameters(values)
         except Exception as e:

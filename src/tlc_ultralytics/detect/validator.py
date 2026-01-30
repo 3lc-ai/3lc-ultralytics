@@ -5,11 +5,12 @@ import weakref
 import tlc
 import torch
 from ultralytics.models.yolo.detect import DetectionValidator
-from ultralytics.utils import metrics, ops
+from ultralytics.utils import LOGGER, metrics, ops
 
 from tlc_ultralytics.constants import (
     DETECTION_LABEL_COLUMN_NAME,
     IMAGE_COLUMN_NAME,
+    TLC_COLORSTR,
 )
 from tlc_ultralytics.detect.loss import v8UnreducedDetectionLoss
 from tlc_ultralytics.detect.utils import (
@@ -132,10 +133,25 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
         return batch_predicted_boxes
 
     def _prepare_loss_fn(self, model):
-        self.loss_fn = v8UnreducedDetectionLoss(
-            model.model if hasattr(model.model, "model") else model,
-            training=self._training,
-        )
+        # Get the inner model for checking end2end attribute
+        inner_model = model.model if hasattr(model.model, "model") else model
+
+        # Check if this is a YOLO26 (end2end) model - per-sample loss is not supported for these
+        is_end2end = getattr(inner_model.model[-1], "end2end", False) if hasattr(inner_model, "model") else False
+
+        if is_end2end and self._settings.collect_loss:
+            LOGGER.warning(
+                f"{TLC_COLORSTR}Per-sample loss collection is not supported for YOLO26 (end2end) models. "
+                "Disabling loss collection for this run."
+            )
+            self._settings.collect_loss = False
+            return
+
+        if self._settings.collect_loss:
+            self.loss_fn = v8UnreducedDetectionLoss(
+                inner_model,
+                training=self._training,
+            )
 
     def _add_embeddings_hook(self, model) -> int:
         if hasattr(model.model, "model"):
