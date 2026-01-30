@@ -445,27 +445,9 @@ def create_tables_from_yaml_file(
     autodownload: bool = True,
     project_name: str | None = None,
     root_url: str | None = None,
-    create_project_alias: bool = True,
     splits: Iterable[str] | None = ("train", "val", "test", "minival"),
     **kwargs,
-) -> dict[str, tlc.Table]:
-    """Create one tlc.Table for each split defined in a YOLO dataset YAML file.
-
-    When a split is defined by a list of locations, one tlc.Table is created for each location and then joined to form
-    a single tlc.Table for the split.
-
-    :param dataset: The path to the dataset or dataset descriptor (like a YAML file).
-    :param task: The task to create the tables for.
-    :param autodownload: Whether to automatically download the dataset if not found, with a download script defined in
-       the YAML file. Forwarded to `ultralytics.data.utils.check_det_dataset`.
-    :param project_name: The name of the project to create the tables for.
-    :param root_url: The root URL of the project to create the tables for.
-    :param create_project_alias: Whether to create a project level alias for image paths in the tables, using the
-    resolved YOLO dataset `path` as the value.
-    :param splits: The splits to create the tables for.
-    :param kwargs: Additional keyword arguments to pass to the table creator.
-    :returns: A dictionary of tables, keyed by split.
-    """
+) -> dict[str, tlc.Table]: ...
 
 
 @overload
@@ -475,7 +457,6 @@ def create_tables_from_yaml_file(
     autodownload: bool = True,
     project_name: str | None = None,
     root_url: str | None = None,
-    create_project_alias: bool = True,
     splits: Iterable[str] | None = ("train", "val", "test", "minival"),
     kpt_shape: tuple[int, int] | None = None,
     points: list[float] | None = None,
@@ -487,33 +468,7 @@ def create_tables_from_yaml_file(
     flip_indices: list[int] | None = None,
     oks_sigmas: list[float] | None = None,
     **kwargs,
-) -> dict[str, tlc.Table]:
-    """Create one tlc.Table for each split defined in a YOLO dataset YAML file.
-
-    When a split is defined by a list of locations, one tlc.Table is created for each location and then joined to form
-    a single tlc.Table for the split.
-
-    :param dataset: The path to the dataset or dataset descriptor (like a YAML file).
-    :param task: The task to create the tables for.
-    :param autodownload: Whether to automatically download the dataset if not found, with a download script defined in
-       the YAML file. Forwarded to `ultralytics.data.utils.check_det_dataset`.
-    :param project_name: The name of the project to create the tables for.
-    :param root_url: The root URL of the project to create the tables for.
-    :param create_project_alias: Whether to create a project level alias for image paths in the tables, using the
-    resolved YOLO dataset `path` as the value.
-    :param splits: The splits to create the tables for.
-    :param kpt_shape: The shape of the keypoints.
-    :param points: The points of the keypoints.
-    :param point_attributes: The attributes of the points.
-    :param lines: The lines of the keypoints.
-    :param line_attributes: The attributes of the lines.
-    :param triangles: The triangles of the keypoints.
-    :param triangle_attributes: The attributes of the triangles.
-    :param flip_indices: The flip indices of the keypoints.
-    :param oks_sigmas: The oks sigmas of the keypoints.
-    :param kwargs: Additional keyword arguments to pass to the table creator.
-    :returns: A dictionary of tables, keyed by split.
-    """
+) -> dict[str, tlc.Table]: ...
 
 
 def create_tables_from_yaml_file(
