@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-01-30
+
 ### Added
 
 - Raise when no data ends up in a dataset split ([#43](https://github.com/3lc-ai/3lc-ultralytics/pull/43)).
