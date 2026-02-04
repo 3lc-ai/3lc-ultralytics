@@ -306,7 +306,7 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
         ):
             # Handle polygons with zero area
             if len(polygon) < 6:
-                LOGGER.warning(f"Polygon {i} in row {example_id} has fewer than 6 points and will be ignored.")
+                LOGGER.warning(f"Polygon {i} in row {example_id} has fewer than 3 points and will be ignored.")
                 continue
 
             classes.append(self._class_map[category])
