@@ -97,7 +97,8 @@ def check_tlc_dataset(  # noqa: C901
         tables = parse_3lc_yaml_file(data)
 
     if tables is None:
-        project_name = project_name or settings.project_name or Path(data).stem
+        resolved_project_name = settings.project_name if settings else None
+        resolved_project_name = resolved_project_name or _get_default_names(data, "")[0]
         splits = splits or ("train", "val", "test", "minival")
 
         tables = {}
@@ -108,14 +109,15 @@ def check_tlc_dataset(  # noqa: C901
 
             for key in splits:
                 if data_dict.get(key):
+                    _, split_dataset_name = _get_default_names(data, key, project_name)
                     try:
                         table = get_or_create_cls_table(
                             key,
                             data_dict,
                             image_column_name=image_column_name,
                             label_column_name=label_column_name,
-                            project_name=project_name,
-                            dataset_name=key,
+                            project_name=resolved_project_name,
+                            dataset_name=split_dataset_name,
                             table_name="initial",
                             settings=settings,
                         )
@@ -127,7 +129,7 @@ def check_tlc_dataset(  # noqa: C901
                         )
 
         elif task in ["detect", "segment", "pose", "obb"]:
-            tables = create_tables_from_yaml_file(data, task, splits=splits, project_name=project_name)
+            tables = create_tables_from_yaml_file(data, task, splits=splits, project_name=resolved_project_name)
 
         # Get the latest version when inferring
         for key, table in tables.items():
@@ -345,6 +347,26 @@ def _check_tables(tables: object):
             raise ValueError(msg)
 
 
+def _get_default_names(
+    data_path: str | Path,
+    split: str,
+    project_name: str | None = None,
+    dataset_name: str | None = None,
+) -> tuple[str, str]:
+    """Get default project and dataset names for a split.
+
+    :param data_path: Path to the dataset YAML file or directory.
+    :param split: The split name (e.g., 'train', 'val').
+    :param project_name: Optional custom project name.
+    :param dataset_name: Optional custom dataset name.
+    :returns: Tuple of (project_name, dataset_name).
+    """
+    name = Path(data_path).stem
+    project = project_name or f"{name}-YOLO"
+    dataset = dataset_name or f"{name}-{split}"
+    return project, dataset
+
+
 def _resolve_pose_kwargs(data_dict: dict, kwargs: dict) -> None:
     """Resolve pose-specific kwargs from the YAML data dict and function arguments.
 
@@ -379,11 +401,11 @@ def _resolve_pose_kwargs(data_dict: dict, kwargs: dict) -> None:
 
 
 def _create_split_table(
-    split: str,
     split_paths: str | list[str],
     categories: dict,
     task: str,
     project_name: str,
+    dataset_name: str,
     if_exists: str,
     **kwargs,
 ) -> tlc.Table:
@@ -399,7 +421,7 @@ def _create_split_table(
             categories=categories,
             task=task,
             project_name=project_name,
-            dataset_name=split,
+            dataset_name=dataset_name,
             table_name=table_name,
             if_exists=if_exists,
             **kwargs,
@@ -410,7 +432,7 @@ def _create_split_table(
         return tlc.Table.join_tables(
             split_tables,
             project_name=project_name,
-            dataset_name=split,
+            dataset_name=dataset_name,
             if_exists=if_exists,
             table_name="initial",
         )
@@ -419,11 +441,11 @@ def _create_split_table(
 
 def _get_existing_table(
     project_name: str | None,
-    split: str,
+    dataset_name: str | None,
     if_exists: Literal["raise", "reuse", "rename", "overwrite"],
 ) -> tlc.Table | None:
     """Check if a table already exists and return it if if_exists is 'reuse'."""
-    final_table_url = tlc.Url.create_table_url(project_name, split, "initial")
+    final_table_url = tlc.Url.create_table_url("initial", dataset_name, project_name)
 
     if not final_table_url.exists():
         return None
@@ -444,6 +466,7 @@ def create_tables_from_yaml_file(
     task: Literal["detect", "segment", "obb"],
     autodownload: bool = True,
     project_name: str | None = None,
+    dataset_name: str | None = None,
     root_url: str | None = None,
     splits: Iterable[str] | None = ("train", "val", "test", "minival"),
     **kwargs,
@@ -456,6 +479,7 @@ def create_tables_from_yaml_file(
     task: Literal["pose"],
     autodownload: bool = True,
     project_name: str | None = None,
+    dataset_name: str | None = None,
     root_url: str | None = None,
     splits: Iterable[str] | None = ("train", "val", "test", "minival"),
     kpt_shape: tuple[int, int] | None = None,
@@ -476,6 +500,7 @@ def create_tables_from_yaml_file(
     task: Literal["detect", "segment", "pose", "obb"],
     autodownload: bool = True,
     project_name: str | None = None,
+    dataset_name: str | None = None,
     root_url: str | None = None,
     splits: Iterable[str] = ("train", "val", "test", "minival"),
     if_exists: Literal["raise", "reuse", "rename", "overwrite"] = "reuse",
@@ -490,8 +515,11 @@ def create_tables_from_yaml_file(
     :param task: The task to create the tables for.
     :param autodownload: Whether to automatically download the dataset if not found, with a download script defined in
        the YAML file. Forwarded to `ultralytics.data.utils.check_det_dataset`.
-    :param project_name: The name of the project to create the tables for.
-    :param root_url: The root URL of the project to create the tables for.
+    :param project_name: The name of the project to create the tables for. If not provided, the project name is set to
+       the dataset path stem + "-YOLO".
+    :param dataset_name: The name of the dataset to create the tables for. If not provided, the dataset name is set to
+       the dataset path stem combined with the split.
+    :param root_url: The root URL of the project to create the tables for. By default the 3LC project root URL is used.
     :param splits: The splits to create the tables for.
     :param if_exists: The if exists option to pass to the table creator.
     :param kwargs: Additional keyword arguments to pass to the table creator.
@@ -500,17 +528,18 @@ def create_tables_from_yaml_file(
     data_dict = check_det_dataset(dataset, autodownload=autodownload)
 
     # Fast-track: reuse existing tables when if_exists="reuse"
-    # Note: uses project_name before defaulting to maintain original behavior
     tables = {}
     for split in splits:
-        existing_table = _get_existing_table(project_name, split, if_exists)
+        split_project_name, split_dataset_name = _get_default_names(dataset, split, project_name, dataset_name)
+        existing_table = _get_existing_table(split_project_name, split_dataset_name, if_exists)
         if existing_table is not None:
+            LOGGER.info(f"{TLC_COLORSTR}Using existing table for split {split} from {existing_table.url}")
             tables[split] = existing_table
 
-    # Set up project name (after fast-track check)
-    project_name = project_name or Path(dataset).stem
-    project_url = tlc.Url.create_project_url(project_name, root_url)
-    project_name = project_url.name
+    # Set up project name
+    default_project_name = _get_default_names(dataset, "")[0] if not project_name else project_name
+    project_url = tlc.Url.create_project_url(default_project_name, root_url)
+    resolved_project_name = project_url.name
 
     if task == "pose":
         _resolve_pose_kwargs(data_dict, kwargs)
@@ -523,7 +552,10 @@ def create_tables_from_yaml_file(
         split_paths = data_dict.get(split)
         if split_paths is None:
             continue
-        tables[split] = _create_split_table(split, split_paths, categories, task, project_name, if_exists, **kwargs)
+        _, split_dataset_name = _get_default_names(dataset, split, project_name, dataset_name)
+        tables[split] = _create_split_table(
+            split_paths, categories, task, resolved_project_name, split_dataset_name, if_exists, **kwargs
+        )
         LOGGER.info(f"{TLC_COLORSTR}Created table for split {split} with URL: {tables[split].url}")
 
     return tables
