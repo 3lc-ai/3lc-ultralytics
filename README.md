@@ -78,18 +78,16 @@ The integration supports three ways of providing the data to use. These are list
 
 The recommended way of providing the data to use is to pass `tlc.Table`s or `tlc.Url`s to `tlc.Table`s directly.
 
-To create a `tlc.Table` for one of your split your YOLO detection dataset, use `tlc.Table.from_yolo`:
+To create a `tlc.Table` for one or more splits of your YOLO detection dataset, use `create_tables_from_yaml_file`:
 
 ```python
-import tlc
+from tlc_ultralytics import create_tables_from_yaml_file
 
-my_train_table = tlc.Table.from_yolo(
-    dataset_yaml_path="path/to/my/dataset.yaml",
-    split="train",
+tables = create_tables_from_yaml_file(
+    dataset="path/to/my/dataset.yaml",
     task="detect",
     project_name="My Project",
     dataset_name="train",
-    table_name="initial",
 )
 ```
 
