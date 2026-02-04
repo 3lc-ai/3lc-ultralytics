@@ -1767,3 +1767,259 @@ def capture_logs(loglevel: int = logging.INFO):
         yield tlc_handler.log_messages
     finally:
         ultralytics_logger.removeHandler(tlc_handler)
+
+
+# === Tests for _get_default_names and table reuse functionality ===
+
+
+class TestGetDefaultNames:
+    """Tests for the _get_default_names function."""
+
+    def test_default_names_no_overrides(self):
+        """Test default naming without any overrides."""
+        from tlc_ultralytics.utils.dataset import _get_default_names
+
+        project, dataset = _get_default_names("coco128.yaml", "train")
+        assert project == "coco128-YOLO"
+        assert dataset == "coco128-train"
+
+    def test_default_names_with_path(self):
+        """Test default naming with a full path."""
+        from tlc_ultralytics.utils.dataset import _get_default_names
+
+        project, dataset = _get_default_names("/path/to/my_dataset.yaml", "val")
+        assert project == "my_dataset-YOLO"
+        assert dataset == "my_dataset-val"
+
+    def test_default_names_with_project_override(self):
+        """Test that project_name override is respected."""
+        from tlc_ultralytics.utils.dataset import _get_default_names
+
+        project, dataset = _get_default_names("coco128.yaml", "train", project_name="custom-project")
+        assert project == "custom-project"
+        assert dataset == "coco128-train"
+
+    def test_default_names_with_dataset_override(self):
+        """Test that dataset_name override is respected."""
+        from tlc_ultralytics.utils.dataset import _get_default_names
+
+        project, dataset = _get_default_names("coco128.yaml", "train", dataset_name="custom-dataset")
+        assert project == "coco128-YOLO"
+        assert dataset == "custom-dataset"
+
+    def test_default_names_with_both_overrides(self):
+        """Test that both overrides are respected."""
+        from tlc_ultralytics.utils.dataset import _get_default_names
+
+        project, dataset = _get_default_names(
+            "coco128.yaml", "train", project_name="my-project", dataset_name="my-dataset"
+        )
+        assert project == "my-project"
+        assert dataset == "my-dataset"
+
+    def test_default_names_empty_split(self):
+        """Test naming with empty split (used for project-only lookup)."""
+        from tlc_ultralytics.utils.dataset import _get_default_names
+
+        project, dataset = _get_default_names("coco128.yaml", "")
+        assert project == "coco128-YOLO"
+        assert dataset == "coco128-"
+
+    def test_default_names_with_pathlib_path(self):
+        """Test that pathlib.Path objects work correctly."""
+        from tlc_ultralytics.utils.dataset import _get_default_names
+
+        project, dataset = _get_default_names(Path("/some/path/dataset.yaml"), "test")
+        assert project == "dataset-YOLO"
+        assert dataset == "dataset-test"
+
+
+class TestGetExistingTable:
+    """Tests for the _get_existing_table function."""
+
+    def test_reuse_nonexistent_table_returns_none(self):
+        """Test that reuse mode returns None for nonexistent tables."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        result = _get_existing_table("nonexistent-project-xyz", "nonexistent-dataset", "reuse")
+        assert result is None
+
+    def test_overwrite_nonexistent_table_returns_none(self):
+        """Test that overwrite mode returns None for nonexistent tables."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        result = _get_existing_table("nonexistent-project-xyz", "nonexistent-dataset", "overwrite")
+        assert result is None
+
+    def test_rename_nonexistent_table_returns_none(self):
+        """Test that rename mode returns None for nonexistent tables."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        result = _get_existing_table("nonexistent-project-xyz", "nonexistent-dataset", "rename")
+        assert result is None
+
+    def test_raise_nonexistent_table_returns_none(self):
+        """Test that raise mode returns None for nonexistent tables (no error if table doesn't exist)."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        result = _get_existing_table("nonexistent-project-xyz", "nonexistent-dataset", "raise")
+        assert result is None
+
+    def test_reuse_existing_table(self):
+        """Test that reuse mode returns the existing table."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        # Create a table first
+        project_name = "test-reuse-project"
+        dataset_name = "test-reuse-dataset"
+        table = tlc.Table.from_dict(
+            {"image": ["a.jpg", "b.jpg"]},
+            project_name=project_name,
+            dataset_name=dataset_name,
+            table_name="initial",
+            if_exists="overwrite",
+        )
+
+        # Now test reuse
+        result = _get_existing_table(project_name, dataset_name, "reuse")
+        assert result is not None
+        assert result.url == table.url
+
+    def test_raise_existing_table_raises_error(self):
+        """Test that raise mode raises FileExistsError for existing tables."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        # Create a table first
+        project_name = "test-raise-project"
+        dataset_name = "test-raise-dataset"
+        tlc.Table.from_dict(
+            {"image": ["a.jpg", "b.jpg"]},
+            project_name=project_name,
+            dataset_name=dataset_name,
+            table_name="initial",
+            if_exists="overwrite",
+        )
+
+        # Now test raise mode
+        with pytest.raises(FileExistsError, match="Table already exists"):
+            _get_existing_table(project_name, dataset_name, "raise")
+
+    def test_overwrite_existing_table_returns_none(self):
+        """Test that overwrite mode returns None (allowing table to be recreated)."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        # Create a table first
+        project_name = "test-overwrite-project"
+        dataset_name = "test-overwrite-dataset"
+        tlc.Table.from_dict(
+            {"image": ["a.jpg", "b.jpg"]},
+            project_name=project_name,
+            dataset_name=dataset_name,
+            table_name="initial",
+            if_exists="overwrite",
+        )
+
+        # Overwrite mode should return None so table gets recreated
+        result = _get_existing_table(project_name, dataset_name, "overwrite")
+        assert result is None
+
+    def test_rename_existing_table_returns_none(self):
+        """Test that rename mode returns None (allowing new table with different name)."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        # Create a table first
+        project_name = "test-rename-project"
+        dataset_name = "test-rename-dataset"
+        tlc.Table.from_dict(
+            {"image": ["a.jpg", "b.jpg"]},
+            project_name=project_name,
+            dataset_name=dataset_name,
+            table_name="initial",
+            if_exists="overwrite",
+        )
+
+        # Rename mode should return None so a new table gets created with different name
+        result = _get_existing_table(project_name, dataset_name, "rename")
+        assert result is None
+
+
+class TestCreateTablesFromYamlFileReuse:
+    """Integration tests for table creation and reuse with create_tables_from_yaml_file."""
+
+    def test_tables_reused_on_second_call(self):
+        """Test that tables are reused when calling create_tables_from_yaml_file twice."""
+        from tlc_ultralytics.utils.dataset import create_tables_from_yaml_file
+
+        # First call - creates tables
+        tables1 = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            project_name="test-reuse-yaml",
+            if_exists="overwrite",
+            splits=("train", "val"),
+        )
+
+        train_url1 = tables1["train"].url
+        val_url1 = tables1["val"].url
+
+        # Second call - should reuse tables
+        tables2 = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            project_name="test-reuse-yaml",
+            if_exists="reuse",
+            splits=("train", "val"),
+        )
+
+        # URLs should match (same tables reused)
+        assert tables2["train"].url == train_url1
+        assert tables2["val"].url == val_url1
+
+    def test_default_naming_scheme_consistency(self):
+        """Test that default naming scheme is consistent between creation and reuse."""
+        from tlc_ultralytics.utils.dataset import create_tables_from_yaml_file
+
+        # Create with default naming (no project_name specified)
+        tables1 = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            if_exists="overwrite",
+            splits=("train",),
+        )
+
+        # Verify default naming was applied
+        assert "coco8-YOLO" in str(tables1["train"].url)
+        assert "coco8-train" in str(tables1["train"].url)
+
+        # Second call should find the table with default naming
+        tables2 = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            if_exists="reuse",
+            splits=("train",),
+        )
+
+        assert tables2["train"].url == tables1["train"].url
+
+    def test_raise_on_existing_table(self):
+        """Test that if_exists='raise' raises error when table exists."""
+        from tlc_ultralytics.utils.dataset import create_tables_from_yaml_file
+
+        # First call - creates tables
+        create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            project_name="test-raise-yaml",
+            if_exists="overwrite",
+            splits=("train",),
+        )
+
+        # Second call with raise should error
+        with pytest.raises(FileExistsError):
+            create_tables_from_yaml_file(
+                "coco8.yaml",
+                task="detect",
+                project_name="test-raise-yaml",
+                if_exists="raise",
+                splits=("train",),
+            )
