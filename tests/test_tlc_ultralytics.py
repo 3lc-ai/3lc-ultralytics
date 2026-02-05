@@ -2023,3 +2023,63 @@ class TestCreateTablesFromYamlFileReuse:
                 if_exists="raise",
                 splits=("train",),
             )
+
+    def test_split_with_multiple_paths_joined(self):
+        """Test that a split with multiple paths creates individual tables and joins them."""
+        from ultralytics.data.utils import check_det_dataset
+
+        from tlc_ultralytics.utils.dataset import create_tables_from_yaml_file
+
+        # Get the actual paths from coco8
+        data = check_det_dataset("coco8.yaml")
+        train_path = data["train"]
+        val_path = data["val"]
+
+        # Create a YAML where train split is a list containing both train and val paths
+        yaml_data = {
+            "train": [train_path, val_path],  # Two entries for the train split
+            "val": None,
+            "test": None,
+            "names": data["names"],
+            "nc": data["nc"],
+        }
+
+        yaml_path = TMP / "coco8-joined-split.yaml"
+        yaml_path.write_text(yaml.safe_dump(yaml_data))
+
+        # Create tables - this should join the two paths into one table
+        tables = create_tables_from_yaml_file(
+            str(yaml_path),
+            task="detect",
+            project_name="test-joined-split",
+            if_exists="overwrite",
+            splits=("train",),
+        )
+
+        assert "train" in tables
+        joined_table = tables["train"]
+
+        # Create separate tables to compare row counts
+        tables_train_only = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            project_name="test-joined-split-train-only",
+            if_exists="overwrite",
+            splits=("train",),
+        )
+        tables_val_only = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            project_name="test-joined-split-val-only",
+            if_exists="overwrite",
+            splits=("val",),
+        )
+
+        train_row_count = len(tables_train_only["train"])
+        val_row_count = len(tables_val_only["val"])
+
+        # The joined table should have the sum of rows from both original splits
+        assert len(joined_table) == train_row_count + val_row_count
+
+        # Verify the table name is "initial" (not "initial-0" or "initial-1")
+        assert joined_table.name == "initial"
