@@ -2024,8 +2024,8 @@ class TestCreateTablesFromYamlFileReuse:
                 splits=("train",),
             )
 
-    def test_split_with_multiple_paths_joined(self):
-        """Test that a split with multiple paths creates individual tables and joins them."""
+    def test_split_with_multiple_paths(self):
+        """Test that a split with multiple paths creates a single table containing all data."""
         from ultralytics.data.utils import check_det_dataset
 
         from tlc_ultralytics.utils.dataset import create_tables_from_yaml_file
@@ -2044,33 +2044,33 @@ class TestCreateTablesFromYamlFileReuse:
             "nc": data["nc"],
         }
 
-        yaml_path = TMP / "coco8-joined-split.yaml"
+        yaml_path = TMP / "coco8-multi-path-split.yaml"
         yaml_path.write_text(yaml.safe_dump(yaml_data))
 
-        # Create tables - this should join the two paths into one table
+        # Create tables - multiple paths are passed directly to from_yolo_url
         tables = create_tables_from_yaml_file(
             str(yaml_path),
             task="detect",
-            project_name="test-joined-split",
+            project_name="test-multi-path-split",
             if_exists="overwrite",
             splits=("train",),
         )
 
         assert "train" in tables
-        joined_table = tables["train"]
+        combined_table = tables["train"]
 
         # Create separate tables to compare row counts
         tables_train_only = create_tables_from_yaml_file(
             "coco8.yaml",
             task="detect",
-            project_name="test-joined-split-train-only",
+            project_name="test-multi-path-split-train-only",
             if_exists="overwrite",
             splits=("train",),
         )
         tables_val_only = create_tables_from_yaml_file(
             "coco8.yaml",
             task="detect",
-            project_name="test-joined-split-val-only",
+            project_name="test-multi-path-split-val-only",
             if_exists="overwrite",
             splits=("val",),
         )
@@ -2078,8 +2078,8 @@ class TestCreateTablesFromYamlFileReuse:
         train_row_count = len(tables_train_only["train"])
         val_row_count = len(tables_val_only["val"])
 
-        # The joined table should have the sum of rows from both original splits
-        assert len(joined_table) == train_row_count + val_row_count
+        # The combined table should have all rows from both paths
+        assert len(combined_table) == train_row_count + val_row_count
 
-        # Verify the table name is "initial" (not "initial-0" or "initial-1")
-        assert joined_table.name == "initial"
+        # Verify the table name is "initial"
+        assert combined_table.name == "initial"

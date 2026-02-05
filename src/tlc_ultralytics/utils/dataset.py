@@ -402,41 +402,24 @@ def _resolve_pose_kwargs(data_dict: dict, kwargs: dict) -> None:
 
 def _create_split_table(
     split_paths: str | list[str],
-    categories: dict,
-    task: str,
+    categories: dict[int, str],
+    task: Literal["detect", "segment", "pose", "obb"],
     project_name: str,
     dataset_name: str,
-    if_exists: str,
+    if_exists: Literal["raise", "reuse", "rename", "overwrite"],
     **kwargs,
 ) -> tlc.Table:
-    """Create a table for a single split, joining multiple paths if necessary."""
-    if not isinstance(split_paths, list):
-        split_paths = [split_paths]
-
-    split_tables = []
-    for i, split_part in enumerate(split_paths):
-        table_name = "initial" if len(split_paths) == 1 else f"initial-{i}"
-        table = tlc.Table.from_yolo_url(
-            split_part,
-            categories=categories,
-            task=task,
-            project_name=project_name,
-            dataset_name=dataset_name,
-            table_name=table_name,
-            if_exists=if_exists,
-            **kwargs,
-        )
-        split_tables.append(table)
-
-    if len(split_tables) > 1:
-        return tlc.Table.join_tables(
-            split_tables,
-            project_name=project_name,
-            dataset_name=dataset_name,
-            if_exists=if_exists,
-            table_name="initial",
-        )
-    return split_tables[0]
+    """Create a table for a single split, supporting multiple paths."""
+    return tlc.Table.from_yolo_url(
+        split_paths,
+        categories=categories,
+        task=task,
+        project_name=project_name,
+        dataset_name=dataset_name,
+        table_name="initial",
+        if_exists=if_exists,
+        **kwargs,
+    )
 
 
 def _get_existing_table(
@@ -545,6 +528,7 @@ def create_tables_from_yaml_file(
         _resolve_pose_kwargs(data_dict, kwargs)
 
     categories = data_dict.get("names")
+    assert isinstance(categories, dict), f"Expected 'names' to be a dictionary, but got {type(categories)}"
 
     for split in splits:
         if split in tables:
