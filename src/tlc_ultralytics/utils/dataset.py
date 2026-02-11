@@ -97,7 +97,7 @@ def check_tlc_dataset(  # noqa: C901
         tables = parse_3lc_yaml_file(data)
 
     if tables is None:
-        resolved_project_name = settings.project_name if settings else None
+        resolved_project_name = settings.project_name if settings else project_name
         resolved_project_name = resolved_project_name or _get_default_names(data, "")[0]
         splits = splits or ("train", "val", "test", "minival")
 
