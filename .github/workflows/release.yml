@@ -55,74 +55,74 @@ jobs:
           ${{ secrets.VARIABLE_NAME }}: ${{ secrets.VARIABLE_VALUE }}
           ${{ secrets.RUNTIME_NAME }}: ${{ secrets.RUNTIME_VALUE }}
 
-  build-and-publish:
-    needs: test
-    environment: release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+  # build-and-publish:
+  #   needs: test
+  #   environment: release
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: write
+  #     id-token: write
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v4
+  #       with:
+  #         python-version: '3.10'
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v2
-        with:
-          version: "0.7.19"
+  #     - name: Install uv
+  #       uses: astral-sh/setup-uv@v2
+  #       with:
+  #         version: "0.7.19"
 
-      - name: Get version from pyproject.toml
-        id: version
-        run: |
-          VERSION=$(uv version --output-format json | jq -r '.version')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Using version: $VERSION"
+  #     - name: Get version from pyproject.toml
+  #       id: version
+  #       run: |
+  #         VERSION=$(uv version --output-format json | jq -r '.version')
+  #         echo "version=$VERSION" >> $GITHUB_OUTPUT
+  #         echo "Using version: $VERSION"
 
-      - name: Extract changelog section
-        id: changelog
-        run: |
-          # Extract the changelog section for this version
-          VERSION="${{ steps.version.outputs.version }}"
-          CHANGELOG_CONTENT=$(awk -v version="$VERSION" '
-            BEGIN { in_section = 0; content = "" }
-            /^## \['"$VERSION"'\]/ { in_section = 1; next }
-            /^## \[/ && in_section { exit }
-            in_section { content = content $0 "\n" }
-            END { print content }
-          ' CHANGELOG.md | sed '/^$/d')
+  #     - name: Extract changelog section
+  #       id: changelog
+  #       run: |
+  #         # Extract the changelog section for this version
+  #         VERSION="${{ steps.version.outputs.version }}"
+  #         CHANGELOG_CONTENT=$(awk -v version="$VERSION" '
+  #           BEGIN { in_section = 0; content = "" }
+  #           /^## \['"$VERSION"'\]/ { in_section = 1; next }
+  #           /^## \[/ && in_section { exit }
+  #           in_section { content = content $0 "\n" }
+  #           END { print content }
+  #         ' CHANGELOG.md | sed '/^$/d')
           
-          # Store the raw changelog content (GitHub Actions handles newlines properly)
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          echo "Extracted changelog for version $VERSION"
+  #         # Store the raw changelog content (GitHub Actions handles newlines properly)
+  #         echo "changelog<<EOF" >> $GITHUB_OUTPUT
+  #         echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+  #         echo "EOF" >> $GITHUB_OUTPUT
+  #         echo "Extracted changelog for version $VERSION"
 
-      - name: Build package
-        run: |
-          uv build --no-sources
+  #     - name: Build package
+  #       run: |
+  #         uv build --no-sources
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: Release v${{ steps.version.outputs.version }}
-          body: |
-            ${{ steps.changelog.outputs.changelog }}
+  #     - name: Create GitHub Release
+  #       uses: softprops/action-gh-release@v1
+  #       with:
+  #         tag_name: v${{ steps.version.outputs.version }}
+  #         name: Release v${{ steps.version.outputs.version }}
+  #         body: |
+  #           ${{ steps.changelog.outputs.changelog }}
             
-            ## Installation
+  #           ## Installation
             
-            ```bash
-            pip install 3lc-ultralytics==${{ steps.version.outputs.version }}
-            ```
-          draft: false
-          prerelease: false
-          generate_release_notes: false 
+  #           ```bash
+  #           pip install 3lc-ultralytics==${{ steps.version.outputs.version }}
+  #           ```
+  #         draft: false
+  #         prerelease: false
+  #         generate_release_notes: false 
 
-      - name: Publish to PyPI
-        run: |
-          uv publish
+  #     - name: Publish to PyPI
+  #       run: |
+  #         uv publish
