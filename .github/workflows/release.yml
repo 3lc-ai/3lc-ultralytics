@@ -13,7 +13,10 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -38,19 +41,19 @@ jobs:
 
       - name: Run tests with Python 3.10
         run: |
-          export "${{ secrets.VARIABLE_NAME }}=${{ secrets.VARIABLE_VALUE }}"
-          export "${{ secrets.RUNTIME_NAME }}=${{ secrets.RUNTIME_VALUE }}"
           uv run --python 3.10 --no-sources pytest tests/ -v -n auto
         env:
           TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
+          ${{ secrets.VARIABLE_NAME }}: ${{ secrets.VARIABLE_VALUE }}
+          ${{ secrets.RUNTIME_NAME }}: ${{ secrets.RUNTIME_VALUE }}
 
       - name: Run tests with Python 3.12 for highest resolution
         run: |
-          export "${{ secrets.VARIABLE_NAME }}=${{ secrets.VARIABLE_VALUE }}"
-          export "${{ secrets.RUNTIME_NAME }}=${{ secrets.RUNTIME_VALUE }}"
           uv run --resolution highest --python 3.12 --no-sources pytest tests/ -v -n auto
         env:
           TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
+          ${{ secrets.VARIABLE_NAME }}: ${{ secrets.VARIABLE_VALUE }}
+          ${{ secrets.RUNTIME_NAME }}: ${{ secrets.RUNTIME_VALUE }}
 
   build-and-publish:
     needs: test
