@@ -129,7 +129,7 @@ def check_tlc_dataset(  # noqa: C901
                         )
 
         elif task in ["detect", "segment", "pose", "obb"]:
-            tables = create_tables_from_yaml_file(data, task, splits=splits, project_name=resolved_project_name)
+            tables = create_tables_from_yaml_file(data, task=task, splits=splits, project_name=resolved_project_name)
 
         # Get the latest version when inferring
         for key, table in tables.items():
