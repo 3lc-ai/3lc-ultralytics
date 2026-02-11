@@ -480,6 +480,7 @@ def create_tables_from_yaml_file(
 
 def create_tables_from_yaml_file(
     dataset: str,
+    *,
     task: Literal["detect", "segment", "pose", "obb"],
     autodownload: bool = True,
     project_name: str | None = None,
