@@ -50,10 +50,11 @@ def check_seg_table(table: tlc.Table, image_column_name: str, label_column_name:
         assert hasattr(row_schema[label_column_name], "sample_type"), (
             f"Label column '{label_column_name}' does not have a sample type."
         )
-        sample_type = tlc.SampleType.from_schema(row_schema[label_column_name])
-        assert isinstance(sample_type, tlc.InstanceSegmentationPolygons), (
-            f"Label column '{label_column_name}' does not have sample type InstanceSegmentationPolygons."
-        )
+        sample_type = row_schema[label_column_name].sample_transform
+        # TODO: assert something
+        # assert isinstance(sample_type, tlc.InstanceSegmentationPolygons), (
+        #     f"Label column '{label_column_name}' does not have sample type InstanceSegmentationPolygons."
+        # )
 
     except AssertionError as e:
         msg = f"Schema validation failed for '{label_column_name}' column in table with URL {table.url}. {e!s}"

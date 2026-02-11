@@ -28,17 +28,17 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         # TODO: Ensure class  mapping is the same as in input table
         instance_properties_structure = {
-            tlc.LABEL: tlc.CategoricalLabel(name=tlc.LABEL, classes=self.data["names_3lc"]),
-            tlc.CONFIDENCE: tlc.Float(name=tlc.CONFIDENCE, number_role=tlc.NUMBER_ROLE_CONFIDENCE),
+            tlc.CONFIDENCE: tlc.Float32Schema(number_role=tlc.NUMBER_ROLE_CONFIDENCE),
         }
 
-        segment_sample_type = tlc.InstanceSegmentationMasks(
-            name=tlc.PREDICTED_SEGMENTATIONS,
+        segment_schema = tlc.SegmentationSchema(
+            classes=self.data["names_3lc"],
             instance_properties_structure=instance_properties_structure,
-            is_prediction=True,
+            writable=False,
+            mode="polygons",
         )
 
-        return {tlc.PREDICTED_SEGMENTATIONS: segment_sample_type.schema}
+        return {tlc.PREDICTED_SEGMENTATIONS: segment_schema}
 
     def _compute_3lc_metrics(self, preds, batch) -> dict[str, list[dict[str, any]]]:
         """Compute 3LC metrics for instance segmentation.

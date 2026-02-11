@@ -298,7 +298,7 @@ class TLCValidatorMixin(BaseValidator):
         self._metrics_writer = tlc.MetricsTableWriter(
             run_url=self._run.url,
             foreign_table_url=self.dataloader.dataset.table.url,
-            column_schemas=column_schemas,
+            schema=column_schemas,
         )
 
         self._seen = 0
@@ -368,7 +368,7 @@ class TLCValidatorMixin(BaseValidator):
 
         metrics_writer = tlc.MetricsTableWriter(
             run_url=self._run.url,
-            column_schemas=self._per_class_metrics_schemas(),
+            schema=self._per_class_metrics_schemas(),
         )
 
         epoch = self._epoch + 1 if self._epoch is not None else -1
@@ -409,7 +409,7 @@ class TLCValidatorMixin(BaseValidator):
             tlc.FOREIGN_TABLE_ID: tlc.ForeignTableIdSchema(
                 self.dataloader.dataset.table.url.to_relative(self._run.url / "metrics").to_str(),
             ),
-            tlc.LABEL: tlc.CategoricalLabel("class", {**self.names, self.nc: "all"}).schema,
+            tlc.LABEL: tlc.CategoricalLabelSchema(classes={**self.names, self.nc: "all"}),
             NUM_IMAGES: tlc.Schema(
                 value=tlc.Int32Value(),
                 description="Number of images with at least one instance of the class",

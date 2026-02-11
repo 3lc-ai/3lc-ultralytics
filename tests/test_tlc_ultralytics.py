@@ -1038,8 +1038,8 @@ def test_check_tlc_dataset_different_categories(train_classes, val_classes, desc
     # Test that an error is raised if the categories of the tables are different
     project_name = f"test_check_tlc_dataset_different_categories_{description.lower().replace(' ', '_')}"
 
-    train_structure = {"image": tlc.ImagePath("image"), "label": tlc.CategoricalLabel("label", classes=train_classes)}
-    val_structure = {"image": tlc.ImagePath("image"), "label": tlc.CategoricalLabel("label", classes=val_classes)}
+    train_structure = {"image": tlc.ImageUrlSchema(), "label": tlc.CategoricalLabelSchema(classes=train_classes)}
+    val_structure = {"image": tlc.ImageUrlSchema(), "label": tlc.CategoricalLabelSchema(classes=val_classes)}
 
     train_table = tlc.Table.from_dict(
         {"image": ["a.jpg", "b.jpg"], "label": [0, 1]},
@@ -1086,11 +1086,11 @@ def test_check_tlc_dataset_bad_url() -> None:
 def test_small_segmentations() -> None:
     # Test that small segmentations are skipped properly
     structure = {
-        "image": tlc.ImagePath("image"),
-        "segmentations": tlc.InstanceSegmentationPolygons(
-            name="segmentations",
-            instance_properties_structure={"label": tlc.CategoricalLabel("label", ["a", "b", "c"])},
+        "image": tlc.ImageUrlSchema(),
+        "segmentations": tlc.SegmentationSchema(
+            classes=["a", "b", "c"],
             relative=True,
+            mode="polygons",
         ),
     }
     zidane_image_path = DUMMY_IMAGE_FILE.as_posix()
@@ -1112,7 +1112,7 @@ def test_small_segmentations() -> None:
     }
 
     table_writer = tlc.TableWriter(
-        column_schemas=structure, project_name="test_small_segmentations", dataset_name="test", table_name="initial"
+        schema=structure, project_name="test_small_segmentations", dataset_name="test", table_name="initial",
     )
     table_writer.add_row(relative_polygons_sample)
     table = table_writer.finalize()
@@ -1136,16 +1136,15 @@ def test_small_segmentations() -> None:
 def test_absolute_segmentation_polygons() -> None:
     # Test that absolute segmentation polygons are handled correctly
     structure = {
-        "image": tlc.ImagePath("image"),
-        "segmentations": tlc.InstanceSegmentationPolygons(
-            name="segmentations",
-            instance_properties_structure={"label": tlc.CategoricalLabel("label", ["a", "b", "c"])},
+        "image": tlc.ImageUrlSchema(),
+        "segmentations": tlc.SegmentationSchema(
+            classes=["a", "b", "c"],
             relative=False,
         ),
     }
 
     table_writer = tlc.TableWriter(
-        column_schemas=structure,
+        schema=structure,
         project_name="test_absolute_segmentation_polygons",
         dataset_name="test",
         table_name="initial",
