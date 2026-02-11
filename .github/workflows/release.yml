@@ -5,11 +5,11 @@ on:
     tags:
       - 'v0.*.*'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to release (e.g., 0.1.0)'
-        required: true
-        type: string
+    # inputs:
+      # version:
+      #   description: 'Version to release (e.g., 0.1.0)'
+      #   required: true
+      #   type: string
 
 jobs:
   test:
