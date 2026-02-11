@@ -170,8 +170,6 @@ class TLCDatasetMixin:
             row = self.table.table_rows[example_id]
             labels.append(self._get_label_from_row(im_file, row, example_id))
 
-        im_files.sort()
-
         return im_files, labels
 
     def _filter_example_ids(self, image_paths: list[str], corrupt_example_ids: list[int]) -> Iterator[int]:
