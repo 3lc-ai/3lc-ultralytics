@@ -12,7 +12,7 @@ resolution-markers = [
 
 [[package]]
 name = "3lc"
-version = "2.22"
+version = "2.22.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cachetools" },
@@ -85,7 +85,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "3lc", specifier = ">=2.18.0,<3.0.0" },
+    { name = "3lc", specifier = ">=2.22.0,<3.0.0" },
     { name = "pacmap", specifier = ">=0.8.0" },
     { name = "ultralytics", specifier = ">=8.4.0,<8.4.7" },
 ]

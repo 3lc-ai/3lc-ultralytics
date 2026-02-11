@@ -68,9 +68,10 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
             label_column_name=self._settings.label_column_name,
         )
 
-        result = DetectionTrainer.build_dataset(self, *args, **kwargs)
-
-        ultralytics.models.yolo.detect.train.build_yolo_dataset = original_build_yolo_dataset
+        try:
+            result = DetectionTrainer.build_dataset(self, *args, **kwargs)
+        finally:
+            ultralytics.models.yolo.detect.train.build_yolo_dataset = original_build_yolo_dataset
 
         return result
 
