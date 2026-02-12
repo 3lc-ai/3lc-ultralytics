@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-02-12
+
 ### Added
 
 - Add `create_tables_from_yaml_file()`, a function to create `tlc.Table`s for each split of a YOLO dataset YAML file.
