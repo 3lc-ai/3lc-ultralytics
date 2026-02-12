@@ -1,0 +1,30 @@
+name: Numba/PaCMAP reproduction
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-numba:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        numba: ["0.60.0", "0.61.2", "0.62.0", "0.63.1"]
+    steps:
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install and run PaCMAP with numba ${{ matrix.numba }}
+        run: |
+          pip install "numba==${{ matrix.numba }}" pacmap
+          python -c "
+          import numpy as np, numba, llvmlite, pacmap
+          print(f'numba={numba.__version__}, llvmlite={llvmlite.__version__}, pacmap={pacmap.__version__}')
+          np.random.seed(42)
+          data = np.random.randn(128, 512).astype(np.float32)
+          print('Running PaCMAP...')
+          result = pacmap.PaCMAP(n_components=2, n_neighbors=10, verbose=True).fit_transform(data)
+          print(f'Result shape: {result.shape}')
+          print('Success!')
+          "
