@@ -51,7 +51,7 @@ def create_dataset_samples(mode: str, task: str) -> tuple[list[dict[str, Any]], 
 
     from tlc_ultralytics import Settings
 
-    settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}")
+    settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}_{task}")
     overrides = {
         "data": TASK2DATASET[task],
         "model": TASK2MODEL[task],
@@ -96,7 +96,7 @@ def create_dataset_samples_with_tracking(mode: str, task: str, output_file: str 
         reset_tracking()
         enable_tracking()
 
-        settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}")
+        settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}_{task}")
         overrides = {
             "data": TASK2DATASET[task],
             "model": TASK2MODEL[task],

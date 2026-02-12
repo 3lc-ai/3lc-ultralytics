@@ -6,6 +6,15 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Added
+
+- Add `create_tables_from_yaml_file()`, a function to create `tlc.Table`s for each split of a YOLO dataset YAML file.
+
+### Changed
+
+- Replace usage of deprecated `Table.from_yolo()` with `Table.from_yolo_url()`, implemented in `tlc_ultralytics.create_tables_from_yaml_file()`. This should be used instead of `Table.from_yolo()` to create tables from each split of a YOLO dataset YAML file.
+- To support the latest version of `3lc` with `Table.from_yolo_url()`, increase the lowest supported Python version from `3.9` to `3.10` and the lower bound of the `3lc` dependency from `2.18.0` to `2.22.0`.
+
 ## [0.1.7] - 2026-01-30
 
 ### Added

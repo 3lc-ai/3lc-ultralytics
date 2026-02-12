@@ -9,8 +9,8 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-RUN uv venv -p 3.9
-RUN uv sync -p 3.9 --no-sources --no-install-project
+RUN uv venv -p 3.10
+RUN uv sync -p 3.10 --no-sources --no-install-project
 
 COPY docker/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh

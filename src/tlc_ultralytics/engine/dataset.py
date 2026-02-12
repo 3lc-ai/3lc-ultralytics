@@ -92,7 +92,7 @@ class TLCDatasetMixin:
         :return: A list of corrupt example ids, or None if cache is invalid
         """
         try:
-            cache_data = json.loads(cache_url.read(mode="s"))
+            cache_data = json.loads(cache_url.read_text())
 
             # Check cache version
             if cache_data.get("version") != 1:
@@ -122,7 +122,7 @@ class TLCDatasetMixin:
             "corrupt_example_ids": corrupt_example_ids,
         }
 
-        cache_url.write(json.dumps(content, indent=2), mode="t")
+        cache_url.write_text(json.dumps(content, indent=2))
 
     def _get_rows_from_table(self) -> tuple[list[str], list[Any]]:
         """Get the rows from the table and return a list of example ids, excluding zero weight and corrupt images.

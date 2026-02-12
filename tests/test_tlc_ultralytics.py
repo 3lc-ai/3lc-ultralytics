@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import tlc
+import yaml
 from PIL import Image
 from testing_helpers import check_pose_table_and_metrics_tables, compare_dataset_values, plot_ultralytics
 from ultralytics.models.yolo import YOLO
@@ -144,13 +145,16 @@ class CapturingHandler(logging.Handler):
         self.log_messages.append(self.format(record))
 
 
-def override_oks_sigmas(yaml_path: str) -> dict[str, str | int | dict[int, str | int] | list[str]]:
+def override_oks_sigmas() -> None:
     """Return coco8-pose.yaml contents overridden with the COCO oks_sigmas"""
+    from ultralytics.data.utils import check_det_dataset
     from ultralytics.utils.metrics import OKS_SIGMA
 
-    return {
-        "train": "images/train",
-        "val": "images/val",
+    data = check_det_dataset("coco8-pose.yaml")
+
+    yaml_data = {
+        "train": data["train"],
+        "val": data["val"],
         "test": None,
         "kpt_shape": [17, 3],
         "flip_idx": [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15],
@@ -158,6 +162,8 @@ def override_oks_sigmas(yaml_path: str) -> dict[str, str | int | dict[int, str |
         "names": {0: "person"},
         "nc": 1,
     }
+
+    (TMP / "coco8-pose.yaml").write_text(yaml.safe_dump(yaml_data))
 
 
 @pytest.mark.parametrize("task", ["detect", "segment", "pose", "obb"])
@@ -176,6 +182,10 @@ def test_training(task: str) -> None:
         "workers": 0,
     }
 
+    if task == "pose":
+        override_oks_sigmas()
+        overrides["data"] = str(TMP / "coco8-pose.yaml")
+
     settings = Settings(
         collection_epoch_start=1,
         project_name=f"test_{task}_project",
@@ -191,15 +201,7 @@ def test_training(task: str) -> None:
     # Run 3LC training and capture logs
     model_3lc = TLCYOLO(TASK2MODEL[task])
     with capture_logs() as tlc_messages:
-        if task == "pose":
-            with patch(
-                "tlc.core.objects.tables.from_url.table_from_yolo._TableFromYolo._load_yaml",
-                side_effect=override_oks_sigmas,
-            ) as mocked_method:
-                results_3lc = model_3lc.train(**overrides, settings=settings)
-                assert mocked_method.called
-        else:
-            results_3lc = model_3lc.train(**overrides, settings=settings)
+        results_3lc = model_3lc.train(**overrides, settings=settings)
 
         assert results_3lc, "Detection training failed"
 
@@ -465,6 +467,7 @@ def test_classify_training() -> None:
     # Imagenet should get special treatment with label display name overrides
     input_table = tlc.Table.from_url(run.url / run.constants["inputs"][0]["input_table_url"])
     value_map = input_table.get_value_map("label")
+    assert value_map is not None, "Expected value map to be not None"
     assert all(v.display_name for v in value_map.values()), "Expected display names for all classes"
     display_names = {v.display_name for v in value_map.values()}
     assert display_names == {
@@ -585,7 +588,7 @@ def test_embeddings_collection() -> None:
     )
     assert "embeddings_pacmap" in embeddings_table.columns, "Expected embeddings column"
 
-    embeddings_column_arrow = embeddings_table.get_column("embeddings_pacmap")
+    embeddings_column_arrow = embeddings_table.get_column_as_pyarrow_array("embeddings_pacmap")
     embeddings_column_list = embeddings_column_arrow.tolist()
 
     assert all(len(embedding) == settings.image_embeddings_dim for embedding in embeddings_column_list), (
@@ -818,7 +821,7 @@ def test_train_no_weight_column_in_table(task) -> None:
     # Test that training with a table that has no weight column works
     model = TLCYOLO(TASK2MODEL[task])
 
-    settings = Settings(project_name="test_train_no_weight_column_in_table")
+    settings = Settings(project_name=f"test_train_no_weight_column_in_table_{task}")
     model.train(data=TASK2DATASET[task], settings=settings, epochs=1, device="cpu", workers=0)
     table = model.trainer.data["train"]
 
@@ -829,11 +832,13 @@ def test_train_no_weight_column_in_table(task) -> None:
 
     # Should fail to train with weights enabled on table with no weight column
     with pytest.raises(ValueError):
-        settings = Settings(project_name="test_train_no_weight_column_in_table", sampling_weights=True)
+        settings = Settings(project_name=f"test_train_no_weight_column_in_table_{task}", sampling_weights=True)
         model.train(tables=tables, settings=settings, workers=0, epochs=1, device="cpu")
 
     # Should collect with exclusion enabled and no weight column
-    settings = Settings(project_name="test_train_no_weight_column_in_table", exclude_zero_weight_collection=True)
+    settings = Settings(
+        project_name=f"test_train_no_weight_column_in_table_{task}", exclude_zero_weight_collection=True
+    )
     model.collect(tables=tables, settings=settings, workers=0, device="cpu")
 
 
@@ -1280,9 +1285,9 @@ def test_extra_metrics() -> None:
 
         assert "metric_with_schema" in metrics_table.columns, "Metric with schema should be present"
 
-        constant_column = metrics_table.get_column("constant_metric").to_numpy()
+        constant_column = metrics_table.get_column_as_pyarrow_array("constant_metric").to_numpy()
         assert np.all(constant_column == 1), "Constant metric should be 1"
-        metric_with_schema_column = metrics_table.get_column("metric_with_schema").to_numpy()
+        metric_with_schema_column = metrics_table.get_column_as_pyarrow_array("metric_with_schema").to_numpy()
         assert np.all(
             metric_with_schema_column == np.array([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3], dtype=np.int32)
         )
@@ -1683,7 +1688,7 @@ def test_single_sample_equality(task: str, mode: str) -> None:
         pytest.skip("Fails because of out of order instances")
 
     NUM_SAMPLES = 4
-    settings = Settings(project_name="test_dataset_determinism_mode_train")
+    settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}_task_{task}")
     overrides = {
         "data": TASK2DATASET[task],
         "model": TASK2MODEL[task],
@@ -1762,3 +1767,319 @@ def capture_logs(loglevel: int = logging.INFO):
         yield tlc_handler.log_messages
     finally:
         ultralytics_logger.removeHandler(tlc_handler)
+
+
+# === Tests for _get_default_names and table reuse functionality ===
+
+
+class TestGetDefaultNames:
+    """Tests for the _get_default_names function."""
+
+    def test_default_names_no_overrides(self):
+        """Test default naming without any overrides."""
+        from tlc_ultralytics.utils.dataset import _get_default_names
+
+        project, dataset = _get_default_names("coco128.yaml", "train")
+        assert project == "coco128-YOLO"
+        assert dataset == "coco128-train"
+
+    def test_default_names_with_path(self):
+        """Test default naming with a full path."""
+        from tlc_ultralytics.utils.dataset import _get_default_names
+
+        project, dataset = _get_default_names("/path/to/my_dataset.yaml", "val")
+        assert project == "my_dataset-YOLO"
+        assert dataset == "my_dataset-val"
+
+    def test_default_names_with_project_override(self):
+        """Test that project_name override is respected."""
+        from tlc_ultralytics.utils.dataset import _get_default_names
+
+        project, dataset = _get_default_names("coco128.yaml", "train", project_name="custom-project")
+        assert project == "custom-project"
+        assert dataset == "coco128-train"
+
+    def test_default_names_with_dataset_override(self):
+        """Test that dataset_name override is respected."""
+        from tlc_ultralytics.utils.dataset import _get_default_names
+
+        project, dataset = _get_default_names("coco128.yaml", "train", dataset_name="custom-dataset")
+        assert project == "coco128-YOLO"
+        assert dataset == "custom-dataset"
+
+    def test_default_names_with_both_overrides(self):
+        """Test that both overrides are respected."""
+        from tlc_ultralytics.utils.dataset import _get_default_names
+
+        project, dataset = _get_default_names(
+            "coco128.yaml", "train", project_name="my-project", dataset_name="my-dataset"
+        )
+        assert project == "my-project"
+        assert dataset == "my-dataset"
+
+    def test_default_names_empty_split(self):
+        """Test naming with empty split (used for project-only lookup)."""
+        from tlc_ultralytics.utils.dataset import _get_default_names
+
+        project, dataset = _get_default_names("coco128.yaml", "")
+        assert project == "coco128-YOLO"
+        assert dataset == "coco128-"
+
+    def test_default_names_with_pathlib_path(self):
+        """Test that pathlib.Path objects work correctly."""
+        from tlc_ultralytics.utils.dataset import _get_default_names
+
+        project, dataset = _get_default_names(Path("/some/path/dataset.yaml"), "test")
+        assert project == "dataset-YOLO"
+        assert dataset == "dataset-test"
+
+
+class TestGetExistingTable:
+    """Tests for the _get_existing_table function."""
+
+    def test_reuse_nonexistent_table_returns_none(self):
+        """Test that reuse mode returns None for nonexistent tables."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        result = _get_existing_table("nonexistent-project-xyz", "nonexistent-dataset", "reuse")
+        assert result is None
+
+    def test_overwrite_nonexistent_table_returns_none(self):
+        """Test that overwrite mode returns None for nonexistent tables."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        result = _get_existing_table("nonexistent-project-xyz", "nonexistent-dataset", "overwrite")
+        assert result is None
+
+    def test_rename_nonexistent_table_returns_none(self):
+        """Test that rename mode returns None for nonexistent tables."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        result = _get_existing_table("nonexistent-project-xyz", "nonexistent-dataset", "rename")
+        assert result is None
+
+    def test_raise_nonexistent_table_returns_none(self):
+        """Test that raise mode returns None for nonexistent tables (no error if table doesn't exist)."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        result = _get_existing_table("nonexistent-project-xyz", "nonexistent-dataset", "raise")
+        assert result is None
+
+    def test_reuse_existing_table(self):
+        """Test that reuse mode returns the existing table."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        # Create a table first
+        project_name = "test-reuse-project"
+        dataset_name = "test-reuse-dataset"
+        table = tlc.Table.from_dict(
+            {"image": ["a.jpg", "b.jpg"]},
+            project_name=project_name,
+            dataset_name=dataset_name,
+            table_name="initial",
+            if_exists="overwrite",
+        )
+
+        # Now test reuse
+        result = _get_existing_table(project_name, dataset_name, "reuse")
+        assert result is not None
+        assert result.url == table.url
+
+    def test_raise_existing_table_raises_error(self):
+        """Test that raise mode raises FileExistsError for existing tables."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        # Create a table first
+        project_name = "test-raise-project"
+        dataset_name = "test-raise-dataset"
+        tlc.Table.from_dict(
+            {"image": ["a.jpg", "b.jpg"]},
+            project_name=project_name,
+            dataset_name=dataset_name,
+            table_name="initial",
+            if_exists="overwrite",
+        )
+
+        # Now test raise mode
+        with pytest.raises(FileExistsError, match="Table already exists"):
+            _get_existing_table(project_name, dataset_name, "raise")
+
+    def test_overwrite_existing_table_returns_none(self):
+        """Test that overwrite mode returns None (allowing table to be recreated)."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        # Create a table first
+        project_name = "test-overwrite-project"
+        dataset_name = "test-overwrite-dataset"
+        tlc.Table.from_dict(
+            {"image": ["a.jpg", "b.jpg"]},
+            project_name=project_name,
+            dataset_name=dataset_name,
+            table_name="initial",
+            if_exists="overwrite",
+        )
+
+        # Overwrite mode should return None so table gets recreated
+        result = _get_existing_table(project_name, dataset_name, "overwrite")
+        assert result is None
+
+    def test_rename_existing_table_returns_none(self):
+        """Test that rename mode returns None (allowing new table with different name)."""
+        from tlc_ultralytics.utils.dataset import _get_existing_table
+
+        # Create a table first
+        project_name = "test-rename-project"
+        dataset_name = "test-rename-dataset"
+        tlc.Table.from_dict(
+            {"image": ["a.jpg", "b.jpg"]},
+            project_name=project_name,
+            dataset_name=dataset_name,
+            table_name="initial",
+            if_exists="overwrite",
+        )
+
+        # Rename mode should return None so a new table gets created with different name
+        result = _get_existing_table(project_name, dataset_name, "rename")
+        assert result is None
+
+
+class TestCreateTablesFromYamlFileReuse:
+    """Integration tests for table creation and reuse with create_tables_from_yaml_file."""
+
+    def test_tables_reused_on_second_call(self):
+        """Test that tables are reused when calling create_tables_from_yaml_file twice."""
+        from tlc_ultralytics.utils.dataset import create_tables_from_yaml_file
+
+        # First call - creates tables
+        tables1 = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            project_name="test-reuse-yaml",
+            if_exists="overwrite",
+            splits=("train", "val"),
+        )
+
+        train_url1 = tables1["train"].url
+        val_url1 = tables1["val"].url
+
+        # Second call - should reuse tables
+        tables2 = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            project_name="test-reuse-yaml",
+            if_exists="reuse",
+            splits=("train", "val"),
+        )
+
+        # URLs should match (same tables reused)
+        assert tables2["train"].url == train_url1
+        assert tables2["val"].url == val_url1
+
+    def test_default_naming_scheme_consistency(self):
+        """Test that default naming scheme is consistent between creation and reuse."""
+        from tlc_ultralytics.utils.dataset import create_tables_from_yaml_file
+
+        # Create with default naming (no project_name specified)
+        tables1 = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            if_exists="overwrite",
+            splits=("train",),
+        )
+
+        # Verify default naming was applied
+        assert "coco8-YOLO" in str(tables1["train"].url)
+        assert "coco8-train" in str(tables1["train"].url)
+
+        # Second call should find the table with default naming
+        tables2 = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            if_exists="reuse",
+            splits=("train",),
+        )
+
+        assert tables2["train"].url == tables1["train"].url
+
+    def test_raise_on_existing_table(self):
+        """Test that if_exists='raise' raises error when table exists."""
+        from tlc_ultralytics.utils.dataset import create_tables_from_yaml_file
+
+        # First call - creates tables
+        create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            project_name="test-raise-yaml",
+            if_exists="overwrite",
+            splits=("train",),
+        )
+
+        # Second call with raise should error
+        with pytest.raises(FileExistsError):
+            create_tables_from_yaml_file(
+                "coco8.yaml",
+                task="detect",
+                project_name="test-raise-yaml",
+                if_exists="raise",
+                splits=("train",),
+            )
+
+    def test_split_with_multiple_paths(self):
+        """Test that a split with multiple paths creates a single table containing all data."""
+        from ultralytics.data.utils import check_det_dataset
+
+        from tlc_ultralytics.utils.dataset import create_tables_from_yaml_file
+
+        # Get the actual paths from coco8
+        data = check_det_dataset("coco8.yaml")
+        train_path = data["train"]
+        val_path = data["val"]
+
+        # Create a YAML where train split is a list containing both train and val paths
+        yaml_data = {
+            "train": [train_path, val_path],  # Two entries for the train split
+            "val": None,
+            "test": None,
+            "names": data["names"],
+            "nc": data["nc"],
+        }
+
+        yaml_path = TMP / "coco8-multi-path-split.yaml"
+        yaml_path.write_text(yaml.safe_dump(yaml_data))
+
+        # Create tables - multiple paths are passed directly to from_yolo_url
+        tables = create_tables_from_yaml_file(
+            str(yaml_path),
+            task="detect",
+            project_name="test-multi-path-split",
+            if_exists="overwrite",
+            splits=("train",),
+        )
+
+        assert "train" in tables
+        combined_table = tables["train"]
+
+        # Create separate tables to compare row counts
+        tables_train_only = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            project_name="test-multi-path-split-train-only",
+            if_exists="overwrite",
+            splits=("train",),
+        )
+        tables_val_only = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            project_name="test-multi-path-split-val-only",
+            if_exists="overwrite",
+            splits=("val",),
+        )
+
+        train_row_count = len(tables_train_only["train"])
+        val_row_count = len(tables_val_only["val"])
+
+        # The combined table should have all rows from both paths
+        assert len(combined_table) == train_row_count + val_row_count
+
+        # Verify the table name is "initial"
+        assert combined_table.name == "initial"
