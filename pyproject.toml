@@ -36,6 +36,9 @@ dev = [
 [tool.uv]
 default-groups = ["dev"]
 required-version = ">=0.7.19"
+constraint-dependencies = [
+    "numba<0.61",
+]
 
 [tool.uv.sources]
 "3lc" = [
