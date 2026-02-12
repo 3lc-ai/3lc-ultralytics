@@ -1,7 +1,9 @@
 name: Numba/PaCMAP reproduction
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - feature/fred/tablefromyolourl
 
 jobs:
   test-numba:
