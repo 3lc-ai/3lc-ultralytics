@@ -3,6 +3,7 @@ name: Test
 on:
   workflow_call:
   workflow_dispatch:
+  push:
 
 jobs:
   test:
