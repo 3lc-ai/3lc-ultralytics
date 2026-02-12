@@ -89,7 +89,7 @@ docker run -e "TLC_API_KEY=${TLC_API_KEY}" -v "$(pwd)":/app/3lc-ultralytics ghcr
 The docker image is set up to have a "pre baked" virtual env matching the uv lock file. This venv is in /app/.venv
 activating it is easy by doing `source /app/.venv/bin/activate`. However, when running uv commands in the repository,
 you have to tell uv not to create its own venv. We achieve this by adding `--no-sources --active` to the uv commands.
-Also the venv is built for Python 10, but the repository defaults to 3.12, so all commands have to also specify python
+Also the venv is built for Python 3.10, but the repository defaults to 3.12, so all commands have to also specify python
 3.10 by using `-p 3.10`. So to run the tests the command is typically:
 ```bash
 uv run -p 3.10 --no-sources --active pytest
