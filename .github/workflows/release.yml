@@ -40,15 +40,15 @@ jobs:
         run: |
           export "${{ secrets.VARIABLE_NAME }}=${{ secrets.VARIABLE_VALUE }}"
           export "${{ secrets.RUNTIME_NAME }}=${{ secrets.RUNTIME_VALUE }}"
-          uv run --python 3.10 --no-sources pytest tests/ -v -n auto
+          uv run --python 3.10 --no-sources pytest tests/ -v -n 1
         env:
           TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
 
-      - name: Run tests with Python 3.12 for highest resolution
+      - name: Run tests with Python 3.13 for highest resolution
         run: |
           export "${{ secrets.VARIABLE_NAME }}=${{ secrets.VARIABLE_VALUE }}"
           export "${{ secrets.RUNTIME_NAME }}=${{ secrets.RUNTIME_VALUE }}"
-          uv run --resolution highest --python 3.12 --no-sources pytest tests/ -v -n auto
+          uv run --resolution highest --python 3.13 --no-sources pytest tests/ -v -n 1
         env:
           TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
 

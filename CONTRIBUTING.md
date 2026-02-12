@@ -24,10 +24,10 @@ cd 3lc-ultralytics
 
 #### Tests
 
-Run the tests with `pytest`. `pytest-xdist` can be enabled by using `-n auto` for faster execution.
+Run the tests with `pytest`.
 
 ```bash
-uv run pytest -n auto
+uv run pytest
 ```
 
 #### Linter and formatter
