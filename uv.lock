@@ -10,9 +10,6 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform != 'win32'",
 ]
 
-[manifest]
-constraints = [{ name = "numba", specifier = "<0.61" }]
-
 [[package]]
 name = "3lc"
 version = "2.22.0"

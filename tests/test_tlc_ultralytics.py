@@ -588,7 +588,7 @@ def test_embeddings_collection() -> None:
     )
     assert "embeddings_pacmap" in embeddings_table.columns, "Expected embeddings column"
 
-    embeddings_column_arrow = embeddings_table.get_column("embeddings_pacmap")
+    embeddings_column_arrow = embeddings_table.get_column_as_pyarrow_array("embeddings_pacmap")
     embeddings_column_list = embeddings_column_arrow.tolist()
 
     assert all(len(embedding) == settings.image_embeddings_dim for embedding in embeddings_column_list), (
@@ -1285,9 +1285,9 @@ def test_extra_metrics() -> None:
 
         assert "metric_with_schema" in metrics_table.columns, "Metric with schema should be present"
 
-        constant_column = metrics_table.get_column("constant_metric").to_numpy()
+        constant_column = metrics_table.get_column_as_pyarrow_array("constant_metric").to_numpy()
         assert np.all(constant_column == 1), "Constant metric should be 1"
-        metric_with_schema_column = metrics_table.get_column("metric_with_schema").to_numpy()
+        metric_with_schema_column = metrics_table.get_column_as_pyarrow_array("metric_with_schema").to_numpy()
         assert np.all(
             metric_with_schema_column == np.array([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3], dtype=np.int32)
         )
