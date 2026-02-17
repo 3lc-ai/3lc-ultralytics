@@ -19,6 +19,7 @@ import tlc
 import yaml
 from PIL import Image
 from testing_helpers import check_pose_table_and_metrics_tables, compare_dataset_values, plot_ultralytics
+from ultralytics.cfg import ASSETS
 from ultralytics.models.yolo import YOLO
 from ultralytics.models.yolo.detect import DetectionTrainer
 from ultralytics.models.yolo.obb import OBBTrainer
@@ -277,15 +278,17 @@ def test_training(task: str) -> None:
         assert category == "zebra", "Expected zebra as first prediction when epoch = 1 and example_id = 3"
 
     # model.predict() should work and be the same as vanilla ultralytics
+    # Pass explicit source for OBB to avoid downloading boats.jpg to the project root
+    source = ASSETS if task != "obb" else ASSETS / "bus.jpg"
     if task == "obb":
-        ultralytics_pred = model_ultralytics.predict(imgsz=320)[0]
-        tlc_pred = model_3lc.predict(imgsz=320)[0]
+        ultralytics_pred = model_ultralytics.predict(source, imgsz=320)[0]
+        tlc_pred = model_3lc.predict(source, imgsz=320)[0]
         assert all(ultralytics_pred.obb.cls == tlc_pred.obb.cls), "Predictions mismatch"
 
     else:
-        assert all(model_ultralytics.predict(imgsz=320)[0].boxes.cls == model_3lc.predict(imgsz=320)[0].boxes.cls), (
-            "Predictions mismatch"
-        )
+        ultralytics_pred = model_ultralytics.predict(source, imgsz=320)[0]
+        tlc_pred = model_3lc.predict(source, imgsz=320)[0]
+        assert all(ultralytics_pred.boxes.cls == tlc_pred.boxes.cls), "Predictions mismatch"
 
     if task == "pose":
         # Pose does not collect per-class metrics (yet?!)
