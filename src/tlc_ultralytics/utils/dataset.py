@@ -147,10 +147,8 @@ def check_tlc_dataset(  # noqa: C901
         tables = tables.copy()
         _check_tables(tables)
 
+        # First pass: convert ALL entries to tlc.Table objects (regardless of splits)
         for key, table in tables.items():
-            if splits is not None and key not in splits:
-                continue
-
             if isinstance(table, (str, Path, tlc.Url)):
                 try:
                     table_url = tlc.Url(table)
@@ -168,6 +166,11 @@ def check_tlc_dataset(  # noqa: C901
                 )
 
                 raise ValueError(msg)
+
+        # Second pass: validate and log only the tables matching splits
+        for key in tables:
+            if splits is not None and key not in splits:
+                continue
 
             # Check that the table is compatible with the current task
             if table_checker is not None:

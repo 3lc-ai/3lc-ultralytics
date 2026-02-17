@@ -16,7 +16,6 @@ from tlc_ultralytics.detect.validator import TLCDetectionValidator
 from tlc_ultralytics.engine.trainer import TLCTrainerMixin
 from tlc_ultralytics.overrides import build_dataloader
 from tlc_ultralytics.utils import create_sampler
-from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 
 class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
@@ -24,35 +23,6 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
 
     _default_image_column_name = IMAGE_COLUMN_NAME
     _default_label_column_name = DETECTION_LABEL_COLUMN_NAME
-
-    def get_dataset(self):
-        # Parse yaml and create tables
-        self.data = check_tlc_dataset(
-            self.args.data,
-            self._tables,
-            self._settings.image_column_name,
-            self._settings.label_column_name,
-            project_name=self._settings.project_name,
-            splits=("train", "val"),
-            task="detect",
-            settings=self._settings,
-        )
-
-        # Get test data if val not present
-        if "val" not in self.data:
-            data_test = check_tlc_dataset(
-                self.args.data,
-                self._tables,
-                self._settings.image_column_name,
-                self._settings.label_column_name,
-                project_name=self._settings.project_name,
-                splits=("test",),
-                task="detect",
-                settings=self._settings,
-            )
-            self.data["test"] = data_test["test"]
-
-        return self.data
 
     def build_dataset(self, *args, **kwargs):
         from ultralytics.models.yolo.detect.train import build_yolo_dataset as original_build_yolo_dataset

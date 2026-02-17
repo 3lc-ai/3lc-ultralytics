@@ -11,7 +11,6 @@ from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME,
 from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
 from tlc_ultralytics.pose.loss import TLCPoseLoss26, TLCv8PoseLoss
 from tlc_ultralytics.pose.validator import TLCPoseValidator
-from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 
 # Monkeypatch Ultralytics PoseModel to use TLC pose losses which respect dataset oks_sigmas
@@ -26,34 +25,6 @@ PoseModel.init_criterion = _tlc_pose_init_criterion
 class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
     _default_image_column_name = IMAGE_COLUMN_NAME
     _default_label_column_name = POSE_LABEL_COLUMN_NAME
-
-    def get_dataset(self):
-        self.data = check_tlc_dataset(
-            self.args.data,
-            self._tables,
-            self._settings.image_column_name,
-            self._settings.label_column_name,
-            project_name=self._settings.project_name,
-            splits=("train", "val"),
-            task="pose",
-            settings=self._settings,
-        )
-
-        # Get test data if val not present
-        if "val" not in self.data:
-            data_test = check_tlc_dataset(
-                self.args.data,
-                self._tables,
-                self._settings.image_column_name,
-                self._settings.label_column_name,
-                project_name=self._settings.project_name,
-                splits=("test",),
-                task="pose",
-                settings=self._settings,
-            )
-            self.data["test"] = data_test["test"]
-
-        return self.data
 
     def set_model_attributes(self):
         """Set keypoints shape and attach dataset-provided OKS sigmas to the model if available."""
