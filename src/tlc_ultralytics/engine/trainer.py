@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import tlc
-import ultralytics
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
 from ultralytics.utils.metrics import smooth
