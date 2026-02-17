@@ -86,8 +86,8 @@ class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
         """Print task-specific parameters to the console."""
         table_sigmas = self.data.get("oks_sigmas")
 
-        if table_sigmas is not None:
-            table_sigmas_rounded = [round(x, 2) for x in table_sigmas]
+        if table_sigmas is not None and isinstance(table_sigmas, list):
+            table_sigmas_rounded = [round(x, 2) for x in table_sigmas]  # type: ignore[no-matching-overload]
             LOGGER.info(f"{TLC_COLORSTR}Using OKS sigmas: {table_sigmas_rounded} from Table for evaluation")
         if self._settings.oks_sigmas is not None:
             settings_oks_rounded = [round(x, 2) for x in self._settings.oks_sigmas]

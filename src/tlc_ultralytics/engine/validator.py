@@ -101,6 +101,7 @@ class TLCValidatorMixin(BaseValidator):
             # Reuse active run only if it has the same project name (if a different run is active)
             if self._settings.project_name:
                 project_name = self._settings.project_name
+                first_split = next(iter(self.data.keys()))
             else:
                 first_split = next(iter(self.data.keys()))
                 project_name = self.data[first_split].project_name
@@ -128,7 +129,7 @@ class TLCValidatorMixin(BaseValidator):
 
         if self.args.task == "pose" and not self._training:
             table_sigmas = self.data.get("oks_sigmas")
-            if table_sigmas is not None:
+            if table_sigmas is not None and isinstance(table_sigmas, list):
                 table_sigmas_rounded = [round(x, 2) for x in table_sigmas]
                 LOGGER.info(f"{TLC_COLORSTR}Using OKS sigmas: {table_sigmas_rounded} from Table for validation")
 
@@ -211,7 +212,7 @@ class TLCValidatorMixin(BaseValidator):
         """Add a hook to extract embeddings from the model, and infer the activation size"""
         raise NotImplementedError("Subclasses must implement this method.")
 
-    def _infer_batch_size(self, preds) -> int:
+    def _infer_batch_size(self, preds, batch=None) -> int:
         """Infer the batch size from the predictions"""
         raise NotImplementedError("Subclasses must implement this method.")
 
@@ -314,15 +315,19 @@ class TLCValidatorMixin(BaseValidator):
         input_table_url = self.dataloader.dataset.table.url.to_str()
 
         # Gather metrics from all ranks to RANK 0 in DDP mode
+        input_table_urls: list[str] = []
         if RANK >= 0:
-            world_size = dist.get_world_size()
+            world_size = dist.get_world_size()  # type: ignore[possibly-missing-attribute]
             gathered_metrics_infos = [None] * world_size if RANK == 0 else None
             gathered_input_urls = [None] * world_size if RANK == 0 else None
 
-            dist.gather_object(metrics_infos, gathered_metrics_infos, dst=0)
-            dist.gather_object(input_table_url, gathered_input_urls, dst=0)
+            dist.gather_object(metrics_infos, gathered_metrics_infos, dst=0)  # type: ignore[possibly-missing-attribute]
+            dist.gather_object(input_table_url, gathered_input_urls, dst=0)  # type: ignore[possibly-missing-attribute]
 
             if RANK == 0:
+                assert gathered_metrics_infos is not None
+                assert gathered_input_urls is not None
+
                 # Flatten metrics_infos from all ranks
                 all_metrics_infos = []
                 for rank_metrics in gathered_metrics_infos:
@@ -459,18 +464,20 @@ class TLCValidatorMixin(BaseValidator):
     def _generate_per_class_metrics(self):
         """Transform metrics from self.metrics to a format suitable for 3LC"""
         # Consider moving this to TLCDetectionValidator when supporting other tasks
+        is_segment = self.args.task == "segment"
+
         precisions = np.zeros(self.nc + 1)
         recalls = np.zeros(self.nc + 1)
         mAPs = np.zeros(self.nc + 1)
         mAP50_95s = np.zeros(self.nc + 1)
 
-        if self.args.task == "segment":
-            precisions_seg = np.zeros(self.nc + 1)
-            recalls_seg = np.zeros(self.nc + 1)
-            mAPs_seg = np.zeros(self.nc + 1)
-            mAP50_95s_seg = np.zeros(self.nc + 1)
+        precisions_seg = np.zeros(self.nc + 1) if is_segment else None
+        recalls_seg = np.zeros(self.nc + 1) if is_segment else None
+        mAPs_seg = np.zeros(self.nc + 1) if is_segment else None
+        mAP50_95s_seg = np.zeros(self.nc + 1) if is_segment else None
 
         for i in range(self.nc):
+            p_seg = r_seg = ap50_seg = ap5095_seg = 0.0
             if i in self.metrics.ap_class_index:
                 class_results = self.metrics.class_result(np.where(self.metrics.ap_class_index == i)[0][0])
                 if self.args.task in ("detect", "obb"):
@@ -479,8 +486,6 @@ class TLCValidatorMixin(BaseValidator):
                     p, r, ap50, ap5095, p_seg, r_seg, ap50_seg, ap5095_seg = class_results
             else:
                 p, r, ap50, ap5095 = 0.0, 0.0, 0.0, 0.0
-                if self.args.task == "segment":
-                    p_seg, r_seg, ap50_seg, ap5095_seg = 0.0, 0.0, 0.0, 0.0
 
             precisions[i] = p
             recalls[i] = r
@@ -492,6 +497,8 @@ class TLCValidatorMixin(BaseValidator):
                 recalls_seg[i] = r_seg
                 mAPs_seg[i] = ap50_seg
                 mAP50_95s_seg[i] = ap5095_seg
+
+        all_p_seg = all_r_seg = all_mAP50_seg = all_mAP50_95_seg = 0.0
 
         mean_results = self.metrics.mean_results()
         if self.args.task in ("detect", "obb"):
@@ -520,7 +527,12 @@ class TLCValidatorMixin(BaseValidator):
             MAP50_95: mAP50_95s,
         }
 
-        if self.args.task == "segment":
+        if is_segment:
+            assert precisions_seg is not None
+            assert recalls_seg is not None
+            assert mAPs_seg is not None
+            assert mAP50_95s_seg is not None
+
             precisions_seg[self.nc] = all_p_seg
             recalls_seg[self.nc] = all_r_seg
             mAPs_seg[self.nc] = all_mAP50_seg

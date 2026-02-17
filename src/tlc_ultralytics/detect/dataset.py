@@ -351,7 +351,7 @@ def unpack_box(
     label_key: str,
 ) -> tuple[int, list[float]]:
     coordinates = [bbox[tlc.X0], bbox[tlc.Y0], bbox[tlc.X1], bbox[tlc.Y1]]
-    return bbox[label_key], convert_to_xywh(table_format(coordinates), image_width, image_height)
+    return bbox[label_key], convert_to_xywh(table_format(coordinates), image_width, image_height)  # type: ignore[invalid-return-type]
 
 
 def unpack_boxes(

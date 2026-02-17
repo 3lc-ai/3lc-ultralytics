@@ -2,9 +2,9 @@
 
 import random
 
-import sentry_sdk
+from sentry_sdk import profiler
 
-sentry_sdk.profiler.transaction_profiler.random = random.Random()
+profiler.transaction_profiler.random = random.Random()
 
 from importlib.metadata import PackageNotFoundError, version
 

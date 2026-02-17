@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 import tlc
 import ultralytics
+import ultralytics.utils.checks
 from ultralytics.models import yolo
 from ultralytics.models.yolo.model import YOLO as YOLOBase
 from ultralytics.nn.tasks import ClassificationModel, DetectionModel, OBBModel, PoseModel, SegmentationModel

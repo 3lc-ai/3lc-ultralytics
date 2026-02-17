@@ -106,6 +106,8 @@ class TLCTrainerMixin(BaseTrainer):
         """Override the train method to use custom generate_ddp_command function to serialize 3LC data in data
         argument.
         """
+        import ultralytics.utils.dist
+
         ultralytics.engine.trainer.generate_ddp_command = generate_ddp_command
         super().train()
         ultralytics.engine.trainer.generate_ddp_command = ultralytics.utils.dist.generate_ddp_command

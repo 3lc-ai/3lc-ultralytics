@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import importlib.metadata
 from importlib.metadata import PackageNotFoundError, metadata
 
 from packaging.specifiers import SpecifierSet

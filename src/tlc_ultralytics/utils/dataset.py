@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 def get_dataset_functions(
     task: Literal["detect", "segment", "pose", "classify", "obb"],
-) -> tuple[Callable, Callable, Callable]:
+) -> tuple[Callable, Callable]:
     if task == "detect":
         from tlc_ultralytics.detect.utils import check_det_table
 
@@ -199,7 +199,8 @@ def check_tlc_dataset(  # noqa: C901
         points = tlc.KeypointHelper.get_points_from_table(tables[first_split], label_column_name)
     else:
         kpt_shape = [17, 3]  # yolo default
-        flip_idx, keypoint_attributes, lines, line_attributes, triangles, triangle_attributes, points = (
+        flip_idx, keypoint_attributes, lines, line_attributes, triangles, triangle_attributes, oks_sigmas, points = (
+            None,
             None,
             None,
             None,
@@ -273,7 +274,7 @@ def check_tlc_dataset(  # noqa: C901
             ret["oks_sigmas"] = oks_sigmas
         if points is not None:
             ret["points"] = points
-    return ret
+    return ret  # type: ignore[invalid-return-type]
 
 
 def get_value_map_from_table(
@@ -292,7 +293,7 @@ def get_value_map_from_table(
         except Exception as e:
             raise ValueError("Failed to get value map from table") from e
     else:
-        return table.get_value_map(label_column_name)
+        return table.get_value_map(label_column_name)  # type: ignore[invalid-return-type]
 
 
 def parse_3lc_yaml_file(data_file: str) -> dict[str, tlc.Table]:
@@ -305,7 +306,7 @@ def parse_3lc_yaml_file(data_file: str) -> dict[str, tlc.Table]:
     if not (data_file_url := tlc.Url(data_file.replace(TLC_PREFIX, ""))).exists():
         raise FileNotFoundError(f"Could not find YAML file {data_file_url}")
 
-    data_config = yaml.safe_load(data_file_url.read())
+    data_config = yaml.safe_load(data_file_url.read_text())
 
     path = data_config.get("path")
     splits = [key for key in data_config if key != "path"]

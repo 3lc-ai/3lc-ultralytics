@@ -1,0 +1,33 @@
+[environment]
+python-version = "3.10"
+root = ["./src"]
+
+[src]
+include = ["src/"]
+
+[rules]
+# Start with all rules disabled, then enable selectively
+all = "ignore"
+
+# Errors: rules that catch real bugs
+call-non-callable = "error"
+conflicting-declarations = "error"
+conflicting-metaclass = "error"
+deprecated = "error"
+division-by-zero = "error"
+duplicate-base = "error"
+index-out-of-bounds = "error"
+invalid-context-manager = "error"
+invalid-exception-caught = "error"
+invalid-raise = "error"
+invalid-return-type = "error"
+invalid-type-form = "error"
+missing-argument = "error"
+no-matching-overload = "error"
+not-iterable = "error"
+possibly-missing-attribute = "error"
+possibly-missing-import = "error"
+possibly-unresolved-reference = "error"
+too-many-positional-arguments = "error"
+unresolved-import = "error"
+unresolved-reference = "error"
