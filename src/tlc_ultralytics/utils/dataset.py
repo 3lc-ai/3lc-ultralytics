@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Literal, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 import tlc
 import yaml
@@ -14,7 +13,11 @@ from ultralytics.data.utils import check_det_dataset
 from ultralytics.utils import LOGGER, colorstr
 
 from tlc_ultralytics.constants import TLC_COLORSTR, TLC_PREFIX
-from tlc_ultralytics.settings import Settings
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
+
+    from tlc_ultralytics.settings import Settings
 
 
 def get_dataset_functions(

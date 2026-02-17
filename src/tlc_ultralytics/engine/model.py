@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 import tlc
 import ultralytics
@@ -20,6 +20,9 @@ from tlc_ultralytics.pose import TLCPoseTrainer, TLCPoseValidator
 from tlc_ultralytics.segment import TLCSegmentationTrainer, TLCSegmentationValidator
 from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import check_requirements, reduce_embeddings
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 class YOLO(YOLOBase):

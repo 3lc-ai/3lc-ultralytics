@@ -61,7 +61,7 @@ class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
         self.verify_schema()
 
         im_files, labels = self._get_rows_from_table()
-        self.samples = list(zip(im_files, labels))
+        self.samples = list(zip(im_files, labels, strict=False))
 
         # Override torchvision ImageFolder when called by parent __init__
         import torchvision

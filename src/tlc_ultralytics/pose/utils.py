@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import tlc
 from tlc.core.builtins.constants import (
     BBS_2D,
@@ -12,7 +14,8 @@ from tlc.core.builtins.constants import (
     Y_MIN,
 )
 
-from tlc_ultralytics.settings import Settings
+if TYPE_CHECKING:
+    from tlc_ultralytics.settings import Settings
 
 
 def get_or_create_pose_table(

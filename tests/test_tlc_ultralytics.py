@@ -1349,7 +1349,7 @@ def test_dataset_determinism(mode, task) -> None:
 
     assert len(rows_3lc) == len(rows_ultralytics), "Number of batches should be the same"
 
-    for row_3lc, row_ultralytics in zip(rows_3lc, rows_ultralytics):
+    for row_3lc, row_ultralytics in zip(rows_3lc, rows_ultralytics, strict=False):
         _compare_dataset_rows(row_ultralytics, row_3lc)
 
 
@@ -1418,7 +1418,7 @@ def test_dataset_cache(task) -> None:
 
     # Check that the dataset has the same rows
     assert len(dataset_first) == len(dataset_second), "Number of rows should be the same"
-    for row_first, row_second in zip(dataset_first, dataset_second):
+    for row_first, row_second in zip(dataset_first, dataset_second, strict=False):
         _compare_dataset_rows(row_second, row_first)
 
     cache_paths = list(Path(trainer.data["train"].url.to_str()).glob("yolo_*.json"))

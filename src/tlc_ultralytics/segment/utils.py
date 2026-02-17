@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import tlc
 
-from tlc_ultralytics.settings import Settings
+if TYPE_CHECKING:
+    from tlc_ultralytics.settings import Settings
 
 
 def get_or_create_seg_table(

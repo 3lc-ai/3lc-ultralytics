@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
-import tlc
-import torch
+if TYPE_CHECKING:
+    import tlc
+    import torch
 
-from tlc_ultralytics.settings import Settings
+    from tlc_ultralytics.settings import Settings
 
 
 def create_sampler(

@@ -120,7 +120,7 @@ class TLCTrainerMixin(BaseTrainer):
                 "run_url": self._run.url.to_str(),
                 "settings": self._settings.to_dict(),
                 "data": self.args.data,
-                "tables": self._tables if self._tables else None,
+                "tables": self._tables or None,
             }
         )
 
@@ -128,10 +128,10 @@ class TLCTrainerMixin(BaseTrainer):
         """Create a run."""
         # Create a 3LC run
         description = (
-            self._settings.run_description if self._settings.run_description else DEFAULT_TRAIN_RUN_DESCRIPTION
+            self._settings.run_description or DEFAULT_TRAIN_RUN_DESCRIPTION
         )
 
-        project_name = self._settings.project_name if self._settings.project_name else self.data["train"].project_name
+        project_name = self._settings.project_name or self.data["train"].project_name
         self._run = tlc.init(
             project_name=project_name,
             description=description,
@@ -318,7 +318,7 @@ class TLCTrainerMixin(BaseTrainer):
                 names.extend(["Seg_F1_score", "Seg_Recall", "Seg_Precision"])
 
             values = {}
-            for py, name in zip(curves, names):
+            for py, name in zip(curves, names, strict=False):
                 y = smooth(py.mean(0), 0.05)
                 values[f"3LC/{name}"] = {"best_val": y.max(), "best_conf": px[y.argmax()]}
 

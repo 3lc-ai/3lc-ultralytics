@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import tlc
@@ -10,6 +10,9 @@ from ultralytics.data.utils import check_file_speeds, segments2boxes
 from ultralytics.utils import LOGGER, colorstr
 
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 SegmentType = Literal["absolute", "relative"]
 
@@ -301,7 +304,7 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
         for i, (category, polygon) in enumerate(
             zip(
                 segmentations[instances_name][label_key],
-                segmentations[tlc.POLYGONS],
+                segmentations[tlc.POLYGONS], strict=False,
             )
         ):
             # Handle polygons with zero area

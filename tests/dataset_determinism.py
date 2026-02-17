@@ -124,7 +124,7 @@ def create_dataset_samples_with_tracking(mode: str, task: str, output_file: str 
         random_info_3lc = get_tracking_info()
 
         # Assert row equality here in the sub-process
-        for row_ultralytics, row_3lc in zip(rows_ultralytics, rows_3lc):
+        for row_ultralytics, row_3lc in zip(rows_ultralytics, rows_3lc, strict=False):
             _compare_dataset_rows(row_ultralytics, row_3lc)
 
         result = {

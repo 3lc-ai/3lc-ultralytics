@@ -118,9 +118,7 @@ class TLCValidatorMixin(BaseValidator):
 
                 self._run = tlc.init(
                     project_name=project_name,
-                    description=self._settings.run_description
-                    if self._settings.run_description
-                    else DEFAULT_COLLECT_RUN_DESCRIPTION,
+                    description=self._settings.run_description or DEFAULT_COLLECT_RUN_DESCRIPTION,
                     run_name=self._settings.run_name,
                     root_url=root_url,
                 )

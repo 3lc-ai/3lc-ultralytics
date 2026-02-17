@@ -1,13 +1,15 @@
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import ultralytics
-from torch.utils.data import Sampler
 from ultralytics.data.build import InfiniteDataLoader
 from ultralytics.data.build import build_dataloader as build_dataloader_ultralytics
 
+if TYPE_CHECKING:
+    from torch.utils.data import Sampler
+
 
 def build_dataloader(*args, **kwargs):
-    sampler: Optional[Sampler] = kwargs.pop("sampler", None)
+    sampler: Sampler | None = kwargs.pop("sampler", None)
 
     class _InfiniteDataLoaderWithSampler(InfiniteDataLoader):
         """This class is a temporary patch to the InfiniteDataLoader that allows for a custom sampler to be set.

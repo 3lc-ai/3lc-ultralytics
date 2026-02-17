@@ -4,12 +4,16 @@ import importlib
 import os
 from dataclasses import dataclass, field, fields
 from difflib import get_close_matches
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
-import tlc
 from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.constants import TLC_COLORSTR
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import tlc
 
 
 @dataclass
