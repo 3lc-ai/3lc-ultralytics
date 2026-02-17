@@ -127,9 +127,7 @@ class TLCTrainerMixin(BaseTrainer):
     def _create_run(self) -> None:
         """Create a run."""
         # Create a 3LC run
-        description = (
-            self._settings.run_description or DEFAULT_TRAIN_RUN_DESCRIPTION
-        )
+        description = self._settings.run_description or DEFAULT_TRAIN_RUN_DESCRIPTION
 
         project_name = self._settings.project_name or self.data["train"].project_name
         self._run = tlc.init(

@@ -304,7 +304,8 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
         for i, (category, polygon) in enumerate(
             zip(
                 segmentations[instances_name][label_key],
-                segmentations[tlc.POLYGONS], strict=False,
+                segmentations[tlc.POLYGONS],
+                strict=False,
             )
         ):
             # Handle polygons with zero area
