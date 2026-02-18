@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterator
 from multiprocessing.pool import ThreadPool
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import tlc
 from ultralytics.data.utils import verify_image
 from ultralytics.utils import LOGGER, NUM_THREADS, TQDM, colorstr
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 # Responsible for any generic 3LC dataset handling, such as scanning, caching and adding example ids to each sample

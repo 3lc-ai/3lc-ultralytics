@@ -1,3 +1,5 @@
+from typing import Any
+
 import numpy as np
 import tlc
 import torch
@@ -40,7 +42,7 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
 
         return {tlc.PREDICTED_SEGMENTATIONS: segment_sample_type.schema}
 
-    def _compute_3lc_metrics(self, preds, batch) -> dict[str, list[dict[str, any]]]:
+    def _compute_3lc_metrics(self, preds, batch) -> dict[str, list[dict[str, Any]]]:
         """Compute 3LC metrics for instance segmentation.
 
         :param preds: Predictions returned by YOLO segmentation model.

@@ -95,13 +95,14 @@ class TLCClassificationValidator(TLCValidatorMixin, yolo.classify.Classification
 
         # Find index of the linear layer
         linear_layer_index: int | None = None
+        activation_size: int | None = None
         for index, module in enumerate(model.modules()):
             if isinstance(module, torch.nn.Linear):
                 activation_size = module.in_features
                 linear_layer_index = index
                 break
 
-        if linear_layer_index is None:
+        if linear_layer_index is None or activation_size is None:
             raise ValueError("No linear layer found in model, cannot collect embeddings.")
 
         weak_self = weakref.ref(self)  # Avoid circular reference (self <-> hook_fn)

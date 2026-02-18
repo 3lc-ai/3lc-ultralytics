@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import tlc
 import torch
 from tlc.core.builtins.constants import KEYPOINTS_2D_PREDICTED
 from tlc.core.builtins.schemas import Keypoints2DSchema
@@ -17,6 +16,9 @@ from tlc_ultralytics.pose.dataset import TLCYOLOPoseDataset
 from tlc_ultralytics.pose.loss import v8UnreducedPoseLoss
 from tlc_ultralytics.pose.utils import yolo_pose_loss_schemas
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
+
+if TYPE_CHECKING:
+    import tlc
 
 
 class TLCPoseValidator(TLCValidatorMixin, PoseValidator):

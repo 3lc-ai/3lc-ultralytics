@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import tlc
 from tlc.core.builtins.constants.column_names import INSTANCES, INSTANCES_ADDITIONAL_DATA, LABEL, ORIENTED_BBS_2D
 
-from tlc_ultralytics.settings import Settings
+if TYPE_CHECKING:
+    from tlc_ultralytics.settings import Settings
 
 
 def get_or_create_obb_table(

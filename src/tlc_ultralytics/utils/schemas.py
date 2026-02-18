@@ -30,13 +30,13 @@ def training_phase_schema() -> tlc.Schema:
     )
 
 
-def image_embeddings_schema(activation_size=512) -> dict[str, tlc.Schema]:
+def image_embeddings_schema(activation_size=512) -> tlc.Schema:
     """Create a 3LC schema for YOLO image embeddings.
 
     :param activation_size: The size of the activation tensor.
     :returns: The YOLO image embeddings schema.
     """
-    embedding_schema = tlc.Schema(
+    return tlc.Schema(
         "Embedding",
         "Large NN embedding",
         writable=False,
@@ -49,4 +49,3 @@ def image_embeddings_schema(activation_size=512) -> dict[str, tlc.Schema]:
             enforce_max=True,
         ),
     )
-    return embedding_schema

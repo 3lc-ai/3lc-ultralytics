@@ -19,6 +19,7 @@ import tlc
 import yaml
 from PIL import Image
 from testing_helpers import check_pose_table_and_metrics_tables, compare_dataset_values, plot_ultralytics
+from ultralytics.cfg import ASSETS
 from ultralytics.models.yolo import YOLO
 from ultralytics.models.yolo.detect import DetectionTrainer
 from ultralytics.models.yolo.obb import OBBTrainer
@@ -277,15 +278,17 @@ def test_training(task: str) -> None:
         assert category == "zebra", "Expected zebra as first prediction when epoch = 1 and example_id = 3"
 
     # model.predict() should work and be the same as vanilla ultralytics
+    # Pass explicit source for OBB to avoid downloading boats.jpg to the project root
+    source = ASSETS if task != "obb" else ASSETS / "bus.jpg"
     if task == "obb":
-        ultralytics_pred = model_ultralytics.predict(imgsz=320)[0]
-        tlc_pred = model_3lc.predict(imgsz=320)[0]
+        ultralytics_pred = model_ultralytics.predict(source, imgsz=320)[0]
+        tlc_pred = model_3lc.predict(source, imgsz=320)[0]
         assert all(ultralytics_pred.obb.cls == tlc_pred.obb.cls), "Predictions mismatch"
 
     else:
-        assert all(model_ultralytics.predict(imgsz=320)[0].boxes.cls == model_3lc.predict(imgsz=320)[0].boxes.cls), (
-            "Predictions mismatch"
-        )
+        ultralytics_pred = model_ultralytics.predict(source, imgsz=320)[0]
+        tlc_pred = model_3lc.predict(source, imgsz=320)[0]
+        assert all(ultralytics_pred.boxes.cls == tlc_pred.boxes.cls), "Predictions mismatch"
 
     if task == "pose":
         # Pose does not collect per-class metrics (yet?!)
@@ -1386,7 +1389,7 @@ def test_dataset_determinism(mode, task) -> None:
 
     assert len(rows_3lc) == len(rows_ultralytics), "Number of batches should be the same"
 
-    for row_3lc, row_ultralytics in zip(rows_3lc, rows_ultralytics):
+    for row_3lc, row_ultralytics in zip(rows_3lc, rows_ultralytics, strict=False):
         _compare_dataset_rows(row_ultralytics, row_3lc)
 
 
@@ -1455,7 +1458,7 @@ def test_dataset_cache(task) -> None:
 
     # Check that the dataset has the same rows
     assert len(dataset_first) == len(dataset_second), "Number of rows should be the same"
-    for row_first, row_second in zip(dataset_first, dataset_second):
+    for row_first, row_second in zip(dataset_first, dataset_second, strict=False):
         _compare_dataset_rows(row_second, row_first)
 
     cache_paths = list(Path(trainer.data["train"].url.to_str()).glob("yolo_*.json"))

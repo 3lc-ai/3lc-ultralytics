@@ -39,6 +39,10 @@ jobs:
         run: |
           uv run --no-sources ruff check .
 
+      - name: Run type checking
+        run: |
+          uv run --no-sources ty check .
+
       - name: Run tests with Python 3.10
         run: |
           uv run --python 3.10 --no-sources pytest tests/ -v -n 1

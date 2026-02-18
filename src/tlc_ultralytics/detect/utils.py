@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import tlc
 from tlc.client.torch.metrics.metrics_collectors.bounding_box_metrics_collector import (
     _TLCPredictedBoundingBox,
@@ -7,7 +9,9 @@ from tlc.client.torch.metrics.metrics_collectors.bounding_box_metrics_collector 
 )
 
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
-from tlc_ultralytics.settings import Settings
+
+if TYPE_CHECKING:
+    from tlc_ultralytics.settings import Settings
 
 
 def get_or_create_det_table(

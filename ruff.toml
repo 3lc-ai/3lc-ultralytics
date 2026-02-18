@@ -5,7 +5,7 @@ exclude = [
     ".vscode",
     "build",
 ]
-target-version = "py39"
+target-version = "py310"
 
 [lint]
 select = [
@@ -14,8 +14,10 @@ select = [
     "C",
     "E",
     "F",
+    "FURB",
     "I",
     "RUF",
+    "TC",
     "UP",
     "W",
 ]

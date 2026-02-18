@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import tlc
 from ultralytics.data.utils import IMG_FORMATS
 from ultralytics.utils import ROOT, YAML
 
-from tlc_ultralytics.settings import Settings
+if TYPE_CHECKING:
+    from tlc_ultralytics.settings import Settings
 
 
 def get_or_create_cls_table(
