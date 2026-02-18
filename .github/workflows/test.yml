@@ -1,14 +1,20 @@
 name: Test
 
 on:
+  pull_request:
   workflow_call:
+    inputs:
+      os-matrix:
+        description: 'JSON array of OS runners'
+        type: string
+        default: '["ubuntu-latest"]'
   workflow_dispatch:
 
 jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: ${{ fromJSON(inputs.os-matrix || '["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
