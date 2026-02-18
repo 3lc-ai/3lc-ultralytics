@@ -154,8 +154,12 @@ def main():
     if not args.dry_run:
         current_branch = run_command(["git", "branch", "--show-current"])
 
+        # Update lock file to reflect the new version
+        run_command(["uv", "lock", "--no-sources"])
+        print("Updated uv.lock")
+
         # Commit changes
-        run_command(["git", "add", "pyproject.toml", "CHANGELOG.md"])
+        run_command(["git", "add", "pyproject.toml", "CHANGELOG.md", "uv.lock"])
         run_command(["git", "commit", "-m", f"Bump version to {new_version}"])
         print("Committed version changes")
 
@@ -174,11 +178,12 @@ def main():
         print("4. Create a GitHub release")
     else:
         print("\n[DRY RUN] Would have:")
-        print("1. Added and committed these changes to current branch")
-        print("2. Pushed these changes to develop branch")
-        print("3. Created and pushed tag")
+        print("1. Run `uv lock --no-sources` to update the lock file")
+        print("2. Added and committed these changes to current branch")
+        print("3. Pushed these changes to develop branch")
+        print("4. Created and pushed tag")
         print(
-            "4. Triggered GitHub Actions workflow to test, build, publish and release the package as GitHub Release "
+            "5. Triggered GitHub Actions workflow to test, build, publish and release the package as GitHub Release "
             "and on PyPI"
         )
 
