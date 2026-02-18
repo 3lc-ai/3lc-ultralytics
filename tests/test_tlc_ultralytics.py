@@ -1088,6 +1088,43 @@ def test_check_tlc_dataset_bad_url() -> None:
         check_tlc_dataset(data="", tables=tables, image_column_name="a", label_column_name="b", task="detect")
 
 
+def test_check_tlc_dataset_string_tables_converted_before_split_filter() -> None:
+    """Regression test: string table entries must be converted to tlc.Table before the splits filter is applied.
+
+    Previously, when only a "train" table was passed as a URL string and check_tlc_dataset was called with
+    splits=("test",), the "train" entry stayed as a string because conversion was gated by the splits filter.
+    Later code then called .get_value_map() on the string, causing AttributeError.
+    """
+    # Create a minimal table to use as the "train" split
+    train_structure = {"image": tlc.ImagePath("image"), "label": tlc.CategoricalLabel("label", classes=["a", "b"])}
+    train_table = tlc.Table.from_dict(
+        {"image": [str(DUMMY_IMAGE_FILE)], "label": [0]},
+        structure=train_structure,
+        project_name="test_string_conversion_bug",
+        dataset_name="train",
+        table_name="initial",
+        if_exists="overwrite",
+    )
+
+    # Pass the table URL as a string (simulating tables={"train": "s3://..."})
+    tables = {"train": train_table.url.to_str()}
+
+    # Call with splits=("train",) — the bug was that string entries not matching splits were
+    # never converted to tlc.Table, causing AttributeError on .get_value_map() later.
+    # Using task="classify" since it accepts simple "label" column names.
+    result = check_tlc_dataset(
+        data="",
+        tables=tables,
+        image_column_name="image",
+        label_column_name="label",
+        task="classify",
+        splits=("train",),
+    )
+
+    # The key assertion: the train entry should be a tlc.Table, not a string
+    assert isinstance(result["train"], tlc.Table)
+
+
 def test_small_segmentations() -> None:
     # Test that small segmentations are skipped properly
     structure = {

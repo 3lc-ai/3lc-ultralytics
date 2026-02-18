@@ -20,6 +20,7 @@ from tlc_ultralytics.engine.utils import (
 )
 from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import reduce_embeddings
+from tlc_ultralytics.utils.dataset import check_tlc_dataset
 from tlc_ultralytics.utils.generate_ddp import generate_ddp_command
 
 
@@ -199,7 +200,29 @@ class TLCTrainerMixin(BaseTrainer):
         """Print task-specific parameters to the console."""
 
     def get_dataset(self):
-        raise NotImplementedError("Subclasses must implement this method.")
+        self.data = check_tlc_dataset(
+            self.args.data,
+            self._tables,
+            self._settings.image_column_name,
+            self._settings.label_column_name,
+            project_name=self._settings.project_name,
+            splits=("train", "val"),
+            task=self.args.task,
+            settings=self._settings,
+        )
+        if "val" not in self.data:
+            data_test = check_tlc_dataset(
+                self.args.data,
+                self._tables,
+                self._settings.image_column_name,
+                self._settings.label_column_name,
+                project_name=self._settings.project_name,
+                splits=("test",),
+                task=self.args.task,
+                settings=self._settings,
+            )
+            self.data["test"] = data_test["test"]
+        return self.data
 
     def build_dataset(self, table, mode="train", batch=None):
         raise NotImplementedError("Subclasses must implement this method.")

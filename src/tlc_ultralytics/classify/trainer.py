@@ -14,39 +14,11 @@ from tlc_ultralytics.constants import (
 from tlc_ultralytics.engine.trainer import TLCTrainerMixin
 from tlc_ultralytics.overrides import build_dataloader
 from tlc_ultralytics.utils import create_sampler
-from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 
 class TLCClassificationTrainer(TLCTrainerMixin, yolo.classify.ClassificationTrainer):
     _default_image_column_name = IMAGE_COLUMN_NAME
     _default_label_column_name = CLASSIFY_LABEL_COLUMN_NAME
-
-    def get_dataset(self):
-        """Overrides the get_dataset method to get or create 3LC tables."""
-        self.data = check_tlc_dataset(
-            self.args.data,
-            self._tables,
-            self._settings.image_column_name,
-            self._settings.label_column_name,
-            project_name=self._settings.project_name,
-            splits=("train", "val"),
-            task="classify",
-            settings=self._settings,
-        )
-        if "val" not in self.data:
-            data_test = check_tlc_dataset(
-                self.args.data,
-                self._tables,
-                self._settings.image_column_name,
-                self._settings.label_column_name,
-                project_name=self._settings.project_name,
-                splits=("test",),
-                task="classify",
-                settings=self._settings,
-            )
-            self.data["test"] = data_test["test"]
-
-        return self.data
 
     def build_dataset(self, table, mode="train", batch=None):
         exclude_zero = mode == "val" and self._settings.exclude_zero_weight_collection
