@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from functools import partial
+from typing import ClassVar
 
 import ultralytics
 from ultralytics.models import yolo
@@ -12,13 +12,14 @@ from tlc_ultralytics.constants import (
     IMAGE_COLUMN_NAME,
 )
 from tlc_ultralytics.engine.trainer import TLCTrainerMixin
-from tlc_ultralytics.overrides import build_dataloader
-from tlc_ultralytics.utils import create_sampler
 
 
 class TLCClassificationTrainer(TLCTrainerMixin, yolo.classify.ClassificationTrainer):
     _default_image_column_name = IMAGE_COLUMN_NAME
     _default_label_column_name = CLASSIFY_LABEL_COLUMN_NAME
+    _validator_class = TLCClassificationValidator
+    _loss_names: ClassVar[list[str]] = ["loss"]
+    _build_dataloader_module = ultralytics.models.yolo.classify.train
 
     def build_dataset(self, table, mode="train", batch=None):
         exclude_zero = mode == "val" and self._settings.exclude_zero_weight_collection
@@ -33,28 +34,3 @@ class TLCClassificationTrainer(TLCTrainerMixin, yolo.classify.ClassificationTrai
             exclude_zero=exclude_zero,
             class_map=self.data["3lc_class_to_range"],
         )
-
-    def get_validator(self, dataloader=None):
-        self.loss_names = ["loss"]
-        dataloader = dataloader or self.test_loader
-        return TLCClassificationValidator(
-            dataloader,
-            self.save_dir,
-            _callbacks=self.callbacks,
-            run=self._run,
-            settings=self._settings,
-            training=True,
-        )
-
-    def get_dataloader(self, dataset_path, batch_size=16, rank=0, mode="train"):
-        sampler = create_sampler(dataset_path, mode, self._settings, distributed=rank != -1)
-
-        # Patch parent class module to use our build_dataloader
-        trainer_build_dataloader = ultralytics.models.yolo.classify.train.build_dataloader
-        ultralytics.models.yolo.classify.train.build_dataloader = partial(build_dataloader, sampler=sampler)
-
-        dataloader = super().get_dataloader(dataset_path, batch_size, rank, mode)
-
-        ultralytics.models.yolo.classify.train.build_dataloader = trainer_build_dataloader
-
-        return dataloader

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+from copy import copy
+from functools import partial
 from pathlib import Path
+from typing import ClassVar
 
 import tlc
 from ultralytics.engine.trainer import BaseTrainer
@@ -17,8 +20,9 @@ from tlc_ultralytics.engine.utils import (
     _handle_deprecated_column_name,
     _restore_random_state,
 )
+from tlc_ultralytics.overrides import build_dataloader
 from tlc_ultralytics.settings import Settings
-from tlc_ultralytics.utils import reduce_embeddings
+from tlc_ultralytics.utils import create_sampler, reduce_embeddings
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
 from tlc_ultralytics.utils.generate_ddp import generate_ddp_command
 
@@ -226,8 +230,30 @@ class TLCTrainerMixin(BaseTrainer):
     def build_dataset(self, table, mode="train", batch=None):
         raise NotImplementedError("Subclasses must implement this method.")
 
-    def get_validator(self, dataloader):
-        raise NotImplementedError("Subclasses must implement this method.")
+    def get_validator(self, dataloader=None):
+        self.loss_names = self._loss_names
+        if not dataloader:
+            dataloader = self.test_loader
+        return self._validator_class(
+            dataloader,
+            save_dir=self.save_dir,
+            args=copy(self.args),
+            _callbacks=self.callbacks,
+            run=self._run,
+            settings=self._settings,
+            training=True,
+        )
+
+    def get_dataloader(self, dataset_path, batch_size=16, rank=0, mode="train"):
+        """Construct and return dataloader."""
+        sampler = create_sampler(dataset_path, mode, self._settings, distributed=rank != -1)
+
+        original = self._build_dataloader_module.build_dataloader
+        self._build_dataloader_module.build_dataloader = partial(build_dataloader, sampler=sampler)
+        try:
+            return super().get_dataloader(dataset_path, batch_size, rank, mode)
+        finally:
+            self._build_dataloader_module.build_dataloader = original
 
     @property
     def train_validator(self):
@@ -356,5 +382,10 @@ class TLCTrainerMixin(BaseTrainer):
 
         super().save_metrics(metrics=metrics)
 
+    _metric_replacements: ClassVar[list[tuple[str, str]]] = []
+
     def _process_metrics(self, metrics):
-        return metrics
+        result = metrics
+        for old, new in self._metric_replacements:
+            result = {key.replace(old, new): value for key, value in result.items()}
+        return result
