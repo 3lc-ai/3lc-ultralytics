@@ -5,7 +5,7 @@ import weakref
 import tlc
 import torch
 from ultralytics.models.yolo.detect import DetectionValidator
-from ultralytics.utils import LOGGER, metrics, ops
+from ultralytics.utils import LOGGER, ops
 
 from tlc_ultralytics.constants import (
     DETECTION_LABEL_COLUMN_NAME,
@@ -60,77 +60,21 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
     def _compute_3lc_metrics(self, preds, batch):
         losses = self.loss_fn(self._curr_raw_preds, batch) if self._settings.collect_loss else {}
 
-        processed_predictions = self._process_detection_predictions(preds, batch)
         return {
-            tlc.PREDICTED_BOUNDING_BOXES: processed_predictions,
+            tlc.PREDICTED_BOUNDING_BOXES: self._process_predictions(preds, batch),
             **{k: tensor.mean(dim=1).cpu().numpy() for k, tensor in losses.items()},
         }
 
-    def _process_detection_predictions(self, batch_predictions, batch):
-        batch_predicted_boxes = []
+    def _build_annotation(self, scaled, mapped_classes, h, w):
+        bboxes_xywhn = ops.xyxy2xywhn(scaled["bboxes"], w=w, h=h)
+        annotations = [
+            {"score": conf, "category_id": label, "bbox": box.cpu().tolist()}
+            for conf, label, box in zip(scaled["conf"].tolist(), mapped_classes, bboxes_xywhn, strict=True)
+        ]
+        return construct_bbox_struct(annotations, image_width=w, image_height=h)
 
-        for i, predictions in enumerate(batch_predictions):
-            predicted_boxes, predicted_confidences, predicted_classes = (
-                predictions["bboxes"].clone(),
-                predictions["conf"].clone(),
-                predictions["cls"].clone(),
-            )
-            height, width = batch["ori_shape"][i]
-
-            # Handle case with no predictions
-            if len(predictions) == 0:
-                batch_predicted_boxes.append(
-                    construct_bbox_struct(
-                        [],
-                        image_width=width,
-                        image_height=height,
-                    )
-                )
-                continue
-
-            # Filter out low confidence predictions
-            mask = predicted_confidences > self._settings.conf_thres
-            predicted_boxes = predicted_boxes[mask]
-            predicted_confidences = predicted_confidences[mask].tolist()
-            predicted_classes = predicted_classes[mask].tolist()
-
-            # Compute IoUs
-            pbatch = self._prepare_batch(i, batch)
-            gt_boxes = pbatch["bboxes"].clone()
-            if gt_boxes.shape[0]:
-                ious = metrics.box_iou(gt_boxes, predicted_boxes)  # IoU evaluated in xyxy format
-                box_ious = ious.max(dim=0)[0].cpu().tolist()
-            else:
-                box_ious = [0.0] * predicted_boxes.shape[0]  # No predictions
-
-            # Scale predicted boxes to original image size
-            resized_shape = batch["resized_shape"][i]
-            ori_shape = batch["ori_shape"][i]
-            ratio_pad = batch["ratio_pad"][i]
-            pred_scaled = ops.scale_boxes(resized_shape, predicted_boxes, ori_shape, ratio_pad)
-
-            pred_xywh = ops.xyxy2xywhn(pred_scaled, w=width, h=height)
-
-            annotations = []
-            for pi in range(len(predicted_boxes)):
-                annotations.append(
-                    {
-                        "score": predicted_confidences[pi],
-                        "category_id": self.data["range_to_3lc_class"][int(predicted_classes[pi])],
-                        "bbox": pred_xywh[pi, :].cpu().tolist(),
-                        "iou": box_ious[pi],
-                    }
-                )
-
-            batch_predicted_boxes.append(
-                construct_bbox_struct(
-                    annotations,
-                    image_width=width,
-                    image_height=height,
-                )
-            )
-
-        return batch_predicted_boxes
+    def _empty_annotation(self, h, w):
+        return construct_bbox_struct([], image_width=w, image_height=h)
 
     def _prepare_loss_fn(self, model):
         # Get the inner model for checking end2end attribute

@@ -8,7 +8,7 @@ from tlc.core.builtins.constants import KEYPOINTS_2D_PREDICTED
 from tlc.core.builtins.schemas import Keypoints2DSchema
 from tlc.core.data_formats import Keypoints2DInstances
 from ultralytics.models.yolo.pose.val import PoseValidator
-from ultralytics.utils import LOGGER, ops
+from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME, TLC_COLORSTR
 from tlc_ultralytics.engine.validator import TLCValidatorMixin
@@ -79,72 +79,41 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         return {KEYPOINTS_2D_PREDICTED: predicted_pose_schema, **loss_schemas}
 
     def _compute_3lc_metrics(self, preds, batch) -> dict[str, Any]:
-        predicted = []
-
-        for i, pred in enumerate(preds):
-            (
-                predicted_keypoints,
-                predicted_confidences,
-                predicted_classes,
-                predicted_bboxes,
-            ) = (
-                pred["keypoints"].clone(),
-                pred["conf"].clone(),
-                pred["cls"].clone(),
-                pred["bboxes"].clone(),
-            )
-            h, w = batch["ori_shape"][i]
-
-            builder = Keypoints2DInstances.create_empty(
-                image_height=int(h),
-                image_width=int(w),
-                include_instance_confidences=True,
-            )
-
-            # Filter out low confidence predictions
-            mask = predicted_confidences > self._settings.conf_thres
-            if not mask.any():
-                predicted.append(builder.to_row())
-                continue
-
-            predicted_keypoints = predicted_keypoints[mask]
-            predicted_confidences = predicted_confidences[mask].tolist()
-            predicted_classes = predicted_classes[mask].cpu().numpy().astype(np.int32).tolist()
-            predicted_bboxes = predicted_bboxes[mask]
-
-            resized_shape = batch["resized_shape"][i]
-            ori_shape = batch["ori_shape"][i]
-            ratio_pad = batch["ratio_pad"][i]
-            scaled_bboxes = ops.scale_boxes(resized_shape, predicted_bboxes, ori_shape, ratio_pad)
-            scaled_keypoints = ops.scale_coords(resized_shape, predicted_keypoints, ori_shape, ratio_pad)
-
-            for j in range(len(predicted_keypoints)):
-                predicted_kpts = scaled_keypoints[j]
-                predicted_bbox = scaled_bboxes[j].cpu().numpy().astype(np.float32)
-                kxy = predicted_kpts[:, 0:2].cpu().numpy().astype(np.float32)
-                kconf = (
-                    predicted_kpts[:, 2].cpu().numpy().astype(np.float32).tolist()
-                    if predicted_kpts.shape[1] == 3
-                    else None
-                )
-                builder.add_instance(
-                    keypoints=kxy,
-                    bbox=predicted_bbox.tolist(),
-                    label=int(predicted_classes[j]),
-                    confidence=kconf,
-                    normalized=False,
-                    bbox_format="xyxy",
-                    instance_confidence=float(predicted_confidences[j]),
-                )
-
-            row = builder.to_row()
-            predicted.append(row)
-
         losses = self.loss_fn(self._curr_raw_preds, batch) if self._settings.collect_loss else {}
         return {
-            KEYPOINTS_2D_PREDICTED: predicted,
+            KEYPOINTS_2D_PREDICTED: self._process_predictions(preds, batch),
             **{k: tensor.mean(dim=1).cpu().numpy() for k, tensor in losses.items()},
         }
+
+    def _build_annotation(self, scaled, mapped_classes, h, w):
+        builder = Keypoints2DInstances.create_empty(
+            image_height=int(h),
+            image_width=int(w),
+            include_instance_confidences=True,
+        )
+        kpts = scaled["kpts"]  # scale_preds outputs scaled keypoints under "kpts"
+        for j in range(len(mapped_classes)):
+            kxy = kpts[j, :, 0:2].cpu().numpy().astype(np.float32)
+            kconf = (
+                kpts[j, :, 2].cpu().numpy().astype(np.float32).tolist() if kpts.shape[2] == 3 else None
+            )
+            builder.add_instance(
+                keypoints=kxy,
+                bbox=scaled["bboxes"][j].cpu().numpy().astype(np.float32).tolist(),
+                label=int(mapped_classes[j]),
+                confidence=kconf,
+                normalized=False,
+                bbox_format="xyxy",
+                instance_confidence=float(scaled["conf"][j]),
+            )
+        return builder.to_row()
+
+    def _empty_annotation(self, h, w):
+        return Keypoints2DInstances.create_empty(
+            image_height=int(h),
+            image_width=int(w),
+            include_instance_confidences=True,
+        ).to_row()
 
     def _prepare_loss_fn(self, model):
         loss_model = model.model if hasattr(model.model, "model") else model
