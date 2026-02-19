@@ -1,8 +1,5 @@
-from typing import Any
-
 import numpy as np
 import tlc
-import torch
 from tlc.core.builtins.constants import (
     CONFIDENCE,
     INSTANCES,
@@ -15,7 +12,6 @@ from tlc.core.builtins.constants import (
 )
 from tlc.core.builtins.schemas import CategoricalLabelListSchema, Float32ListSchema, Geometry2DSchema
 from ultralytics.models.yolo.obb.val import OBBValidator
-from ultralytics.utils import ops
 
 from tlc_ultralytics.constants import (
     IMAGE_COLUMN_NAME,
@@ -43,72 +39,44 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
             )
         }
 
-    def _compute_3lc_metrics(self, preds, batch) -> dict[str, list[dict[str, Any]]]:
-        """Compute 3LC metrics for instance segmentation.
+    def _compute_3lc_metrics(self, preds, batch):
+        return {"oriented_bbs_2d_predicted": self._process_predictions(preds, batch)}
 
-        :param preds: Predictions returned by YOLO segmentation model.
-        :param batch: Batch of data presented to the YOLO segmentation model.
-        :returns: Metrics dict with predicted instance data for each sample in a batch.
-        """
-        predicted = []
-
-        for i, pred in enumerate(preds):
-            predicted_bboxes, predicted_classes, predicted_confidences = (
-                pred["bboxes"].clone(),
-                pred["cls"].clone(),
-                pred["conf"].clone(),
-            )
-            h, w = batch["ori_shape"][i]
-            mask = predicted_confidences >= self._settings.conf_thres
-
-            if len(pred) == 0 or not torch.any(mask):
-                predicted.append(
-                    {
-                        X_MIN: 0,
-                        Y_MIN: 0,
-                        X_MAX: w,
-                        Y_MAX: h,
-                        INSTANCES: [],
-                        INSTANCES_ADDITIONAL_DATA: {LABEL: [], CONFIDENCE: []},
-                    }
-                )
-                continue
-
-            predicted_bboxes = predicted_bboxes[mask]
-            predicted_classes = predicted_classes[mask].cpu().numpy().astype(np.int32).tolist()
-            predicted_confidences = predicted_confidences[mask].cpu().numpy().astype(np.float32).tolist()
-
-            resized_shape = batch["resized_shape"][i]
-            ori_shape = batch["ori_shape"][i]
-            ratio_pad = batch["ratio_pad"][i]
-            scaled_bboxes = ops.scale_boxes(resized_shape, predicted_bboxes, ori_shape, ratio_pad, xywh=True)
-
-            instances = []
-            for j in range(len(predicted_bboxes)):
-                predicted_bbox = scaled_bboxes[j].cpu().numpy().astype(np.float32).tolist()
-                instances.append(
-                    {
-                        "oriented_bbs_2d": [
-                            {
-                                "center_x": predicted_bbox[0],
-                                "center_y": predicted_bbox[1],
-                                "size_x": predicted_bbox[2],
-                                "size_y": predicted_bbox[3],
-                                "rotation": predicted_bbox[4],
-                            }
-                        ],
-                    }
-                )
-
-            predicted.append(
+    def _build_annotation(self, scaled, mapped_classes, h, w):
+        instances = []
+        for j in range(len(mapped_classes)):
+            bb = scaled["bboxes"][j].cpu().numpy().astype(np.float32).tolist()
+            instances.append(
                 {
-                    X_MIN: 0,
-                    Y_MIN: 0,
-                    X_MAX: w,
-                    Y_MAX: h,
-                    INSTANCES: instances,
-                    INSTANCES_ADDITIONAL_DATA: {LABEL: predicted_classes, CONFIDENCE: predicted_confidences},
+                    "oriented_bbs_2d": [
+                        {
+                            "center_x": bb[0],
+                            "center_y": bb[1],
+                            "size_x": bb[2],
+                            "size_y": bb[3],
+                            "rotation": bb[4],
+                        }
+                    ],
                 }
             )
+        return {
+            X_MIN: 0,
+            Y_MIN: 0,
+            X_MAX: w,
+            Y_MAX: h,
+            INSTANCES: instances,
+            INSTANCES_ADDITIONAL_DATA: {
+                LABEL: [int(c) for c in mapped_classes],
+                CONFIDENCE: scaled["conf"].cpu().numpy().astype(np.float32).tolist(),
+            },
+        }
 
-        return {"oriented_bbs_2d_predicted": predicted}
+    def _empty_annotation(self, h, w):
+        return {
+            X_MIN: 0,
+            Y_MIN: 0,
+            X_MAX: w,
+            Y_MAX: h,
+            INSTANCES: [],
+            INSTANCES_ADDITIONAL_DATA: {LABEL: [], CONFIDENCE: []},
+        }

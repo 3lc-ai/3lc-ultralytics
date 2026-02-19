@@ -222,22 +222,18 @@ def construct_bbox_struct(
     )
 
     for pred in predicted_annotations:
-        bbox, label, score, iou = (
-            pred["bbox"],
-            pred["category_id"],
-            pred["score"],
-            pred["iou"],
-        )
-        label_val = inverse_label_mapping[label] if inverse_label_mapping is not None else label
+        label_val = pred["category_id"]
+        if inverse_label_mapping is not None:
+            label_val = inverse_label_mapping[label_val]
         bbox_struct["bb_list"].append(
             _TLCPredictedBoundingBox(
                 label=label_val,
-                confidence=score,
-                iou=iou,
-                x0=bbox[0],
-                y0=bbox[1],
-                x1=bbox[2],
-                y1=bbox[3],
+                confidence=pred["score"],
+                iou=pred.get("iou", 0.0),
+                x0=pred["bbox"][0],
+                y0=pred["bbox"][1],
+                x1=pred["bbox"][2],
+                y1=pred["bbox"][3],
             )
         )
 

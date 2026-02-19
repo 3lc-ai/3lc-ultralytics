@@ -208,6 +208,32 @@ class TLCValidatorMixin(BaseValidator):
         """Compute 3LC metrics for a batch of predictions and targets"""
         raise NotImplementedError("Subclasses must implement this method.")
 
+    def _process_predictions(self, preds, batch):
+        """Filter, scale, and build 3LC annotations for a batch of predictions."""
+        results = []
+        for i, pred in enumerate(preds):
+            pbatch = self._prepare_batch(i, batch)
+            h, w = pbatch["ori_shape"]
+
+            mask = pred["conf"] >= self._settings.conf_thres
+            if not mask.any():
+                results.append(self._empty_annotation(h, w))
+                continue
+
+            filtered = {k: v[mask] for k, v in pred.items()}
+
+            # Keep only top max_det predictions by confidence
+            max_det = self._settings.max_det
+            if len(filtered["conf"]) > max_det:
+                topk = filtered["conf"].topk(max_det).indices
+                filtered = {k: v[topk] for k, v in filtered.items()}
+
+            scaled = self.scale_preds(filtered, pbatch)
+            mapped_classes = [self.data["range_to_3lc_class"][int(c)] for c in scaled["cls"].tolist()]
+            results.append(self._build_annotation(scaled, mapped_classes, h, w))
+
+        return results
+
     def _add_embeddings_hook(self, model) -> int:
         """Add a hook to extract embeddings from the model, and infer the activation size"""
         raise NotImplementedError("Subclasses must implement this method.")
