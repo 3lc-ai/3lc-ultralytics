@@ -3,10 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import tlc
-from tlc.client.torch.metrics.metrics_collectors.bounding_box_metrics_collector import (
-    _TLCPredictedBoundingBox,
-    _TLCPredictedBoundingBoxes,
-)
 
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
 
@@ -161,6 +157,7 @@ def yolo_predicted_bounding_box_schema(
         writable=False,
         is_prediction=True,
         include_segmentation=False,
+        include_iou=False,
     )
 
     return bounding_box_schema
@@ -206,7 +203,7 @@ def construct_bbox_struct(
     image_width: int,
     image_height: int,
     inverse_label_mapping: dict[int, int] | None = None,
-) -> _TLCPredictedBoundingBoxes:
+) -> dict:
     """Construct a 3LC bounding box struct from a list of bounding boxes.
 
     :param predicted_annotations: A list of predicted bounding boxes.
@@ -214,27 +211,22 @@ def construct_bbox_struct(
     :param image_height: The height of the image.
     :param inverse_label_mapping: A mapping from predicted label to category id.
     """
-
-    bbox_struct = _TLCPredictedBoundingBoxes(
-        bb_list=[],
-        image_width=image_width,
-        image_height=image_height,
-    )
-
+    bb_list = []
     for pred in predicted_annotations:
-        label_val = pred["category_id"]
+        label = pred["category_id"]
         if inverse_label_mapping is not None:
-            label_val = inverse_label_mapping[label_val]
-        bbox_struct["bb_list"].append(
-            _TLCPredictedBoundingBox(
-                label=label_val,
-                confidence=pred["score"],
-                iou=pred.get("iou", 0.0),
-                x0=pred["bbox"][0],
-                y0=pred["bbox"][1],
-                x1=pred["bbox"][2],
-                y1=pred["bbox"][3],
-            )
-        )
+            label = inverse_label_mapping[label]
+        bb_list.append({
+            "label": label,
+            "confidence": pred["score"],
+            "x0": pred["bbox"][0],
+            "y0": pred["bbox"][1],
+            "x1": pred["bbox"][2],
+            "y1": pred["bbox"][3],
+        })
 
-    return bbox_struct
+    return {
+        "bb_list": bb_list,
+        "image_width": image_width,
+        "image_height": image_height,
+    }
