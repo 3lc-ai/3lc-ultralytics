@@ -62,6 +62,17 @@ class Settings:
      for more details.
     """
 
+    instance_embeddings_dim: int = field(default=0)
+    """Per-instance embeddings dimension. 0 means disabled, 2 means 2D, 3 means 3D. Default: 0"""
+
+    instance_embeddings_layer: int | None = field(default=None)
+    """Model layer index for instance embeddings feature extraction.
+    None means auto-detect the highest-resolution neck output (P3). Default: None"""
+
+    ground_truth_instance_embeddings: bool = field(default=False)
+    """Whether to collect instance embeddings for ground-truth annotations.
+    Requires instance_embeddings_dim > 0. Default: False"""
+
     sampling_weights: bool = field(default=False)
     """Whether to use 3LC Sampling Weights. Default: False"""
 
@@ -224,6 +235,28 @@ class Settings:
         if self.image_embeddings_dim > 0:
             self._check_reducer_available()
 
+        assert self.instance_embeddings_dim >= 0, (
+            f"Invalid instance embeddings dimension {self.instance_embeddings_dim}, must be non-negative."
+        )
+        if self.instance_embeddings_dim > 3:
+            LOGGER.warning(
+                f"{TLC_COLORSTR}Instance embeddings dimension {self.instance_embeddings_dim} is greater than 3. While "
+                "this is supported, it will not be as useful for visualization in the 3LC Dashboard as 2 or 3."
+            )
+        elif self.instance_embeddings_dim == 1:
+            LOGGER.warning(
+                f"{TLC_COLORSTR}Instance embeddings dimension is one and points will be reduced to a single line. "
+                "Consider using 2 or 3 for better visualization in the 3LC Dashboard."
+            )
+
+        if self.instance_embeddings_dim > 0:
+            self._check_reducer_available()
+
+        if self.ground_truth_instance_embeddings:
+            assert self.instance_embeddings_dim > 0, (
+                "ground_truth_instance_embeddings requires instance_embeddings_dim > 0."
+            )
+
         # Validate metrics collection function if provided
         if self.metrics_collection_function is not None:
             assert callable(self.metrics_collection_function), (
@@ -274,6 +307,8 @@ class Settings:
             (self.collection_val_only, "collect only on val set"),
             # (self.collect_loss, 'collect loss values'), TODO: Restore when loss is supported.
             (self.image_embeddings_dim > 0, "collect image embeddings"),
+            (self.instance_embeddings_dim > 0, "collect instance embeddings"),
+            (self.ground_truth_instance_embeddings, "collect ground-truth instance embeddings"),
             (self.collection_epoch_start, "collect metrics during training"),
         ]
 
