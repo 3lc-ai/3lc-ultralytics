@@ -193,7 +193,7 @@ class TLCValidatorMixin(BaseValidator):
         initial_spaces = len(desc) - len(desc.lstrip())
         split_centered = split.center(initial_spaces)
         split_str = f"{colorstr(split_centered)}"
-        desc = split_str + desc[len(split_centered):]
+        desc = split_str + desc[len(split_centered) :]
 
         return desc
 
