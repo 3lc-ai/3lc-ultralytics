@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import weakref
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -64,6 +65,20 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         return super().postprocess(preds)
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
+        emb_schemas = {}
+        if self._settings.instance_embeddings_dim > 0:
+            from tlc_ultralytics.utils.schemas import instance_embeddings_list_schema
+
+            dim = self._settings.instance_embeddings_dim
+            emb_schemas["predicted_instance_embedding"] = instance_embeddings_list_schema(
+                dim, display_name=f"Predicted Instance Embedding ({dim}D)"
+            )
+
+            if self._settings.ground_truth_instance_embeddings:
+                emb_schemas["ground_truth_instance_embedding"] = instance_embeddings_list_schema(
+                    dim, display_name=f"Ground Truth Instance Embedding ({dim}D)"
+                )
+
         predicted_pose_schema = Keypoints2D.schema(
             classes=self.data["names_3lc"],
             num_keypoints=self.kpt_shape[0],
@@ -79,7 +94,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         )
 
         loss_schemas = yolo_pose_loss_schemas(training=self._training) if self._settings.collect_loss else {}
-        return {PREDICTED_KEYPOINTS_2D: predicted_pose_schema, **loss_schemas}
+        return {PREDICTED_KEYPOINTS_2D: predicted_pose_schema, **loss_schemas, **emb_schemas}
 
     def _compute_3lc_metrics(self, preds, batch) -> dict[str, Any]:
         losses = self.loss_fn(self._curr_raw_preds, batch) if self._settings.collect_loss else {}
@@ -149,6 +164,153 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
 
         self._hook_handles.append(model.model[sppf_index].register_forward_hook(hook_fn))
         return model.model[sppf_index]._modules["cv2"]._modules["conv"].out_channels
+
+    def _add_instance_embeddings_hook(self, model) -> int:
+        """Add a hook to capture high-resolution feature maps for instance embeddings.
+
+        Reuses the detection validator's implementation.
+        """
+        if hasattr(model.model, "model"):
+            model = model.model
+
+        layer_index = self._settings.instance_embeddings_layer
+
+        if layer_index is None:
+            sppf_index = next((i for i, m in enumerate(model.model) if "SPPF" in m.type), -1)
+            candidates = []
+            for i, m in enumerate(model.model):
+                if i > sppf_index and any(t in m.type for t in ("C3k2", "C2f")):
+                    candidates.append(i)
+
+            if candidates:
+                # Find the last candidate before a downsampling Conv (stride=2) appears.
+                # This is the P3 neck output — highest resolution feature map in the neck.
+                p3_index = candidates[0]
+                for idx in candidates:
+                    next_idx = idx + 1
+                    if next_idx < len(model.model):
+                        next_layer = model.model[next_idx]
+                        if "Conv" in next_layer.type and hasattr(next_layer, "conv"):
+                            stride = next_layer.conv.stride
+                            if isinstance(stride, tuple):
+                                stride = stride[0]
+                            if stride >= 2:
+                                p3_index = idx
+                                break
+                    else:
+                        p3_index = idx
+                layer_index = p3_index
+            else:
+                raise ValueError(
+                    "Could not auto-detect a suitable layer for instance embeddings. "
+                    "Please set instance_embeddings_layer manually in settings."
+                )
+
+        LOGGER.info(
+            f"{TLC_COLORSTR}Using layer {layer_index} ({model.model[layer_index].type}) "
+            "for instance embeddings extraction."
+        )
+
+        weak_self = weakref.ref(self)
+
+        def hook_fn(_module, _input, output):
+            self_ref = weak_self()
+            self_ref._instance_feature_map = output
+
+        self._hook_handles.append(model.model[layer_index].register_forward_hook(hook_fn))
+
+        layer = model.model[layer_index]
+        if hasattr(layer, "cv2") and hasattr(layer.cv2, "conv"):
+            return layer.cv2.conv.out_channels
+        elif hasattr(layer, "cv2") and hasattr(layer.cv2, "out_channels"):
+            return layer.cv2.out_channels
+        elif hasattr(layer, "c"):
+            return layer.c
+        else:
+            return 256
+
+    def _extract_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
+        """Extract per-instance embeddings using bboxes (same as detection)."""
+        from ultralytics.utils import ops
+
+        from tlc_ultralytics.utils.embeddings import extract_instance_embeddings_bbox
+
+        feature_map = self._instance_feature_map
+
+        bboxes_list = []
+        image_sizes = []
+        for i, pred in enumerate(preds):
+            pbatch = self._prepare_batch(i, batch)
+            h, w = pbatch["ori_shape"]
+            image_sizes.append((h, w))
+
+            mask = pred["conf"] >= self._settings.conf_thres
+            if not mask.any():
+                bboxes_list.append(torch.empty((0, 4), device=feature_map.device))
+                continue
+
+            filtered_bboxes = pred["bboxes"][mask]
+            filtered_conf = pred["conf"][mask]
+
+            max_det = self._settings.max_det
+            if len(filtered_conf) > max_det:
+                topk = filtered_conf.topk(max_det).indices
+                filtered_bboxes = filtered_bboxes[topk]
+
+            # Scale bboxes directly (can't use self.scale_preds — pose variant requires keypoints)
+            scaled_bboxes = ops.scale_boxes(
+                pbatch["imgsz"], filtered_bboxes.clone(), pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"]
+            )
+            bboxes_list.append(scaled_bboxes)
+
+        return extract_instance_embeddings_bbox(feature_map, bboxes_list, image_sizes)
+
+    def _inject_instance_embeddings(self, batch_metrics, reduced_embeddings):
+        """Inject reduced predicted instance embeddings as a top-level metric column."""
+        pred_embeddings = []
+        for emb_array in reduced_embeddings:
+            if emb_array.shape[0] > 0:
+                pred_embeddings.append([emb_array[i].astype(np.float32).tolist() for i in range(len(emb_array))])
+            else:
+                pred_embeddings.append([])
+        batch_metrics["predicted_instance_embedding"] = pred_embeddings
+
+    def _extract_gt_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
+        """Extract per-instance embeddings for ground-truth bboxes."""
+        from ultralytics.utils import ops
+
+        from tlc_ultralytics.utils.embeddings import extract_instance_embeddings_bbox
+
+        feature_map = self._instance_feature_map
+
+        bboxes_list = []
+        image_sizes = []
+        for i in range(len(preds)):
+            pbatch = self._prepare_batch(i, batch)
+            h, w = pbatch["ori_shape"]
+            image_sizes.append((h, w))
+
+            gt_bboxes = pbatch["bboxes"]  # GT bboxes in resized image coords (xyxy)
+            if gt_bboxes.numel() == 0:
+                bboxes_list.append(torch.empty((0, 4), device=feature_map.device))
+            else:
+                # Scale GT bboxes from resized image coords to original image coords
+                scaled_bboxes = ops.scale_boxes(
+                    pbatch["imgsz"], gt_bboxes.clone(), pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"]
+                )
+                bboxes_list.append(scaled_bboxes.to(feature_map.device))
+
+        return extract_instance_embeddings_bbox(feature_map, bboxes_list, image_sizes)
+
+    def _inject_gt_instance_embeddings(self, batch_metrics, reduced_embeddings):
+        """Inject reduced GT instance embeddings as a top-level metric column."""
+        gt_embeddings = []
+        for emb_array in reduced_embeddings:
+            if emb_array.shape[0] > 0:
+                gt_embeddings.append([emb_array[i].astype(np.float32).tolist() for i in range(len(emb_array))])
+            else:
+                gt_embeddings.append([])
+        batch_metrics["ground_truth_instance_embedding"] = gt_embeddings
 
     def _infer_batch_size(self, preds, batch) -> int:
         return len(batch["im_file"])
