@@ -2224,3 +2224,148 @@ class TestCreateTablesFromYamlFileReuse:
 
         # Verify the table name is "initial"
         assert combined_table.name == "initial"
+
+
+# === Instance embeddings tests ===
+
+INSTANCE_EMB_OVERRIDES = {"batch": 4, "device": "cpu", "workers": 0}
+
+
+@pytest.mark.skipif(not UMAP_AVAILABLE, reason="umap not installed")
+@pytest.mark.parametrize("task", ["detect", "segment", "pose", "obb"])
+def test_instance_embeddings_collection(task: str) -> None:
+    """Test that predicted instance embeddings are collected as a top-level column."""
+    dim = 2
+    settings = Settings(
+        project_name=f"test_instance_emb_{task}",
+        run_name=f"test_instance_emb_{task}",
+        instance_embeddings_dim=dim,
+        image_embeddings_reducer="umap",
+        label_column_name=TASK2LABEL_COLUMN_NAME[task],
+    )
+
+    model = TLCYOLO(TASK2MODEL[task])
+    model.collect(data=TASK2DATASET[task], splits=("train",), settings=settings, **INSTANCE_EMB_OVERRIDES)
+
+    run = _get_run_from_settings(settings)
+    metrics_tables = get_metrics_tables_from_run(run)
+    default_tables = metrics_tables["default_stream"]
+    assert len(default_tables) >= 1, "Expected at least one default_stream metrics table"
+
+    metrics_df = pd.concat([m.to_pandas() for m in default_tables], ignore_index=True)
+
+    # Predicted instance embeddings should be a top-level column
+    assert "predicted_instance_embedding" in metrics_df.columns, (
+        f"Expected 'predicted_instance_embedding' column in metrics for task {task}"
+    )
+
+    # Each row should contain a list of embeddings (one per instance)
+    for row_embs in metrics_df["predicted_instance_embedding"]:
+        assert isinstance(row_embs, (list, np.ndarray)), "Expected list or array of embeddings per image"
+        for emb in row_embs:
+            assert len(emb) == dim, f"Expected embedding dimension {dim}, got {len(emb)}"
+
+
+@pytest.mark.skipif(not UMAP_AVAILABLE, reason="umap not installed")
+@pytest.mark.parametrize("task", ["detect", "segment", "pose", "obb"])
+def test_gt_instance_embeddings_collection(task: str) -> None:
+    """Test that both predicted and ground-truth instance embeddings are collected."""
+    dim = 2
+    settings = Settings(
+        project_name=f"test_gt_instance_emb_{task}",
+        run_name=f"test_gt_instance_emb_{task}",
+        instance_embeddings_dim=dim,
+        ground_truth_instance_embeddings=True,
+        image_embeddings_reducer="umap",
+        label_column_name=TASK2LABEL_COLUMN_NAME[task],
+    )
+
+    model = TLCYOLO(TASK2MODEL[task])
+    model.collect(data=TASK2DATASET[task], splits=("train",), settings=settings, **INSTANCE_EMB_OVERRIDES)
+
+    run = _get_run_from_settings(settings)
+    metrics_tables = get_metrics_tables_from_run(run)
+    default_tables = metrics_tables["default_stream"]
+    assert len(default_tables) >= 1, "Expected at least one default_stream metrics table"
+
+    metrics_df = pd.concat([m.to_pandas() for m in default_tables], ignore_index=True)
+
+    # Both predicted and GT instance embeddings should be top-level columns
+    assert "predicted_instance_embedding" in metrics_df.columns, (
+        f"Expected 'predicted_instance_embedding' column for task {task}"
+    )
+    assert "ground_truth_instance_embedding" in metrics_df.columns, (
+        f"Expected 'ground_truth_instance_embedding' column for task {task}"
+    )
+
+    # Validate predicted embeddings
+    for row_embs in metrics_df["predicted_instance_embedding"]:
+        assert isinstance(row_embs, (list, np.ndarray)), "Expected list of embeddings"
+        for emb in row_embs:
+            assert len(emb) == dim, f"Expected predicted embedding dim {dim}, got {len(emb)}"
+
+    # Validate GT embeddings
+    for row_embs in metrics_df["ground_truth_instance_embedding"]:
+        assert isinstance(row_embs, (list, np.ndarray)), "Expected list of embeddings"
+        for emb in row_embs:
+            assert len(emb) == dim, f"Expected GT embedding dim {dim}, got {len(emb)}"
+
+    # At least some images should have GT annotations
+    gt_counts = [len(row_embs) for row_embs in metrics_df["ground_truth_instance_embedding"]]
+    assert sum(gt_counts) > 0, "Expected at least some GT instance embeddings"
+
+
+@pytest.mark.skipif(not UMAP_AVAILABLE, reason="umap not installed")
+def test_all_embeddings_combined() -> None:
+    """Test that image, predicted instance, and GT instance embeddings can all be collected together."""
+    dim = 2
+    settings = Settings(
+        project_name="test_all_embeddings_combined",
+        run_name="test_all_embeddings_combined",
+        image_embeddings_dim=dim,
+        instance_embeddings_dim=dim,
+        ground_truth_instance_embeddings=True,
+        image_embeddings_reducer="umap",
+        label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
+    )
+
+    model = TLCYOLO(TASK2MODEL["detect"])
+    model.collect(data=TASK2DATASET["detect"], splits=("train",), settings=settings, **INSTANCE_EMB_OVERRIDES)
+
+    run = _get_run_from_settings(settings)
+    metrics_tables = get_metrics_tables_from_run(run)
+    default_tables = metrics_tables["default_stream"]
+    metrics_df = pd.concat([m.to_pandas() for m in default_tables], ignore_index=True)
+
+    # All three embedding types should be present
+    assert "embeddings" in metrics_df.columns, "Expected image embeddings column"
+    assert "predicted_instance_embedding" in metrics_df.columns, "Expected predicted instance embeddings column"
+    assert "ground_truth_instance_embedding" in metrics_df.columns, "Expected GT instance embeddings column"
+
+    # Image embeddings should also be reduced (PaCMAPTable or similar)
+    assert any(isinstance(m, (tlc.PaCMAPTable, tlc.UMAPTable)) for m in run.metrics_tables), (
+        "Expected a reduced embeddings table"
+    )
+
+
+def test_gt_instance_embeddings_requires_instance_dim() -> None:
+    """Test that ground_truth_instance_embeddings requires instance_embeddings_dim > 0."""
+    settings = Settings(
+        ground_truth_instance_embeddings=True,
+        instance_embeddings_dim=0,
+        label_column_name="test",
+    )
+    with pytest.raises(AssertionError, match="ground_truth_instance_embeddings requires instance_embeddings_dim"):
+        settings.verify(training=False)
+
+
+def test_gt_instance_embeddings_incompatible_with_collection_disable() -> None:
+    """Test that ground_truth_instance_embeddings can't be used with collection_disable."""
+    settings = Settings(
+        ground_truth_instance_embeddings=True,
+        instance_embeddings_dim=2,
+        collection_disable=True,
+        label_column_name="test",
+    )
+    with pytest.raises(AssertionError, match="Cannot disable collection"):
+        settings.verify(training=True)

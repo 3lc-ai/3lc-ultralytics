@@ -88,6 +88,12 @@ class TLCValidatorMixin(BaseValidator):
         self._final_validation = False
         self._hook_handles = []
 
+        # Instance embeddings state
+        self._instance_feature_map = None
+        self._buffered_metrics = []
+        self._buffered_raw_instance_embeddings = []
+        self._buffered_raw_gt_instance_embeddings = []
+
         super().__init__(*args, **kwargs)
 
         if not self._training:
@@ -187,7 +193,7 @@ class TLCValidatorMixin(BaseValidator):
         initial_spaces = len(desc) - len(desc.lstrip())
         split_centered = split.center(initial_spaces)
         split_str = f"{colorstr(split_centered)}"
-        desc = split_str + desc[len(split_centered) :]
+        desc = split_str + desc[len(split_centered):]
 
         return desc
 
@@ -243,6 +249,41 @@ class TLCValidatorMixin(BaseValidator):
         """Add a hook to extract embeddings from the model, and infer the activation size"""
         raise NotImplementedError("Subclasses must implement this method.")
 
+    def _add_instance_embeddings_hook(self, model) -> int:
+        """Add a hook to capture high-resolution feature maps for instance embeddings.
+
+        Subclasses can override for custom behavior. Default delegates to detect validator.
+        """
+        raise NotImplementedError("Subclasses must implement this method.")
+
+    def _extract_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
+        """Extract per-instance raw embeddings from the captured feature map.
+
+        Subclasses must implement this for their specific prediction format.
+        """
+        raise NotImplementedError("Subclasses must implement this method.")
+
+    def _inject_instance_embeddings(self, batch_metrics, reduced_embeddings):
+        """Inject reduced instance embeddings into the prediction struct.
+
+        Subclasses must implement this for their specific prediction format.
+        """
+        raise NotImplementedError("Subclasses must implement this method.")
+
+    def _extract_gt_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
+        """Extract per-instance raw embeddings for ground-truth annotations.
+
+        Subclasses must implement this for their specific GT annotation format.
+        """
+        raise NotImplementedError("Subclasses must implement this method.")
+
+    def _inject_gt_instance_embeddings(self, batch_metrics, reduced_embeddings):
+        """Inject reduced ground-truth instance embeddings as a top-level metric column.
+
+        Subclasses must implement this for their specific GT annotation format.
+        """
+        raise NotImplementedError("Subclasses must implement this method.")
+
     def _infer_batch_size(self, preds, batch=None) -> int:
         """Infer the batch size from the predictions"""
         raise NotImplementedError("Subclasses must implement this method.")
@@ -263,6 +304,9 @@ class TLCValidatorMixin(BaseValidator):
 
         In DDP mode, each rank collects metrics for its portion of the data.
         These are gathered to RANK 0 in _post_validation.
+
+        When instance_embeddings_dim > 0, metrics are buffered instead of
+        being written to the MetricsTableWriter immediately.
         """
         batch_size = self._infer_batch_size(preds, batch)
 
@@ -286,7 +330,19 @@ class TLCValidatorMixin(BaseValidator):
         if RANK >= 0:
             batch_metrics["ddp_rank"] = [RANK] * batch_size
 
-        self._metrics_writer.add_batch(batch_metrics)
+        # Extract and buffer instance embeddings if enabled
+        if self._settings.instance_embeddings_dim > 0:
+            raw_instance_embs = self._extract_instance_embeddings(preds, batch)
+            self._buffered_raw_instance_embeddings.extend(raw_instance_embs)
+
+            if self._settings.ground_truth_instance_embeddings:
+                raw_gt_embs = self._extract_gt_instance_embeddings(preds, batch)
+                self._buffered_raw_gt_instance_embeddings.extend(raw_gt_embs)
+
+            self._buffered_metrics.append(batch_metrics)
+        else:
+            self._metrics_writer.add_batch(batch_metrics)
+
         self._seen += batch_size
 
     @execute_when_collecting
@@ -308,6 +364,22 @@ class TLCValidatorMixin(BaseValidator):
             activation_size = self._add_embeddings_hook(model)
 
             column_schemas["embeddings"] = image_embeddings_schema(activation_size=activation_size)
+
+        if self._settings.instance_embeddings_dim > 0:
+            self._instance_embeddings_channel_size = self._add_instance_embeddings_hook(model)
+            # Schema for instance embeddings is added by subclasses in _get_metrics_schemas
+            # Clear buffers for this validation pass
+            self._buffered_metrics = []
+            self._buffered_raw_instance_embeddings = []
+            self._buffered_raw_gt_instance_embeddings = []
+
+        if self._settings.ground_truth_instance_embeddings:
+            from tlc_ultralytics.utils.schemas import instance_embeddings_list_schema
+
+            dim = self._settings.instance_embeddings_dim
+            column_schemas["ground_truth_instance_embedding"] = instance_embeddings_list_schema(
+                dim, display_name=f"Ground Truth Instance Embedding ({dim}D)"
+            )
 
         if self._epoch is not None:
             column_schemas[TRAINING_PHASE] = training_phase_schema()
@@ -336,9 +408,16 @@ class TLCValidatorMixin(BaseValidator):
     def _post_validation(self):
         """Clean up the validator after one validation pass.
 
+        When instance_embeddings_dim > 0, reduces all buffered instance embeddings
+        and writes them along with buffered metrics to the MetricsTableWriter.
+
         In DDP mode, gathers metrics_infos and input table URLs from all ranks
         to RANK 0, which then updates the run with all collected data.
         """
+        # If instance embeddings are enabled, reduce and write buffered metrics
+        if self._settings.instance_embeddings_dim > 0 and self._buffered_metrics:
+            self._reduce_and_write_buffered_metrics()
+
         # Each rank finalizes its own metrics writer
         self._metrics_writer.finalize()
         metrics_infos = self._metrics_writer.get_written_metrics_infos()
@@ -384,7 +463,7 @@ class TLCValidatorMixin(BaseValidator):
             self._run.set_status_running()
 
         # Remove hook handles (all ranks)
-        if self._settings.image_embeddings_dim > 0:
+        if self._settings.image_embeddings_dim > 0 or self._settings.instance_embeddings_dim > 0:
             for handle in self._hook_handles:
                 handle.remove()
             self._hook_handles.clear()
@@ -393,6 +472,54 @@ class TLCValidatorMixin(BaseValidator):
         self._seen = None
         self._training_phase = None
         self._final_validation = None
+        self._instance_feature_map = None
+        self._buffered_metrics = []
+        self._buffered_raw_instance_embeddings = []
+        self._buffered_raw_gt_instance_embeddings = []
+
+    def _reduce_and_write_buffered_metrics(self):
+        """Reduce all buffered instance embeddings and write metrics to the writer."""
+        from tlc_ultralytics.utils.embeddings import reduce_instance_embeddings, transform_instance_embeddings
+
+        # Reduce all predicted instance embeddings at once (fit_transform)
+        reduced_per_image, reducer = reduce_instance_embeddings(
+            self._buffered_raw_instance_embeddings,
+            method=self._settings.image_embeddings_reducer,
+            n_components=self._settings.instance_embeddings_dim,
+        )
+
+        # Transform GT embeddings with the same fitted reducer
+        gt_reduced_per_image = None
+        if self._settings.ground_truth_instance_embeddings and self._buffered_raw_gt_instance_embeddings:
+            if reducer is not None:
+                gt_reduced_per_image = transform_instance_embeddings(
+                    self._buffered_raw_gt_instance_embeddings,
+                    reducer,
+                    n_components=self._settings.instance_embeddings_dim,
+                )
+            else:
+                # No reducer (all predicted were empty) — produce empty GT embeddings too
+                gt_reduced_per_image = [
+                    np.empty((0, self._settings.instance_embeddings_dim), dtype=np.float32)
+                    for _ in self._buffered_raw_gt_instance_embeddings
+                ]
+
+        # Inject reduced embeddings into buffered predictions and write
+        emb_idx = 0
+        gt_emb_idx = 0
+        for batch_metrics in self._buffered_metrics:
+            batch_size = len(batch_metrics[tlc.EXAMPLE_ID])
+            batch_reduced = reduced_per_image[emb_idx : emb_idx + batch_size]
+            emb_idx += batch_size
+
+            self._inject_instance_embeddings(batch_metrics, batch_reduced)
+
+            if gt_reduced_per_image is not None:
+                gt_batch_reduced = gt_reduced_per_image[gt_emb_idx : gt_emb_idx + batch_size]
+                gt_emb_idx += batch_size
+                self._inject_gt_instance_embeddings(batch_metrics, gt_batch_reduced)
+
+            self._metrics_writer.add_batch(batch_metrics)
 
     def _write_per_class_metrics_tables(self) -> None:
         if self.args.task not in ("detect", "segment", "obb"):
