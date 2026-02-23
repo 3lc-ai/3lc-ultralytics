@@ -149,48 +149,14 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
 
         Returns the channel dimension size of the hooked layer.
         """
+        from tlc_ultralytics.utils.embeddings import _auto_detect_p3_layer, _infer_layer_channels
+
         if hasattr(model.model, "model"):
             model = model.model
 
         layer_index = self._settings.instance_embeddings_layer
-
         if layer_index is None:
-            # Auto-detect: find the highest-resolution C3k2/C2f layer in the neck.
-            # In the FPN neck, features are upsampled progressively: SPPF (20x20) -> P4 (40x40) -> P3 (80x80).
-            # The LAST C3k2/C2f layer before any downsampling Conv is the P3 output with highest spatial detail.
-            # In YOLO11, this is layer 16 (C3k2, 80x80). In YOLOv8, it's also the last C2f before
-            # the bottom-up path starts with a strided Conv.
-            sppf_index = next((i for i, m in enumerate(model.model) if "SPPF" in m.type), -1)
-            candidates = []
-            for i, m in enumerate(model.model):
-                if i > sppf_index and any(t in m.type for t in ("C3k2", "C2f")):
-                    candidates.append(i)
-
-            if candidates:
-                # Find the last candidate before a downsampling Conv (stride=2) appears.
-                # This is the P3 neck output — highest resolution feature map in the neck.
-                p3_index = candidates[0]
-                for idx in candidates:
-                    # Check if the next layer is a strided Conv (start of bottom-up path)
-                    next_idx = idx + 1
-                    if next_idx < len(model.model):
-                        next_layer = model.model[next_idx]
-                        if "Conv" in next_layer.type and hasattr(next_layer, "conv"):
-                            stride = next_layer.conv.stride
-                            if isinstance(stride, tuple):
-                                stride = stride[0]
-                            if stride >= 2:
-                                # This candidate is the last one before downsampling
-                                p3_index = idx
-                                break
-                    else:
-                        p3_index = idx
-                layer_index = p3_index
-            else:
-                raise ValueError(
-                    "Could not auto-detect a suitable layer for instance embeddings. "
-                    "Please set instance_embeddings_layer manually in settings."
-                )
+            layer_index = _auto_detect_p3_layer(model.model)
 
         LOGGER.info(
             f"{TLC_COLORSTR}Using layer {layer_index} ({model.model[layer_index].type}) "
@@ -204,23 +170,7 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
             self_ref._instance_feature_map = output
 
         self._hook_handles.append(model.model[layer_index].register_forward_hook(hook_fn))
-
-        # Infer channel size from the layer's output convolution
-        layer = model.model[layer_index]
-        # Try common patterns for getting output channels
-        if hasattr(layer, "cv2") and hasattr(layer.cv2, "conv"):
-            return layer.cv2.conv.out_channels
-        elif hasattr(layer, "cv2") and hasattr(layer.cv2, "out_channels"):
-            return layer.cv2.out_channels
-        elif hasattr(layer, "c"):
-            return layer.c
-        else:
-            # Fallback: run a test or just use a sensible default
-            LOGGER.warning(
-                f"{TLC_COLORSTR}Could not infer channel size for layer {layer_index}. "
-                "Instance embedding dimension will be determined at runtime."
-            )
-            return 256  # Common default for P3
+        return _infer_layer_channels(model.model[layer_index], layer_index)
 
     def _extract_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
         """Extract per-instance embeddings from the captured feature map using bboxes."""
@@ -252,7 +202,7 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
 
             # Scale bboxes to original image size
             scaled = self.scale_preds(
-                {"bboxes": filtered_bboxes, "conf": filtered_conf[:len(filtered_bboxes)]}, pbatch
+                {"bboxes": filtered_bboxes, "conf": filtered_conf[: len(filtered_bboxes)]}, pbatch
             )
             bboxes_list.append(scaled["bboxes"])
 

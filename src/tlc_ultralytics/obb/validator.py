@@ -128,7 +128,7 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
 
             # Scale to original image coordinates
             scaled = self.scale_preds(
-                {"bboxes": filtered_bboxes, "conf": filtered_conf[:len(filtered_bboxes)]}, pbatch
+                {"bboxes": filtered_bboxes, "conf": filtered_conf[: len(filtered_bboxes)]}, pbatch
             )
             obb_masks = _obbs_to_masks(scaled["bboxes"], h, w, device=feature_map.device)
             masks_list.append(obb_masks)

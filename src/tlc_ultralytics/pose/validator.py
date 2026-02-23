@@ -62,8 +62,6 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         return super().postprocess(preds)
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
-        per_instance_schemas = {}
-
         emb_schemas = {}
         if self._settings.instance_embeddings_dim > 0:
             from tlc_ultralytics.utils.schemas import instance_embeddings_list_schema
@@ -111,9 +109,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         kpts = scaled["kpts"]  # scale_preds outputs scaled keypoints under "kpts"
         for j in range(len(mapped_classes)):
             kxy = kpts[j, :, 0:2].cpu().numpy().astype(np.float32)
-            kconf = (
-                kpts[j, :, 2].cpu().numpy().astype(np.float32).tolist() if kpts.shape[2] == 3 else None
-            )
+            kconf = kpts[j, :, 2].cpu().numpy().astype(np.float32).tolist() if kpts.shape[2] == 3 else None
             builder.add_instance(
                 keypoints=kxy,
                 bbox=scaled["bboxes"][j].cpu().numpy().astype(np.float32).tolist(),
@@ -175,41 +171,14 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
 
         Reuses the detection validator's implementation.
         """
+        from tlc_ultralytics.utils.embeddings import _auto_detect_p3_layer, _infer_layer_channels
+
         if hasattr(model.model, "model"):
             model = model.model
 
         layer_index = self._settings.instance_embeddings_layer
-
         if layer_index is None:
-            sppf_index = next((i for i, m in enumerate(model.model) if "SPPF" in m.type), -1)
-            candidates = []
-            for i, m in enumerate(model.model):
-                if i > sppf_index and any(t in m.type for t in ("C3k2", "C2f")):
-                    candidates.append(i)
-
-            if candidates:
-                # Find the last candidate before a downsampling Conv (stride=2) appears.
-                # This is the P3 neck output — highest resolution feature map in the neck.
-                p3_index = candidates[0]
-                for idx in candidates:
-                    next_idx = idx + 1
-                    if next_idx < len(model.model):
-                        next_layer = model.model[next_idx]
-                        if "Conv" in next_layer.type and hasattr(next_layer, "conv"):
-                            stride = next_layer.conv.stride
-                            if isinstance(stride, tuple):
-                                stride = stride[0]
-                            if stride >= 2:
-                                p3_index = idx
-                                break
-                    else:
-                        p3_index = idx
-                layer_index = p3_index
-            else:
-                raise ValueError(
-                    "Could not auto-detect a suitable layer for instance embeddings. "
-                    "Please set instance_embeddings_layer manually in settings."
-                )
+            layer_index = _auto_detect_p3_layer(model.model)
 
         LOGGER.info(
             f"{TLC_COLORSTR}Using layer {layer_index} ({model.model[layer_index].type}) "
@@ -223,16 +192,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             self_ref._instance_feature_map = output
 
         self._hook_handles.append(model.model[layer_index].register_forward_hook(hook_fn))
-
-        layer = model.model[layer_index]
-        if hasattr(layer, "cv2") and hasattr(layer.cv2, "conv"):
-            return layer.cv2.conv.out_channels
-        elif hasattr(layer, "cv2") and hasattr(layer.cv2, "out_channels"):
-            return layer.cv2.out_channels
-        elif hasattr(layer, "c"):
-            return layer.c
-        else:
-            return 256
+        return _infer_layer_channels(model.model[layer_index], layer_index)
 
     def _extract_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
         """Extract per-instance embeddings using bboxes (same as detection)."""

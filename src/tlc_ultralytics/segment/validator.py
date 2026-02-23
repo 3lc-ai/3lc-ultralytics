@@ -151,4 +151,3 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
             else:
                 gt_embeddings.append([])
         batch_metrics["ground_truth_instance_embedding"] = gt_embeddings
-

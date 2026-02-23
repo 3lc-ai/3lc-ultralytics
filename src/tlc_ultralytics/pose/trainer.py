@@ -29,7 +29,10 @@ class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
     _validator_class = TLCPoseValidator
     _loss_names = ("box_loss", "pose_loss", "kobj_loss", "cls_loss", "dfl_loss")
     _metric_replacements: ClassVar[list[tuple[str, str]]] = [
-        ("(B)", ""), ("(P)", "_pose"), ("metrics", "val"), ("/", "_"),
+        ("(B)", ""),
+        ("(P)", "_pose"),
+        ("metrics", "val"),
+        ("/", "_"),
     ]
 
     # Explicit binding to ensure TLCTrainerMixin.get_validator wins over PoseTrainer.get_validator in MRO
