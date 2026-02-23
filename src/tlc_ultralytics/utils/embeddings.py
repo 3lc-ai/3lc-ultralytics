@@ -9,6 +9,53 @@ from ultralytics.utils import LOGGER
 from tlc_ultralytics.constants import TLC_COLORSTR
 
 
+def _auto_detect_p3_layer(model_layers) -> int:
+    """Auto-detect the P3 (highest resolution) neck layer for instance embeddings.
+
+    Finds the last C3k2/C2f layer before any downsampling Conv (stride >= 2) in the neck.
+    """
+    sppf_index = next((i for i, m in enumerate(model_layers) if "SPPF" in m.type), -1)
+    candidates = [i for i, m in enumerate(model_layers) if i > sppf_index and any(t in m.type for t in ("C3k2", "C2f"))]
+
+    if not candidates:
+        raise ValueError(
+            "Could not auto-detect a suitable layer for instance embeddings. "
+            "Please set instance_embeddings_layer manually in settings."
+        )
+
+    p3_index = candidates[0]
+    for idx in candidates:
+        next_idx = idx + 1
+        if next_idx < len(model_layers):
+            next_layer = model_layers[next_idx]
+            if "Conv" in next_layer.type and hasattr(next_layer, "conv"):
+                stride = next_layer.conv.stride
+                if isinstance(stride, tuple):
+                    stride = stride[0]
+                if stride >= 2:
+                    p3_index = idx
+                    break
+        else:
+            p3_index = idx
+    return p3_index
+
+
+def _infer_layer_channels(layer, layer_index: int) -> int:
+    """Infer the output channel count of a model layer."""
+    if hasattr(layer, "cv2") and hasattr(layer.cv2, "conv"):
+        return layer.cv2.conv.out_channels
+    elif hasattr(layer, "cv2") and hasattr(layer.cv2, "out_channels"):
+        return layer.cv2.out_channels
+    elif hasattr(layer, "c"):
+        return layer.c
+    else:
+        LOGGER.warning(
+            f"{TLC_COLORSTR}Could not infer channel size for layer {layer_index}. "
+            "Instance embedding dimension will be determined at runtime."
+        )
+        return 256
+
+
 def reduce_embeddings(
     run: tlc.Run,
     method: str,
@@ -168,10 +215,7 @@ def reduce_instance_embeddings(
     # Flatten all instance embeddings
     all_embeddings = np.concatenate([emb for emb in raw_embeddings_per_image if emb.shape[0] > 0], axis=0)
 
-    LOGGER.info(
-        TLC_COLORSTR
-        + f"Reducing {total_instances} instance embeddings to {n_components}D with {method}..."
-    )
+    LOGGER.info(TLC_COLORSTR + f"Reducing {total_instances} instance embeddings to {n_components}D with {method}...")
 
     if method == "pacmap":
         import pacmap
@@ -227,10 +271,7 @@ def transform_instance_embeddings(
 
     all_embeddings = np.concatenate([emb for emb in raw_embeddings_per_image if emb.shape[0] > 0], axis=0)
 
-    LOGGER.info(
-        TLC_COLORSTR
-        + f"Transforming {total_instances} ground-truth instance embeddings to {n_components}D..."
-    )
+    LOGGER.info(TLC_COLORSTR + f"Transforming {total_instances} ground-truth instance embeddings to {n_components}D...")
 
     reduced = reducer.transform(all_embeddings).astype(np.float32)
 
