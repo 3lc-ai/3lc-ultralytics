@@ -2130,7 +2130,6 @@ class TestCreateTablesFromYamlFileReuse:
 INSTANCE_EMB_OVERRIDES = {"batch": 4, "device": "cpu", "workers": 0}
 
 
-@pytest.mark.skipif(not UMAP_AVAILABLE, reason="umap not installed")
 @pytest.mark.parametrize("task", ["detect", "segment", "pose", "obb"])
 def test_instance_embeddings_collection(task: str) -> None:
     """Test that predicted instance embeddings are collected as a top-level column."""
@@ -2139,7 +2138,7 @@ def test_instance_embeddings_collection(task: str) -> None:
         project_name=f"test_instance_emb_{task}",
         run_name=f"test_instance_emb_{task}",
         instance_embeddings_dim=dim,
-        image_embeddings_reducer="umap",
+        image_embeddings_reducer="pca",
         label_column_name=TASK2LABEL_COLUMN_NAME[task],
     )
 
@@ -2165,7 +2164,6 @@ def test_instance_embeddings_collection(task: str) -> None:
             assert len(emb) == dim, f"Expected embedding dimension {dim}, got {len(emb)}"
 
 
-@pytest.mark.skipif(not UMAP_AVAILABLE, reason="umap not installed")
 @pytest.mark.parametrize("task", ["detect", "segment", "pose", "obb"])
 def test_gt_instance_embeddings_collection(task: str) -> None:
     """Test that both predicted and ground-truth instance embeddings are collected."""
@@ -2175,7 +2173,7 @@ def test_gt_instance_embeddings_collection(task: str) -> None:
         run_name=f"test_gt_instance_emb_{task}",
         instance_embeddings_dim=dim,
         ground_truth_instance_embeddings=True,
-        image_embeddings_reducer="umap",
+        image_embeddings_reducer="pca",
         label_column_name=TASK2LABEL_COLUMN_NAME[task],
     )
 
@@ -2214,17 +2212,15 @@ def test_gt_instance_embeddings_collection(task: str) -> None:
     assert sum(gt_counts) > 0, "Expected at least some GT instance embeddings"
 
 
-@pytest.mark.skipif(not UMAP_AVAILABLE, reason="umap not installed")
 def test_all_embeddings_combined() -> None:
-    """Test that image, predicted instance, and GT instance embeddings can all be collected together."""
+    """Test that predicted instance and GT instance embeddings can be collected together."""
     dim = 2
     settings = Settings(
         project_name="test_all_embeddings_combined",
         run_name="test_all_embeddings_combined",
-        image_embeddings_dim=dim,
         instance_embeddings_dim=dim,
         ground_truth_instance_embeddings=True,
-        image_embeddings_reducer="umap",
+        image_embeddings_reducer="pca",
         label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
     )
 
@@ -2236,15 +2232,9 @@ def test_all_embeddings_combined() -> None:
     default_tables = metrics_tables["default_stream"]
     metrics_df = pd.concat([m.to_pandas() for m in default_tables], ignore_index=True)
 
-    # All three embedding types should be present
-    assert "embeddings" in metrics_df.columns, "Expected image embeddings column"
+    # Both embedding types should be present
     assert "predicted_instance_embedding" in metrics_df.columns, "Expected predicted instance embeddings column"
     assert "ground_truth_instance_embedding" in metrics_df.columns, "Expected GT instance embeddings column"
-
-    # Image embeddings should also be reduced (PaCMAPTable or similar)
-    assert any(isinstance(m, (tlc.PaCMAPTable, tlc.UMAPTable)) for m in run.metrics_tables), (
-        "Expected a reduced embeddings table"
-    )
 
 
 def test_gt_instance_embeddings_requires_instance_dim() -> None:

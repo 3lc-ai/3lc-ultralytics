@@ -335,15 +335,16 @@ class Settings:
 
         :raises: ValueError if the selected reducer is not available.
         """
-        reducer_to_package = {"pacmap": "pacmap", "umap": "umap-learn"}
+        reducer_to_package = {"pacmap": "pacmap", "umap": "umap-learn", "pca": "scikit-learn"}
+        reducer_to_module = {"pacmap": "pacmap", "umap": "umap", "pca": "sklearn"}
         if self.image_embeddings_reducer not in reducer_to_package:
             raise ValueError(
                 f"Invalid image embeddings reducer {self.image_embeddings_reducer}. "
-                "Valid options are 'pacmap' and 'umap'."
+                f"Valid options are {', '.join(repr(k) for k in reducer_to_package)}."
             )
 
         try:
-            importlib.import_module(self.image_embeddings_reducer)
+            importlib.import_module(reducer_to_module[self.image_embeddings_reducer])
         except Exception as e:
             package = reducer_to_package[self.image_embeddings_reducer]
             raise ValueError(
