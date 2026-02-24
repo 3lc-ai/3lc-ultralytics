@@ -197,7 +197,7 @@ def reduce_instance_embeddings(
 
     Args:
         raw_embeddings_per_image: list of [N_i, C] arrays
-        method: 'pacmap' or 'umap'
+        method: 'pacmap', 'umap', or 'pca'
         n_components: target dimensionality (2 or 3)
 
     Returns:
@@ -223,9 +223,14 @@ def reduce_instance_embeddings(
         reducer = pacmap.PaCMAP(n_components=n_components, **reducer_args)
         reduced = reducer.fit_transform(all_embeddings)
     elif method == "umap":
-        import umap
+        import umap  # ty: ignore[unresolved-import]
 
         reducer = umap.UMAP(n_components=n_components, **reducer_args)
+        reduced = reducer.fit_transform(all_embeddings)
+    elif method == "pca":
+        from sklearn.decomposition import PCA
+
+        reducer = PCA(n_components=n_components, **reducer_args)
         reduced = reducer.fit_transform(all_embeddings)
     else:
         raise ValueError(f"Unknown reduction method: {method}")
