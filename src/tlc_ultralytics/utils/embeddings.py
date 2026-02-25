@@ -87,10 +87,14 @@ def extract_instance_embeddings_bbox(
 ) -> list[np.ndarray]:
     """Extract embeddings by cropping feature map to bbox regions and avg-pooling.
 
+    Important: bboxes and image_sizes must be in the same coordinate system as
+    the feature map (i.e. model-input / letterboxed coords). Do NOT pass original
+    image coordinates, as the feature map aligns with the letterboxed input.
+
     Args:
         feature_map: [B, C, H_feat, W_feat] tensor
-        bboxes: list of [N_i, 4] tensors (xyxy in pixel coords) per image
-        image_sizes: list of (h, w) tuples for original image sizes
+        bboxes: list of [N_i, 4] tensors (xyxy in model-input coords) per image
+        image_sizes: list of (h, w) tuples for model-input (letterboxed) sizes
 
     Returns:
         list of [N_i, C] numpy arrays, one per image
