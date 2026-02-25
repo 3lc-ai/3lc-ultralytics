@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import weakref
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -167,32 +166,24 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         return model.model[sppf_index]._modules["cv2"]._modules["conv"].out_channels
 
     def _add_instance_embeddings_hook(self, model) -> int:
-        """Add a hook to capture high-resolution feature maps for instance embeddings.
+        """Add a hook to capture class-discriminative feature maps for instance embeddings.
 
-        Reuses the detection validator's implementation.
+        Delegates to the detection validator's cls-head hook implementation.
         """
-        from tlc_ultralytics.utils.embeddings import _auto_detect_p3_layer, _infer_layer_channels
+        from tlc_ultralytics.detect.validator import TLCDetectionValidator
 
-        if hasattr(model.model, "model"):
-            model = model.model
+        return TLCDetectionValidator._add_instance_embeddings_hook(self, model)
 
-        layer_index = self._settings.instance_embeddings_layer
-        if layer_index is None:
-            layer_index = _auto_detect_p3_layer(model.model)
+    @staticmethod
+    def _find_cls_head(model):
+        from tlc_ultralytics.detect.validator import TLCDetectionValidator
 
-        LOGGER.info(
-            f"{TLC_COLORSTR}Using layer {layer_index} ({model.model[layer_index].type}) "
-            "for instance embeddings extraction."
-        )
+        return TLCDetectionValidator._find_cls_head(model)
 
-        weak_self = weakref.ref(self)
+    def _add_cls_head_hooks(self, model) -> int:
+        from tlc_ultralytics.detect.validator import TLCDetectionValidator
 
-        def hook_fn(_module, _input, output):
-            self_ref = weak_self()
-            self_ref._instance_feature_map = output
-
-        self._hook_handles.append(model.model[layer_index].register_forward_hook(hook_fn))
-        return _infer_layer_channels(model.model[layer_index], layer_index)
+        return TLCDetectionValidator._add_cls_head_hooks(self, model)
 
     def _extract_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
         """Extract per-instance embeddings using bboxes (same as detection)."""

@@ -145,32 +145,121 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
         return activation_size
 
     def _add_instance_embeddings_hook(self, model) -> int:
-        """Add a hook to capture high-resolution feature maps for instance embeddings.
+        """Add a hook to capture class-discriminative feature maps for instance embeddings.
 
-        Returns the channel dimension size of the hooked layer.
+        By default, hooks into the classification branch (cv3) of the detection head,
+        which produces features optimized for class discrimination rather than localization.
+        Falls back to a neck layer if instance_embeddings_layer is explicitly set.
+
+        Returns the channel dimension size of the hooked layer(s).
         """
-        from tlc_ultralytics.utils.embeddings import _auto_detect_p3_layer, _infer_layer_channels
+        from tlc_ultralytics.utils.embeddings import _infer_layer_channels
 
         if hasattr(model.model, "model"):
             model = model.model
 
-        layer_index = self._settings.instance_embeddings_layer
-        if layer_index is None:
+        # If user explicitly set a layer index, use the neck-layer approach
+        if self._settings.instance_embeddings_layer is not None:
+            layer_index = self._settings.instance_embeddings_layer
+            LOGGER.info(
+                f"{TLC_COLORSTR}Using layer {layer_index} ({model.model[layer_index].type}) "
+                "for instance embeddings extraction."
+            )
+
+            weak_self = weakref.ref(self)
+
+            def hook_fn(_module, _input, output):
+                weak_self()._instance_feature_map = output
+
+            self._hook_handles.append(model.model[layer_index].register_forward_hook(hook_fn))
+            return _infer_layer_channels(model.model[layer_index], layer_index)
+
+        # Default: hook the cls branch (cv3) of the detection head for class-discriminative features
+        return self._add_cls_head_hooks(model)
+
+    @staticmethod
+    def _find_cls_head(model) -> torch.nn.ModuleList | None:
+        """Find the cls head ModuleList from the detection head."""
+        detect_head = model.model[-1]
+        cv3 = detect_head.cv3
+        if cv3 is not None:
+            return cv3
+        if hasattr(detect_head, "one2one"):
+            return detect_head.one2one.get("cls_head")
+        return None
+
+    def _add_cls_head_hooks(self, model) -> int:
+        """Hook the cls branch of the detection head at all FPN levels.
+
+        Captures the penultimate layer output (before the final 1x1 conv to class logits)
+        from each FPN level. These are resized to P3 resolution and concatenated into a
+        single feature map stored in _instance_feature_map.
+
+        Returns the total channel dimension across all levels.
+        """
+        import torch.nn.functional as F
+
+        detect_head = model.model[-1]
+        cv3 = self._find_cls_head(model)
+
+        if cv3 is None:
+            # Fallback to neck layer approach
+            from tlc_ultralytics.utils.embeddings import _auto_detect_p3_layer, _infer_layer_channels
+
             layer_index = _auto_detect_p3_layer(model.model)
+            LOGGER.info(
+                f"{TLC_COLORSTR}No cls head found, falling back to neck layer {layer_index} "
+                "for instance embeddings extraction."
+            )
+            weak_self = weakref.ref(self)
 
-        LOGGER.info(
-            f"{TLC_COLORSTR}Using layer {layer_index} ({model.model[layer_index].type}) "
-            "for instance embeddings extraction."
-        )
+            def hook_fn(_module, _input, output):
+                weak_self()._instance_feature_map = output
 
+            self._hook_handles.append(model.model[layer_index].register_forward_hook(hook_fn))
+            return _infer_layer_channels(model.model[layer_index], layer_index)
+
+        # Hook penultimate sub-layer of each FPN level's cls branch
+        # cv3[level] = Sequential([DWConv+Conv, DWConv+Conv, Conv2d])
+        # We want [-2] (second DWConv+Conv block) — class-discriminative features
+        hook_sub_index = len(cv3[0]) - 2
+        level_features: list[torch.Tensor | None] = [None] * len(cv3)
         weak_self = weakref.ref(self)
 
-        def hook_fn(_module, _input, output):
-            self_ref = weak_self()
-            self_ref._instance_feature_map = output
+        total_channels = 0
+        for level_idx in range(len(cv3)):
+            target = cv3[level_idx][hook_sub_index]
+            try:
+                total_channels += target[-1].conv.out_channels
+            except (AttributeError, IndexError):
+                total_channels += detect_head.nc
 
-        self._hook_handles.append(model.model[layer_index].register_forward_hook(hook_fn))
-        return _infer_layer_channels(model.model[layer_index], layer_index)
+            def make_hook(idx):
+                def hook_fn(_module, _input, output):
+                    level_features[idx] = output
+                return hook_fn
+
+            self._hook_handles.append(target.register_forward_hook(make_hook(level_idx)))
+
+        def combine_hook(_module, _input, _output):
+            self_ref = weak_self()
+            if self_ref is None or level_features[0] is None:
+                return
+            target_size = level_features[0].shape[2:]
+            resized = [
+                F.interpolate(f, size=target_size, mode="bilinear", align_corners=False)
+                if f.shape[2:] != target_size else f
+                for f in level_features
+            ]
+            self_ref._instance_feature_map = torch.cat(resized, dim=1)
+
+        self._hook_handles.append(detect_head.register_forward_hook(combine_hook))
+
+        LOGGER.info(
+            f"{TLC_COLORSTR}Using detection head cls branch (cv3) for instance embeddings "
+            f"({len(cv3)} levels, {total_channels} total channels)."
+        )
+        return total_channels
 
     def _extract_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
         """Extract per-instance embeddings from the captured feature map using bboxes."""
