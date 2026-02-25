@@ -267,13 +267,14 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
 
         feature_map = self._instance_feature_map
 
-        # Get predicted bboxes (xyxy in pixel coords) and image sizes per image
+        # Use model-input (letterboxed) coords — these align with the feature map spatial domain.
+        # pred["bboxes"] are already in model-input coords, and imgsz is the letterboxed input size.
         bboxes_list = []
         image_sizes = []
         for i, pred in enumerate(preds):
             pbatch = self._prepare_batch(i, batch)
-            h, w = pbatch["ori_shape"]
-            image_sizes.append((h, w))
+            imgsz = pbatch["imgsz"]
+            image_sizes.append((int(imgsz[0]), int(imgsz[1])))
 
             mask = pred["conf"] >= self._settings.conf_thres
             if not mask.any():
@@ -289,11 +290,7 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
                 topk = filtered_conf.topk(max_det).indices
                 filtered_bboxes = filtered_bboxes[topk]
 
-            # Scale bboxes to original image size
-            scaled = self.scale_preds(
-                {"bboxes": filtered_bboxes, "conf": filtered_conf[: len(filtered_bboxes)]}, pbatch
-            )
-            bboxes_list.append(scaled["bboxes"])
+            bboxes_list.append(filtered_bboxes)
 
         return extract_instance_embeddings_bbox(feature_map, bboxes_list, image_sizes)
 
@@ -313,22 +310,19 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
 
         feature_map = self._instance_feature_map
 
+        # GT bboxes from _prepare_batch are already in model-input (letterboxed) coords
         bboxes_list = []
         image_sizes = []
         for i in range(len(preds)):
             pbatch = self._prepare_batch(i, batch)
-            h, w = pbatch["ori_shape"]
-            image_sizes.append((h, w))
+            imgsz = pbatch["imgsz"]
+            image_sizes.append((int(imgsz[0]), int(imgsz[1])))
 
-            gt_bboxes = pbatch["bboxes"]  # GT bboxes in resized image coords (xyxy)
+            gt_bboxes = pbatch["bboxes"]
             if gt_bboxes.numel() == 0:
                 bboxes_list.append(torch.empty((0, 4), device=feature_map.device))
             else:
-                # Scale GT bboxes from resized image coords to original image coords
-                scaled_bboxes = ops.scale_boxes(
-                    pbatch["imgsz"], gt_bboxes.clone(), pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"]
-                )
-                bboxes_list.append(scaled_bboxes.to(feature_map.device))
+                bboxes_list.append(gt_bboxes.to(feature_map.device))
 
         return extract_instance_embeddings_bbox(feature_map, bboxes_list, image_sizes)
 

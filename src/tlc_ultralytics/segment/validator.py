@@ -86,16 +86,18 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
 
         feature_map = self._instance_feature_map
 
+        # pred["masks"] are in model-input (letterboxed) coords, same as the feature map.
         masks_list = []
         image_sizes = []
         for i, pred in enumerate(preds):
             pbatch = self._prepare_batch(i, batch)
-            h, w = pbatch["ori_shape"]
-            image_sizes.append((h, w))
+            imgsz = pbatch["imgsz"]
+            h_in, w_in = int(imgsz[0]), int(imgsz[1])
+            image_sizes.append((h_in, w_in))
 
             mask = pred["conf"] >= self._settings.conf_thres
             if not mask.any():
-                masks_list.append(torch.empty((0, h, w), device=feature_map.device))
+                masks_list.append(torch.empty((0, h_in, w_in), device=feature_map.device))
                 continue
 
             filtered_masks = pred["masks"][mask]
@@ -127,16 +129,18 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
 
         feature_map = self._instance_feature_map
 
+        # GT masks from _prepare_batch are in model-input (letterboxed) coords
         masks_list = []
         image_sizes = []
         for i in range(len(preds)):
             pbatch = self._prepare_batch(i, batch)
-            h, w = pbatch["ori_shape"]
-            image_sizes.append((h, w))
+            imgsz = pbatch["imgsz"]
+            h_in, w_in = int(imgsz[0]), int(imgsz[1])
+            image_sizes.append((h_in, w_in))
 
             gt_masks = pbatch.get("masks")
             if gt_masks is None or gt_masks.numel() == 0:
-                masks_list.append(torch.empty((0, h, w), device=feature_map.device))
+                masks_list.append(torch.empty((0, h_in, w_in), device=feature_map.device))
             else:
                 masks_list.append(gt_masks.to(feature_map.device))
 
