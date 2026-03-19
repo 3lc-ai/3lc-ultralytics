@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+from copy import copy
+from functools import partial
 from pathlib import Path
+from typing import ClassVar
 
 import tlc
-import ultralytics
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
 from ultralytics.utils.metrics import smooth
@@ -18,8 +20,10 @@ from tlc_ultralytics.engine.utils import (
     _handle_deprecated_column_name,
     _restore_random_state,
 )
+from tlc_ultralytics.overrides import build_dataloader
 from tlc_ultralytics.settings import Settings
-from tlc_ultralytics.utils import reduce_embeddings
+from tlc_ultralytics.utils import create_sampler, reduce_embeddings
+from tlc_ultralytics.utils.dataset import check_tlc_dataset
 from tlc_ultralytics.utils.generate_ddp import generate_ddp_command
 
 
@@ -106,6 +110,8 @@ class TLCTrainerMixin(BaseTrainer):
         """Override the train method to use custom generate_ddp_command function to serialize 3LC data in data
         argument.
         """
+        import ultralytics.utils.dist
+
         ultralytics.engine.trainer.generate_ddp_command = generate_ddp_command
         super().train()
         ultralytics.engine.trainer.generate_ddp_command = ultralytics.utils.dist.generate_ddp_command
@@ -120,18 +126,16 @@ class TLCTrainerMixin(BaseTrainer):
                 "run_url": self._run.url.to_str(),
                 "settings": self._settings.to_dict(),
                 "data": self.args.data,
-                "tables": self._tables if self._tables else None,
+                "tables": self._tables or None,
             }
         )
 
     def _create_run(self) -> None:
         """Create a run."""
         # Create a 3LC run
-        description = (
-            self._settings.run_description if self._settings.run_description else DEFAULT_TRAIN_RUN_DESCRIPTION
-        )
+        description = self._settings.run_description or DEFAULT_TRAIN_RUN_DESCRIPTION
 
-        project_name = self._settings.project_name if self._settings.project_name else self.data["train"].project_name
+        project_name = self._settings.project_name or self.data["train"].project_name
         self._run = tlc.init(
             project_name=project_name,
             description=description,
@@ -199,13 +203,57 @@ class TLCTrainerMixin(BaseTrainer):
         """Print task-specific parameters to the console."""
 
     def get_dataset(self):
-        raise NotImplementedError("Subclasses must implement this method.")
+        self.data = check_tlc_dataset(
+            self.args.data,
+            self._tables,
+            self._settings.image_column_name,
+            self._settings.label_column_name,
+            project_name=self._settings.project_name,
+            splits=("train", "val"),
+            task=self.args.task,
+            settings=self._settings,
+        )
+        if "val" not in self.data:
+            data_test = check_tlc_dataset(
+                self.args.data,
+                self._tables,
+                self._settings.image_column_name,
+                self._settings.label_column_name,
+                project_name=self._settings.project_name,
+                splits=("test",),
+                task=self.args.task,
+                settings=self._settings,
+            )
+            self.data["test"] = data_test["test"]
+        return self.data
 
     def build_dataset(self, table, mode="train", batch=None):
         raise NotImplementedError("Subclasses must implement this method.")
 
-    def get_validator(self, dataloader):
-        raise NotImplementedError("Subclasses must implement this method.")
+    def get_validator(self, dataloader=None):
+        self.loss_names = self._loss_names
+        if not dataloader:
+            dataloader = self.test_loader
+        return self._validator_class(
+            dataloader,
+            save_dir=self.save_dir,
+            args=copy(self.args),
+            _callbacks=self.callbacks,
+            run=self._run,
+            settings=self._settings,
+            training=True,
+        )
+
+    def get_dataloader(self, dataset_path, batch_size=16, rank=0, mode="train"):
+        """Construct and return dataloader."""
+        sampler = create_sampler(dataset_path, mode, self._settings, distributed=rank != -1)
+
+        original = self._build_dataloader_module.build_dataloader
+        self._build_dataloader_module.build_dataloader = partial(build_dataloader, sampler=sampler)
+        try:
+            return super().get_dataloader(dataset_path, batch_size, rank, mode)
+        finally:
+            self._build_dataloader_module.build_dataloader = original
 
     @property
     def train_validator(self):
@@ -318,7 +366,7 @@ class TLCTrainerMixin(BaseTrainer):
                 names.extend(["Seg_F1_score", "Seg_Recall", "Seg_Precision"])
 
             values = {}
-            for py, name in zip(curves, names):
+            for py, name in zip(curves, names, strict=False):
                 y = smooth(py.mean(0), 0.05)
                 values[f"3LC/{name}"] = {"best_val": y.max(), "best_conf": px[y.argmax()]}
 
@@ -334,5 +382,10 @@ class TLCTrainerMixin(BaseTrainer):
 
         super().save_metrics(metrics=metrics)
 
+    _metric_replacements: ClassVar[list[tuple[str, str]]] = []
+
     def _process_metrics(self, metrics):
-        return metrics
+        result = metrics
+        for old, new in self._metric_replacements:
+            result = {key.replace(old, new): value for key, value in result.items()}
+        return result

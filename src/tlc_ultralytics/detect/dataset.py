@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import tlc
@@ -10,6 +10,9 @@ from ultralytics.data.utils import check_file_speeds, segments2boxes
 from ultralytics.utils import LOGGER, colorstr
 
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 SegmentType = Literal["absolute", "relative"]
 
@@ -302,11 +305,12 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
             zip(
                 segmentations[instances_name][label_key],
                 segmentations[tlc.POLYGONS],
+                strict=False,
             )
         ):
             # Handle polygons with zero area
             if len(polygon) < 6:
-                LOGGER.warning(f"Polygon {i} in row {example_id} has fewer than 6 points and will be ignored.")
+                LOGGER.warning(f"Polygon {i} in row {example_id} has fewer than 3 points and will be ignored.")
                 continue
 
             classes.append(self._class_map[category])
@@ -347,7 +351,7 @@ def unpack_box(
     label_key: str,
 ) -> tuple[int, list[float]]:
     coordinates = [bbox[tlc.X0], bbox[tlc.Y0], bbox[tlc.X1], bbox[tlc.Y1]]
-    return bbox[label_key], convert_to_xywh(table_format(coordinates), image_width, image_height)
+    return bbox[label_key], convert_to_xywh(table_format(coordinates), image_width, image_height)  # type: ignore[invalid-return-type]
 
 
 def unpack_boxes(

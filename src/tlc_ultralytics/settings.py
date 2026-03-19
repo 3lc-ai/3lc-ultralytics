@@ -4,12 +4,16 @@ import importlib
 import os
 from dataclasses import dataclass, field, fields
 from difflib import get_close_matches
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
-import tlc
 from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.constants import TLC_COLORSTR
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import tlc
 
 
 @dataclass
@@ -145,8 +149,6 @@ class Settings:
 
         :returns: A Settings instance with values parsed from environment variables.
         """
-        cls._handle_unsupported_env_vars()  # Warn about unsupported environment variables
-
         kwargs = {}
 
         for _field in fields(cls):
@@ -160,6 +162,8 @@ class Settings:
 
         instance._from_env = True  # Mark the instance as created from environment variables
 
+        instance._handle_unsupported_env_vars()  # Warn about unsupported environment variables
+
         return instance
 
     def __post_init__(self) -> None:
@@ -172,7 +176,7 @@ class Settings:
             import numpy as np
 
             if isinstance(self.oks_sigmas, np.ndarray):  # just in case
-                self.oks_sigmas = self.oks_sigmas.astype(float).tolist()
+                self.oks_sigmas = self.oks_sigmas.astype(np.float64).tolist()  # type: ignore[no-matching-overload]
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the settings to a dictionary.
@@ -313,7 +317,7 @@ class Settings:
             ) from e
 
     @staticmethod
-    def _field_to_env_var(_field: field) -> None:
+    def _field_to_env_var(_field) -> str:
         """Return the environment variable name for a given field.
 
         :param _field: The field to get the environment variable for.

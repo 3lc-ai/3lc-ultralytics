@@ -13,44 +13,10 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v2
-        with:
-          version: "latest"
-
-      - name: Install dependencies
-        run: |
-          uv sync --group dev --no-sources
-
-      - name: Run linting
-        run: |
-          uv run --no-sources ruff check .
-
-      - name: Run tests with Python 3.9
-        run: |
-          export "${{ secrets.VARIABLE_NAME }}=${{ secrets.VARIABLE_VALUE }}"
-          export "${{ secrets.RUNTIME_NAME }}=${{ secrets.RUNTIME_VALUE }}"
-          uv run --python 3.9 --no-sources pytest tests/ -v -n auto
-        env:
-          TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
-
-      - name: Run tests with Python 3.12 for highest resolution
-        run: |
-          export "${{ secrets.VARIABLE_NAME }}=${{ secrets.VARIABLE_VALUE }}"
-          export "${{ secrets.RUNTIME_NAME }}=${{ secrets.RUNTIME_VALUE }}"
-          uv run --resolution highest --python 3.12 --no-sources pytest tests/ -v -n auto
-        env:
-          TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
+    uses: ./.github/workflows/test.yml
+    with:
+      os-matrix: '["ubuntu-latest", "windows-latest", "macos-latest"]'
+    secrets: inherit
 
   build-and-publish:
     needs: test
@@ -66,7 +32,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.10'
 
       - name: Install uv
         uses: astral-sh/setup-uv@v2

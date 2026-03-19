@@ -12,7 +12,7 @@
 import random
 import traceback
 from collections import defaultdict
-from typing import Any, Union, cast
+from typing import Any, cast
 
 import numpy as np
 import torch
@@ -42,7 +42,7 @@ def reset_tracking() -> None:
     call_stacks.clear()
 
 
-def get_tracking_info() -> dict[str, dict[str, Union[int, list[str]]]]:
+def get_tracking_info() -> dict[str, dict[str, int | list[str]]]:
     """Get the current tracking information."""
     return {"call_counts": dict(call_counts), "call_stacks": dict(call_stacks)}
 
@@ -137,7 +137,7 @@ def tracked_np_random(*args: Any, **kwargs: Any) -> np.ndarray:
     return original_np_random(*args, **kwargs)
 
 
-def tracked_np_randint(*args: Any, **kwargs: Any) -> Union[int, np.ndarray]:
+def tracked_np_randint(*args: Any, **kwargs: Any) -> int | np.ndarray:
     call_counts["np.random.randint"] += 1
     stack = traceback.extract_stack()
     formatted_stack = get_formatted_call_stack(stack)
@@ -146,7 +146,7 @@ def tracked_np_randint(*args: Any, **kwargs: Any) -> Union[int, np.ndarray]:
     return original_np_randint(*args, **kwargs)
 
 
-def tracked_np_choice(*args: Any, **kwargs: Any) -> Union[Any, np.ndarray]:
+def tracked_np_choice(*args: Any, **kwargs: Any) -> Any | np.ndarray:
     call_counts["np.random.choice"] += 1
     stack = traceback.extract_stack()
     formatted_stack = get_formatted_call_stack(stack)
@@ -182,9 +182,9 @@ def enable_tracking() -> None:
     random.shuffle = tracked_shuffle
     random.sample = tracked_sample
     random.uniform = tracked_random_uniform
-    np.random.random = cast(Any, tracked_np_random)
-    np.random.randint = cast(Any, tracked_np_randint)
-    np.random.choice = cast(Any, tracked_np_choice)
+    np.random.random = cast("Any", tracked_np_random)
+    np.random.randint = cast("Any", tracked_np_randint)
+    np.random.choice = cast("Any", tracked_np_choice)
     np.random.shuffle = tracked_np_shuffle
     torch.manual_seed = tracked_torch_manual_seed
 

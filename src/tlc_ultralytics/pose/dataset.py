@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 from tlc.core.builtins.constants import IMAGE, KEYPOINTS_2D
-from tlc.core.data_formats import Keypoints2DInstances
+from tlc.core.data_formats import Keypoints2D
 
 from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
 
@@ -42,7 +42,7 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
 
         # Desired fixed K from dataset config (default 17) for empty-case shapes
         kpt_shape = self.data.get("kpt_shape")
-        instances = Keypoints2DInstances.from_row(label_column_value)
+        instances = Keypoints2D.from_row(label_column_value)
 
         # Image dimensions and raw arrays
         H = float(instances.image_height)

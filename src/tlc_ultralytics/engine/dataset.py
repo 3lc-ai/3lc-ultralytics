@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterator
 from multiprocessing.pool import ThreadPool
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import tlc
 from ultralytics.data.utils import verify_image
 from ultralytics.utils import LOGGER, NUM_THREADS, TQDM, colorstr
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 # Responsible for any generic 3LC dataset handling, such as scanning, caching and adding example ids to each sample
@@ -92,7 +94,7 @@ class TLCDatasetMixin:
         :return: A list of corrupt example ids, or None if cache is invalid
         """
         try:
-            cache_data = json.loads(cache_url.read(mode="s"))
+            cache_data = json.loads(cache_url.read_text())
 
             # Check cache version
             if cache_data.get("version") != 1:
@@ -122,7 +124,7 @@ class TLCDatasetMixin:
             "corrupt_example_ids": corrupt_example_ids,
         }
 
-        cache_url.write(json.dumps(content, indent=2), mode="t")
+        cache_url.write_text(json.dumps(content, indent=2))
 
     def _get_rows_from_table(self) -> tuple[list[str], list[Any]]:
         """Get the rows from the table and return a list of example ids, excluding zero weight and corrupt images.

@@ -1,0 +1,61 @@
+name: Test
+
+on:
+  pull_request:
+  workflow_call:
+    inputs:
+      os-matrix:
+        description: 'JSON array of OS runners'
+        type: string
+        default: '["ubuntu-latest"]'
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: ${{ fromJSON(inputs.os-matrix || '["ubuntu-latest"]') }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v2
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: |
+          uv sync --group dev --no-sources
+
+      - name: Run linting
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          uv run --no-sources ruff check .
+
+      - name: Run type checking
+        run: |
+          uv run --no-sources ty check .
+
+      - name: Run tests with Python 3.10
+        run: |
+          uv run --python 3.10 --no-sources pytest tests/ -v -n 1
+        env:
+          TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
+          ${{ secrets.VARIABLE_NAME }}: ${{ secrets.VARIABLE_VALUE }}
+          ${{ secrets.RUNTIME_NAME }}: ${{ secrets.RUNTIME_VALUE }}
+
+      - name: Run tests with Python 3.13 for highest resolution
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          uv run --resolution highest --python 3.13 --no-sources pytest tests/ -v -n 1
+        env:
+          TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
+          ${{ secrets.VARIABLE_NAME }}: ${{ secrets.VARIABLE_VALUE }}
+          ${{ secrets.RUNTIME_NAME }}: ${{ secrets.RUNTIME_VALUE }}

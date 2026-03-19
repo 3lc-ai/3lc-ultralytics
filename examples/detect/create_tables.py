@@ -1,10 +1,6 @@
-import tlc
+from tlc_ultralytics import create_tables_from_yaml_file
 
-train_table = tlc.Table.from_yolo(
-    dataset_yaml_file="/path/to/dataset.yaml",
-    split="train",
-    project_name="my_detection_project_name",
-    dataset_name="train",
-    table_name="initial",
+tables = create_tables_from_yaml_file(
+    dataset="coco128.yaml",
     task="detect",
 )
