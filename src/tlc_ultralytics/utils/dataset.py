@@ -435,7 +435,7 @@ def _get_existing_table(
     if_exists: Literal["raise", "reuse", "rename", "overwrite"],
 ) -> tlc.Table | None:
     """Check if a table already exists and return it if if_exists is 'reuse'."""
-    final_table_url = tlc.Url.create_table_url("initial", dataset_name, project_name)
+    final_table_url = tlc.ProjectLayout.table_url(table_name="initial", dataset_name=dataset_name, project_name=project_name)
 
     if not final_table_url.exists():
         return None
@@ -529,7 +529,7 @@ def create_tables_from_yaml_file(
 
     # Set up project name
     default_project_name = _get_default_names(dataset, "")[0] if not project_name else project_name
-    project_url = tlc.Url.create_project_url(default_project_name, root_url)
+    project_url = tlc.ProjectLayout.project_url(project_name=default_project_name, root_url=root_url)
     resolved_project_name = project_url.name
 
     if task == "pose":
