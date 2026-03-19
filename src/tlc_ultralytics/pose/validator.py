@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from tlc.core.builtins.constants import KEYPOINTS_2D_PREDICTED
 from tlc.core.builtins.schemas import Keypoints2DSchema
-from tlc.core.data_formats import Keypoints2DInstances
+from tlc.core.data_formats import Keypoints2D
 from ultralytics.models.yolo.pose.val import PoseValidator
 from ultralytics.utils import LOGGER
 
@@ -86,7 +86,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         }
 
     def _build_annotation(self, scaled, mapped_classes, h, w):
-        builder = Keypoints2DInstances.create_empty(
+        builder = Keypoints2D.create_empty(
             image_height=int(h),
             image_width=int(w),
             include_instance_confidences=True,
@@ -109,7 +109,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         return builder.to_row()
 
     def _empty_annotation(self, h, w):
-        return Keypoints2DInstances.create_empty(
+        return Keypoints2D.create_empty(
             image_height=int(h),
             image_width=int(w),
             include_instance_confidences=True,
