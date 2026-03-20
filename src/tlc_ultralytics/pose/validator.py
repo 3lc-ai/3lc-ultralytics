@@ -111,7 +111,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             image_height=int(h),
             image_width=int(w),
             include_instance_confidences=True,
-        ).to_row()
+        )
 
     def _prepare_loss_fn(self, model):
         loss_model = model.model if hasattr(model.model, "model") else model

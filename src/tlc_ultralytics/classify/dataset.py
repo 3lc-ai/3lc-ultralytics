@@ -22,6 +22,10 @@ class _DummyImageFolder:
     def root(self):
         return self._root.url
 
+    @property
+    def classes(self):
+        return sorted({str(label) for _, label in self._samples}) if self._samples else []
+
 
 class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
     """
