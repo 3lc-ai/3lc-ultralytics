@@ -86,7 +86,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         }
 
     def _build_annotation(self, scaled, mapped_classes, h, w):
-        builder = Keypoints2D.create_empty(
+        instances = Keypoints2D.create_empty(
             image_height=int(h),
             image_width=int(w),
             include_instance_confidences=True,
@@ -97,7 +97,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             kconf = (
                 kpts[j, :, 2].cpu().numpy().astype(np.float32).tolist() if kpts.shape[2] == 3 else None
             )
-            builder.add_instance(
+            instances.add_instance(
                 keypoints=kxy,
                 bbox=scaled["bboxes"][j].cpu().numpy().astype(np.float32).tolist(),
                 label=int(mapped_classes[j]),
@@ -106,7 +106,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                 bbox_format="xyxy",
                 instance_confidence=float(scaled["conf"][j]),
             )
-        return builder.to_row()
+        return instances
 
     def _empty_annotation(self, h, w):
         return Keypoints2D.create_empty(

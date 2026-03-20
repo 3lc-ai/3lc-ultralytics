@@ -30,11 +30,10 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
             tlc.CONFIDENCE: tlc.Float32Schema(number_role=tlc.NUMBER_ROLE_CONFIDENCE),
         }
 
-        segment_schema = tlc.SegmentationSchema(
+        segment_schema = tlc.SegmentationMasksSchema(
             classes=self.data["names_3lc"],
-            instance_properties_structure=instance_properties_structure,
+            per_instance_schemas=instance_properties_structure,
             writable=False,
-            mode="polygons",
         )
 
         return {tlc.PREDICTED_SEGMENTATIONS: segment_schema}
