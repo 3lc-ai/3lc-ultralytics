@@ -94,9 +94,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         kpts = scaled["kpts"]  # scale_preds outputs scaled keypoints under "kpts"
         for j in range(len(mapped_classes)):
             kxy = kpts[j, :, 0:2].cpu().numpy().astype(np.float32)
-            kconf = (
-                kpts[j, :, 2].cpu().numpy().astype(np.float32).tolist() if kpts.shape[2] == 3 else None
-            )
+            kconf = kpts[j, :, 2].cpu().numpy().astype(np.float32).tolist() if kpts.shape[2] == 3 else None
             instances.add_instance(
                 keypoints=kxy,
                 bbox=scaled["bboxes"][j].cpu().numpy().astype(np.float32).tolist(),

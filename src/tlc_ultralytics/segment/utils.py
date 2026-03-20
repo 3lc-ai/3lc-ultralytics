@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import tlc
-from tlc.core.sample_types.registry import SampleTypeRegistry
 
 if TYPE_CHECKING:
     from tlc_ultralytics.settings import Settings
@@ -53,12 +52,20 @@ def check_seg_table(table: tlc.Table, image_column_name: str, label_column_name:
 
         # Data checks
         first_row = table.table_rows[0]
-        assert isinstance(first_row[label_column_name], dict), f"Label column '{label_column_name}' must be a dictionary."
+        assert isinstance(first_row[label_column_name], dict), (
+            f"Label column '{label_column_name}' must be a dictionary."
+        )
         assert "rles" in first_row[label_column_name], f"Label column '{label_column_name}' missing rles."
         assert "image_width" in first_row[label_column_name], f"Label column '{label_column_name}' missing image_width."
-        assert "image_height" in first_row[label_column_name], f"Label column '{label_column_name}' missing image_height."
-        assert "instance_properties" in first_row[label_column_name], f"Label column '{label_column_name}' missing instance_properties."
-        assert "label" in first_row[label_column_name]["instance_properties"], f"Label column '{label_column_name}' missing label."
+        assert "image_height" in first_row[label_column_name], (
+            f"Label column '{label_column_name}' missing image_height."
+        )
+        assert "instance_properties" in first_row[label_column_name], (
+            f"Label column '{label_column_name}' missing instance_properties."
+        )
+        assert "label" in first_row[label_column_name]["instance_properties"], (
+            f"Label column '{label_column_name}' missing label."
+        )
         assert image_column_name in first_row, (
             f"Image column {image_column_name} not found in table with URL {table.url}"
         )

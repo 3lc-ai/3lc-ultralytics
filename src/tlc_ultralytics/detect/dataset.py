@@ -5,10 +5,11 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 import tlc
 from tlc.core.data_formats.bounding_boxes import CenteredXYWHBoundingBox
+from tlc.core.sample_types.registry import SampleTypeRegistry
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.data.utils import check_file_speeds, segments2boxes
 from ultralytics.utils import LOGGER, colorstr
-from tlc.core.sample_types.registry import SampleTypeRegistry
+
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
 
 if TYPE_CHECKING:
