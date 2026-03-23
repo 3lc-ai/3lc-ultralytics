@@ -31,7 +31,6 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         return {
             "oriented_bbs_2d_predicted": Geometry2DSchema(
-                include_2d_oriented_bounding_boxes=True,
                 per_instance_schemas={
                     LABEL: CategoricalLabelListSchema(classes=self.data["names"]),
                     CONFIDENCE: Float32ListSchema(),
