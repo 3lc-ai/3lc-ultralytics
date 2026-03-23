@@ -231,7 +231,7 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
             target = cv3[level_idx][hook_sub_index]
             try:
                 total_channels += target[-1].conv.out_channels
-            except (AttributeError, IndexError):
+            except (AttributeError, IndexError, TypeError):
                 total_channels += detect_head.nc
 
             def make_hook(idx):
