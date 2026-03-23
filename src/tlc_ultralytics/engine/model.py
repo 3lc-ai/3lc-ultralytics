@@ -99,18 +99,26 @@ class YOLO(YOLOBase):
         splits: Iterable[str] | None = None,
         tables: dict[str, str | tlc.Url | tlc.Table] | None = None,
         settings: Settings | None = None,
+        progress_callback: object | None = None,
         **kwargs,
     ) -> dict[str, dict[str, float]]:
         """Perform calls to model.val() to collect metrics on a set of splits, all under one tlc.Run.
-        If enabled, embeddings are reduced at the end of validation.
+
+        If enabled, embeddings are reduced at the end of validation. When instance
+        embeddings are enabled and multiple splits are collected, the first split
+        (train) defines the reduction space and subsequent splits are projected
+        into it.
 
         :param data: Path to a YOLO or 3LC YAML file. If provided, splits must also be provided.
         :param splits: List of splits to collect metrics for. If provided, data must also be provided.
         :param tables: Dictionary of splits to tables to collect metrics for. Mutually exclusive with data and splits.
         :param settings: 3LC settings to use for collecting metrics. If None, default settings are used.
+        :param progress_callback: Optional callable(phase, current, total) for reporting reduction progress.
         :param kwargs: Additional keyword arguments are forwarded as model.val(**kwargs).
         :return: Dictionary of split names to results returned by model.val().
         """
+        from tlc_ultralytics.constants import TLC_COLORSTR
+
         # Verify only data+splits or tables are provided
         if not ((data and splits) or tables):
             raise ValueError("Either data and splits or tables must be provided to collect.")
@@ -121,18 +129,34 @@ class YOLO(YOLOBase):
         if not settings.run_description:
             settings.run_description = DEFAULT_COLLECT_RUN_DESCRIPTION
 
+        # Store progress callback on settings so the validator can use it during reduction
+        if progress_callback is not None:
+            settings._reduction_progress_callback = progress_callback
+
         results_dict = {}
-        # Call val for each split or table
+
+        # Ensure train split runs first so its fitted reducer is reused by val.
+        # The validator stores the fitted reducer on settings._fitted_instance_reducer
+        # after fit_transform; subsequent splits see it and use transform instead.
         if data and splits:
-            for split in splits:
+            ordered = sorted(splits, key=lambda s: 0 if s == "train" else 1)
+            for split in ordered:
+                LOGGER.info(TLC_COLORSTR + f"Collecting metrics for split: {split}")
+                if progress_callback:
+                    progress_callback("split_start", 0, 0)
                 results_dict[split] = self.val(data=data, split=split, settings=settings, **kwargs)
         elif tables:
-            for split in tables:
+            ordered = sorted(tables.keys(), key=lambda s: 0 if s == "train" else 1)
+            for split in ordered:
+                LOGGER.info(TLC_COLORSTR + f"Collecting metrics for split: {split}")
+                if progress_callback:
+                    progress_callback("split_start", 0, 0)
                 results_dict[split] = self.val(table=tables[split], settings=settings, **kwargs)
 
-        # Reduce embeddings
+        # Reduce image embeddings (server-side, across all splits)
         if settings and settings.image_embeddings_dim > 0:
-            # TODO: Allow user to pass in preferred foreign_table_url
+            if progress_callback:
+                progress_callback("image_embeddings", 0, 0)
 
             reduce_embeddings(
                 tlc.active_run(),
@@ -140,6 +164,9 @@ class YOLO(YOLOBase):
                 n_components=settings.image_embeddings_dim,
                 reducer_args=settings.image_embeddings_reducer_args,
             )
+
+            if progress_callback:
+                progress_callback("image_embeddings_done", 0, 0)
 
         tlc.active_run().set_status_completed()
 

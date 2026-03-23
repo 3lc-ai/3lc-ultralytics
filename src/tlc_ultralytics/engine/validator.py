@@ -474,15 +474,39 @@ class TLCValidatorMixin(BaseValidator):
         self._buffered_raw_gt_instance_embeddings = []
 
     def _reduce_and_write_buffered_metrics(self):
-        """Reduce all buffered instance embeddings and write metrics to the writer."""
+        """Reduce all buffered instance embeddings and write metrics to the writer.
+
+        If a fitted reducer already exists on ``settings._fitted_instance_reducer``
+        (e.g. fitted on the train split during ``collect()``), predicted embeddings
+        are *transformed* into that existing space instead of fitting a new one.
+        Otherwise a new reducer is fitted and stored on settings for later splits.
+        """
         from tlc_ultralytics.utils.embeddings import reduce_instance_embeddings, transform_instance_embeddings
 
-        # Reduce all predicted instance embeddings at once (fit_transform)
-        reduced_per_image, reducer = reduce_instance_embeddings(
-            self._buffered_raw_instance_embeddings,
-            method=self._settings.image_embeddings_reducer,
-            n_components=self._settings.instance_embeddings_dim,
-        )
+        progress_cb = getattr(self._settings, "_reduction_progress_callback", None)
+        existing_reducer = getattr(self._settings, "_fitted_instance_reducer", None)
+
+        if existing_reducer is not None:
+            # Use existing reducer (e.g. val split reusing train's fitted space)
+            reduced_per_image = transform_instance_embeddings(
+                self._buffered_raw_instance_embeddings,
+                existing_reducer,
+                n_components=self._settings.instance_embeddings_dim,
+                progress_callback=progress_cb,
+                label="predicted",
+            )
+            reducer = existing_reducer
+        else:
+            # Fit new reducer (train split or standalone validation)
+            reduced_per_image, reducer = reduce_instance_embeddings(
+                self._buffered_raw_instance_embeddings,
+                method=self._settings.image_embeddings_reducer,
+                n_components=self._settings.instance_embeddings_dim,
+                progress_callback=progress_cb,
+            )
+            # Store fitted reducer for subsequent splits to reuse
+            if reducer is not None:
+                self._settings._fitted_instance_reducer = reducer
 
         # Transform GT embeddings with the same fitted reducer
         gt_reduced_per_image = None
@@ -492,6 +516,8 @@ class TLCValidatorMixin(BaseValidator):
                     self._buffered_raw_gt_instance_embeddings,
                     reducer,
                     n_components=self._settings.instance_embeddings_dim,
+                    progress_callback=progress_cb,
+                    label="ground-truth",
                 )
             else:
                 # No reducer (all predicted were empty) — produce empty GT embeddings too
