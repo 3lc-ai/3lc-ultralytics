@@ -287,7 +287,7 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
         :return: Normalized segments
         """
         if self._segment_type == "absolute":
-            return segments / np.array([width, height])
+            return segments / np.array([width, height], dtype=np.float32)
         return segments
 
     def _get_label_from_row(self, im_file: str, row: Any, example_id: int) -> dict[str, Any]:
