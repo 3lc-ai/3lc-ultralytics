@@ -130,7 +130,7 @@ def extract_instance_embeddings_bbox(
             results.append(np.empty((0, C), dtype=np.float32))
         return results
 
-    rois = torch.cat(roi_list, dim=0)  # [N_total, 5]
+    rois = torch.cat(roi_list, dim=0).to(dtype=feature_map.dtype)  # [N_total, 5]
 
     # roi_align expects boxes in the feature map's spatial coordinate system,
     # so we pass spatial_scale to convert from image coords to feature coords.
