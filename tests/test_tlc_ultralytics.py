@@ -582,12 +582,12 @@ def test_embeddings_collection() -> None:
 
     run = _get_run_from_settings(settings)
     assert len(run.metrics_tables) == 2, "Expected 2 metrics tables to be written"
-    assert any(isinstance(metrics_table, tlc.PaCMAPTable) for metrics_table in run.metrics_tables), (
+    assert any(isinstance(metrics_table, tlc.PacmapTable) for metrics_table in run.metrics_tables), (
         "Expected a PaCMAPTable"
     )
 
     embeddings_table = next(
-        metrics_table for metrics_table in run.metrics_tables if isinstance(metrics_table, tlc.PaCMAPTable)
+        metrics_table for metrics_table in run.metrics_tables if isinstance(metrics_table, tlc.PacmapTable)
     )
     assert "embeddings_pacmap" in embeddings_table.columns, "Expected embeddings column"
 
@@ -705,7 +705,7 @@ def test_seg_table_checker() -> None:
         dataset_name="test_seg_table_checker",
         table_name="invalid_seg_table",
     )
-    with pytest.raises(ValueError, match="Schema validation failed"):
+    with pytest.raises(ValueError, match="Validation failed"):
         check_seg_table(invalid_schema_seg_table, "image", "segmentations")
 
 
@@ -1046,18 +1046,18 @@ def test_check_tlc_dataset_different_categories(train_classes, val_classes, desc
     # Test that an error is raised if the categories of the tables are different
     project_name = f"test_check_tlc_dataset_different_categories_{description.lower().replace(' ', '_')}"
 
-    train_structure = {"image": tlc.ImagePath("image"), "label": tlc.CategoricalLabel("label", classes=train_classes)}
-    val_structure = {"image": tlc.ImagePath("image"), "label": tlc.CategoricalLabel("label", classes=val_classes)}
+    train_structure = {"image": tlc.ImageUrlSchema(), "label": tlc.CategoricalLabelSchema(classes=train_classes)}
+    val_structure = {"image": tlc.ImageUrlSchema(), "label": tlc.CategoricalLabelSchema(classes=val_classes)}
 
     train_table = tlc.Table.from_dict(
         {"image": ["a.jpg", "b.jpg"], "label": [0, 1]},
-        structure=train_structure,
+        schema=train_structure,
         project_name=project_name,
         dataset_name="train",
     )
     val_table = tlc.Table.from_dict(
         {"image": ["c.jpg", "d.jpg"], "label": [0, 1]},
-        structure=val_structure,
+        schema=val_structure,
         project_name=project_name,
         dataset_name="val",
     )
@@ -1099,10 +1099,10 @@ def test_check_tlc_dataset_string_tables_converted_before_split_filter() -> None
     Later code then called .get_value_map() on the string, causing AttributeError.
     """
     # Create a minimal table to use as the "train" split
-    train_structure = {"image": tlc.ImagePath("image"), "label": tlc.CategoricalLabel("label", classes=["a", "b"])}
+    train_schema = {"image": tlc.ImageUrlSchema(), "label": tlc.CategoricalLabelSchema(classes=["a", "b"])}
     train_table = tlc.Table.from_dict(
         {"image": [str(DUMMY_IMAGE_FILE)], "label": [0]},
-        structure=train_structure,
+        schema=train_schema,
         project_name="test_string_conversion_bug",
         dataset_name="train",
         table_name="initial",
@@ -1131,10 +1131,9 @@ def test_check_tlc_dataset_string_tables_converted_before_split_filter() -> None
 def test_small_segmentations() -> None:
     # Test that small segmentations are skipped properly
     structure = {
-        "image": tlc.ImagePath("image"),
-        "segmentations": tlc.InstanceSegmentationPolygons(
-            name="segmentations",
-            instance_properties_structure={"label": tlc.CategoricalLabel("label", ["a", "b", "c"])},
+        "image": tlc.ImageUrlSchema(),
+        "segmentations": tlc.SegmentationPolygonsSchema(
+            classes=["a", "b", "c"],
             relative=True,
         ),
     }
@@ -1157,15 +1156,19 @@ def test_small_segmentations() -> None:
     }
 
     table_writer = tlc.TableWriter(
-        column_schemas=structure, project_name="test_small_segmentations", dataset_name="test", table_name="initial"
+        schema=structure,
+        project_name="test_small_segmentations",
+        dataset_name="test",
+        table_name="initial",
     )
     table_writer.add_row(relative_polygons_sample)
     table = table_writer.finalize()
 
-    assert len(table[0]["segmentations"]["polygons"]) == 3  # All three instances should be present in some way
-    assert len(table[0]["segmentations"]["polygons"][0]) == 6  # Expecting a full polygon
-    assert len(table[0]["segmentations"]["polygons"][1]) < 6  # Expecting some kind of zero area polygon
-    assert len(table[0]["segmentations"]["polygons"][2]) == 0  # Expecting an empty list
+    first_row = table[0]
+    assert len(first_row["segmentations"].polygons) == 3  # All three instances should be present in some way
+    assert len(first_row["segmentations"].polygons[0]) == 6  # Expecting a full polygon
+    assert len(first_row["segmentations"].polygons[1]) < 6  # Expecting some kind of zero area polygon
+    assert len(first_row["segmentations"].polygons[2]) == 0  # Expecting an empty list
 
     dataset = TLCYOLODataset(
         table,
@@ -1181,16 +1184,15 @@ def test_small_segmentations() -> None:
 def test_absolute_segmentation_polygons() -> None:
     # Test that absolute segmentation polygons are handled correctly
     structure = {
-        "image": tlc.ImagePath("image"),
-        "segmentations": tlc.InstanceSegmentationPolygons(
-            name="segmentations",
-            instance_properties_structure={"label": tlc.CategoricalLabel("label", ["a", "b", "c"])},
+        "image": tlc.ImageUrlSchema(),
+        "segmentations": tlc.SegmentationPolygonsSchema(
+            classes=["a", "b", "c"],
             relative=False,
         ),
     }
 
     table_writer = tlc.TableWriter(
-        column_schemas=structure,
+        schema=structure,
         project_name="test_absolute_segmentation_polygons",
         dataset_name="test",
         table_name="initial",
@@ -1252,7 +1254,7 @@ def test_absolutize_image_url() -> None:
 
     # Non-file schemes should fail
     for scheme in (tlc.Scheme.S3, tlc.Scheme.GS, tlc.Scheme.ABFS):
-        url = tlc.Url(f"{scheme.value}://some/remote/url.png")
+        url = tlc.Url(f"{scheme}://some/remote/url.png")
         with pytest.raises(ValueError):
             TLCDatasetMixin._absolutize_image_url(url, tlc.Url("some_table_url"))
 

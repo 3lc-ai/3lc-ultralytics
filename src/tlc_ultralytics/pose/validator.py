@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from tlc.core.builtins.constants import KEYPOINTS_2D_PREDICTED
 from tlc.core.builtins.schemas import Keypoints2DSchema
-from tlc.core.data_formats import Keypoints2DInstances
+from tlc.core.data_formats import Keypoints2D
 from ultralytics.models.yolo.pose.val import PoseValidator
 from ultralytics.utils import LOGGER
 
@@ -86,7 +86,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         }
 
     def _build_annotation(self, scaled, mapped_classes, h, w):
-        builder = Keypoints2DInstances.create_empty(
+        instances = Keypoints2D.create_empty(
             image_height=int(h),
             image_width=int(w),
             include_instance_confidences=True,
@@ -94,10 +94,8 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         kpts = scaled["kpts"]  # scale_preds outputs scaled keypoints under "kpts"
         for j in range(len(mapped_classes)):
             kxy = kpts[j, :, 0:2].cpu().numpy().astype(np.float32)
-            kconf = (
-                kpts[j, :, 2].cpu().numpy().astype(np.float32).tolist() if kpts.shape[2] == 3 else None
-            )
-            builder.add_instance(
+            kconf = kpts[j, :, 2].cpu().numpy().astype(np.float32).tolist() if kpts.shape[2] == 3 else None
+            instances.add_instance(
                 keypoints=kxy,
                 bbox=scaled["bboxes"][j].cpu().numpy().astype(np.float32).tolist(),
                 label=int(mapped_classes[j]),
@@ -106,14 +104,14 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                 bbox_format="xyxy",
                 instance_confidence=float(scaled["conf"][j]),
             )
-        return builder.to_row()
+        return instances
 
     def _empty_annotation(self, h, w):
-        return Keypoints2DInstances.create_empty(
+        return Keypoints2D.create_empty(
             image_height=int(h),
             image_width=int(w),
             include_instance_confidences=True,
-        ).to_row()
+        )
 
     def _prepare_loss_fn(self, model):
         loss_model = model.model if hasattr(model.model, "model") else model

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 import tlc
 from tlc.core.data_formats.bounding_boxes import CenteredXYWHBoundingBox
+from tlc.core.sample_types.registry import SampleTypeRegistry
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.data.utils import check_file_speeds, segments2boxes
 from ultralytics.utils import LOGGER, colorstr
@@ -286,25 +287,25 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
         :return: Normalized segments
         """
         if self._segment_type == "absolute":
-            return segments / np.array([width, height])
+            return segments / np.array([width, height], dtype=np.float32)
         return segments
 
     def _get_label_from_row(self, im_file: str, row: Any, example_id: int) -> dict[str, Any]:
         """Get the segmentation label for a row."""
-        column_name, instances_name, label_key = self._label_column_name.split(".")
+        column_name, _, _ = self._label_column_name.split(".")
 
         # Use sample view to get polygons, row is row view
-        sample = self.table[example_id]
-
-        segmentations = sample[column_name]
-        height, width = segmentations[tlc.IMAGE_HEIGHT], segmentations[tlc.IMAGE_WIDTH]
+        row = self.table.table_rows[example_id]
+        raw_segmentations = row[column_name]
+        segmentations = SampleTypeRegistry.get("segmentation_polygons", relative=True).from_row(raw_segmentations)
+        height, width = segmentations.image_height, segmentations.image_width
         classes = []
         segments = []
 
         for i, (category, polygon) in enumerate(
             zip(
-                segmentations[instances_name][label_key],
-                segmentations[tlc.POLYGONS],
+                segmentations.instance_labels,
+                segmentations.polygons,
                 strict=False,
             )
         ):

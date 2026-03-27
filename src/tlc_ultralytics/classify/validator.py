@@ -93,10 +93,18 @@ class TLCClassificationValidator(TLCValidatorMixin, yolo.classify.Classification
         """Add a hook to extract embeddings from the model, and infer the activation size. For a classification model,
         this amounts to finding the linear layer and extracting the input size."""
 
+        # Unwrap AutoBackend to get the underlying nn.Module.
+        # In ultralytics >=8.4.10, AutoBackend delegates to a non-nn.Module backend,
+        # so model.modules() no longer recurses into the actual model layers.
+        if hasattr(model, "model"):
+            inner_model = model.model
+        else:
+            inner_model = model
+
         # Find index of the linear layer
         linear_layer_index: int | None = None
         activation_size: int | None = None
-        for index, module in enumerate(model.modules()):
+        for index, module in enumerate(inner_model.modules()):
             if isinstance(module, torch.nn.Linear):
                 activation_size = module.in_features
                 linear_layer_index = index
@@ -114,7 +122,7 @@ class TLCClassificationValidator(TLCValidatorMixin, yolo.classify.Classification
             self_ref.embeddings = embeddings
 
         # Add forward hook to collect embeddings
-        for i, module in enumerate(model.modules()):
+        for i, module in enumerate(inner_model.modules()):
             if i == linear_layer_index - 1:
                 self._hook_handles.append(module.register_forward_hook(hook_fn))
 

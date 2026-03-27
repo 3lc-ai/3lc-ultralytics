@@ -216,14 +216,16 @@ def construct_bbox_struct(
         label = pred["category_id"]
         if inverse_label_mapping is not None:
             label = inverse_label_mapping[label]
-        bb_list.append({
-            "label": label,
-            "confidence": pred["score"],
-            "x0": pred["bbox"][0],
-            "y0": pred["bbox"][1],
-            "x1": pred["bbox"][2],
-            "y1": pred["bbox"][3],
-        })
+        bb_list.append(
+            {
+                "label": label,
+                "confidence": pred["score"],
+                "x0": pred["bbox"][0],
+                "y0": pred["bbox"][1],
+                "x1": pred["bbox"][2],
+                "y1": pred["bbox"][3],
+            }
+        )
 
     return {
         "bb_list": bb_list,

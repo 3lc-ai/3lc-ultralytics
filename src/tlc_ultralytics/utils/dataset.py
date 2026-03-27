@@ -435,7 +435,9 @@ def _get_existing_table(
     if_exists: Literal["raise", "reuse", "rename", "overwrite"],
 ) -> tlc.Table | None:
     """Check if a table already exists and return it if if_exists is 'reuse'."""
-    final_table_url = tlc.ProjectLayout.table_url(table_name="initial", dataset_name=dataset_name, project_name=project_name)
+    final_table_url = tlc.ProjectLayout.table_url(
+        table_name="initial", dataset_name=dataset_name, project_name=project_name
+    )
 
     if not final_table_url.exists():
         return None

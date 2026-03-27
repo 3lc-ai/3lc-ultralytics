@@ -13,7 +13,10 @@ class TLCSegmentationTrainer(SegmentationTrainer, TLCDetectionTrainer):
     _validator_class = TLCSegmentationValidator
     _loss_names = ("box_loss", "seg_loss", "cls_loss", "dfl_loss")
     _metric_replacements: ClassVar[list[tuple[str, str]]] = [
-        ("(B)", ""), ("(M)", "_seg"), ("metrics", "val"), ("/", "_"),
+        ("(B)", ""),
+        ("(M)", "_seg"),
+        ("metrics", "val"),
+        ("/", "_"),
     ]
 
     # Explicit binding to ensure TLCTrainerMixin.get_validator wins over SegmentationTrainer.get_validator in MRO

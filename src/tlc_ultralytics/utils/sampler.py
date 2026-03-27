@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
+from tlc.client.torch.samplers import create_sampler as create_sampler_tlc
 
 if TYPE_CHECKING:
     import tlc
@@ -34,7 +35,8 @@ def create_sampler(
             exclude_zero_weights = False if table.weights_column_name is None else settings.exclude_zero_weight_training
 
             try:
-                sampler = table.create_sampler(
+                sampler = create_sampler_tlc(
+                    table=table,
                     exclude_zero_weights=exclude_zero_weights,
                     weighted=settings.sampling_weights,
                     shuffle=True,

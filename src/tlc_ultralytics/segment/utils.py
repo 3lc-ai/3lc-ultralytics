@@ -44,32 +44,32 @@ def check_seg_table(table: tlc.Table, image_column_name: str, label_column_name:
 
     label_column_name = label_column_name.split(".")[0]
 
-    # Check that the schema is compatible with instance segmentation
+    # Check that the schema and data are compatible with instance segmentation
     try:
         # Schema checks
         assert image_column_name in row_schema, f"Image column '{image_column_name}' not found."
         assert label_column_name in row_schema, f"Label column '{label_column_name}' not found."
 
-        assert hasattr(row_schema[label_column_name], "sample_type"), (
-            f"Label column '{label_column_name}' does not have a sample type."
+        # Data checks
+        first_row = table.table_rows[0]
+        assert isinstance(first_row[label_column_name], dict), (
+            f"Label column '{label_column_name}' must be a dictionary."
         )
-        sample_type = tlc.SampleType.from_schema(row_schema[label_column_name])
-        assert isinstance(sample_type, tlc.InstanceSegmentationPolygons), (
-            f"Label column '{label_column_name}' does not have sample type InstanceSegmentationPolygons."
+        assert "rles" in first_row[label_column_name], f"Label column '{label_column_name}' missing rles."
+        assert "image_width" in first_row[label_column_name], f"Label column '{label_column_name}' missing image_width."
+        assert "image_height" in first_row[label_column_name], (
+            f"Label column '{label_column_name}' missing image_height."
         )
-
-    except AssertionError as e:
-        msg = f"Schema validation failed for '{label_column_name}' column in table with URL {table.url}. {e!s}"
-        raise ValueError(msg) from e
-
-    # Check that the table data is compatible with its schema
-    try:
-        first_row = table[0]
-        sample_type.ensure_sample_valid(first_row[label_column_name])
+        assert "instance_properties" in first_row[label_column_name], (
+            f"Label column '{label_column_name}' missing instance_properties."
+        )
+        assert "label" in first_row[label_column_name]["instance_properties"], (
+            f"Label column '{label_column_name}' missing label."
+        )
         assert image_column_name in first_row, (
             f"Image column {image_column_name} not found in table with URL {table.url}"
         )
 
     except (AssertionError, ValueError) as e:
-        msg = f"Data validation failed for {label_column_name} column in table with URL {table.url}. {e!s}"
+        msg = f"Validation failed for {label_column_name} column in table with URL {table.url}. {e!s}"
         raise ValueError(msg) from e
