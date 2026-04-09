@@ -3,8 +3,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
-import tlc
-from tlc.core.data_formats.bounding_boxes import CenteredXYWHBoundingBox
+from tlc.core.builtins.constants.column_names import BOUNDING_BOX_LIST
+from tlc.core.data_formats.bb_conversions import (
+    legacy_bb_row_to_bounding_boxes_2d,
+    normalize_bbs,
+    xyxy_to_cxywh,
+)
 from tlc.core.sample_types.registry import SampleTypeRegistry
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.data.utils import check_file_speeds, segments2boxes
@@ -13,7 +17,7 @@ from ultralytics.utils import LOGGER, colorstr
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from tlc.core.objects.table import Table
 
 SegmentType = Literal["absolute", "relative"]
 
@@ -182,9 +186,12 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
         :param image_column_name: Name of the image column in the table
         :param label_column_name: Name of the label column in the table
         """
-        self._detection_factory: Callable[[list[float]], tlc.BoundingBox] = self._get_detection_factory(
-            table, label_column_name
-        )
+        # Determine the annotation column name and whether this is a legacy-format table
+        column_name = label_column_name.split(".")[0]
+        column_schema = table.rows_schema.values[column_name]
+        self._annotation_column = column_name
+        self._is_legacy_bb = BOUNDING_BOX_LIST in column_schema
+        self._bb_schema = column_schema if self._is_legacy_bb else None
 
         super().__init__(
             table,
@@ -197,34 +204,56 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
             **kwargs,
         )
 
-    def _get_detection_factory(
-        self, table: tlc.Table, label_column_name: str
-    ) -> Callable[[list[float]], tlc.BoundingBox]:
-        """Infer the bounding box factory from the table schema.
-
-        :param table: The 3LC table containing the dataset
-        :param label_column_name: The name of the label column in the table
-        :returns: A factory function that creates bounding boxes from coordinates
-        """
-        column_name, instances_name, _ = label_column_name.split(".")
-
-        try:
-            factory = tlc.BoundingBox.from_schema(table.rows_schema.values[column_name].values[instances_name])
-        except Exception as e:
-            raise ValueError(f"Table {table.url} is not a detection table: {e}") from None
-
-        return factory
-
     def _get_label_from_row(self, im_file: str, row: Any, example_id: int) -> dict[str, Any]:
-        """Get the detection label for a row."""
-        return tlc_table_row_to_yolo_label(
-            row,
-            self._detection_factory,
-            self._class_map,
-            im_file,
-            label_column_name=self._label_column_name,
-            example_id=example_id,
-        )
+        """Get the detection label for a row using BoundingBoxes2D."""
+        raw = row[self._annotation_column]
+
+        # Get BoundingBoxes2D — handles both legacy and new format
+        if self._is_legacy_bb:
+            bb2d = legacy_bb_row_to_bounding_boxes_2d(raw, self._bb_schema)
+        else:
+            bb2d = SampleTypeRegistry.get("bounding_boxes_2d").from_row(raw)
+
+        height = bb2d.image_height
+        width = bb2d.image_width
+
+        if bb2d.num_instances == 0 or bb2d.instance_labels is None:
+            return {
+                "im_file": im_file,
+                "shape": (height, width),
+                "cls": np.zeros((0, 1), dtype=np.float32),
+                "bboxes": np.zeros((0, 4), dtype=np.float32),
+                "segments": [],
+                "keypoints": None,
+                "normalized": True,
+                "bbox_format": "xywh",
+                "example_id": example_id,
+            }
+
+        # Normalize to [0,1] and convert to centered XYWH (what YOLO expects)
+        normalized = normalize_bbs(bb2d.bboxes, width, height)
+        cxywh = xyxy_to_cxywh(normalized)
+
+        # Filter boxes with non-positive width or height and apply class map
+        widths = cxywh[:, 2]
+        heights = cxywh[:, 3]
+        valid = (widths > 0) & (heights > 0)
+
+        valid_boxes = cxywh[valid]
+        valid_labels = bb2d.instance_labels[valid]
+        classes = np.array([self._class_map[int(lbl)] for lbl in valid_labels], dtype=np.float32).reshape(-1, 1)
+
+        return {
+            "im_file": im_file,
+            "shape": (height, width),
+            "cls": classes,
+            "bboxes": valid_boxes,
+            "segments": [],
+            "keypoints": None,
+            "normalized": True,
+            "bbox_format": "xywh",
+            "example_id": example_id,
+        }
 
 
 class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
@@ -261,7 +290,7 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
             **kwargs,
         )
 
-    def _get_segment_type(self, table: tlc.Table, label_column_name: str) -> SegmentType:
+    def _get_segment_type(self, table: Table, label_column_name: str) -> SegmentType:
         """Verify the table format and check if the polygons are relative.
 
         :param table: The 3LC table containing the dataset
@@ -335,92 +364,3 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
             "bbox_format": "xywh",
             "example_id": example_id,
         }
-
-
-def convert_to_xywh(bbox: tlc.BoundingBox, image_width: int, image_height: int) -> CenteredXYWHBoundingBox:
-    if isinstance(bbox, CenteredXYWHBoundingBox):
-        return bbox
-    else:
-        return CenteredXYWHBoundingBox.from_top_left_xywh(bbox.to_top_left_xywh().normalize(image_width, image_height))
-
-
-def unpack_box(
-    bbox: dict[str, int | float],
-    table_format: Callable[[list[float]], tlc.BoundingBox],
-    image_width: int,
-    image_height: int,
-    label_key: str,
-) -> tuple[int, list[float]]:
-    coordinates = [bbox[tlc.X0], bbox[tlc.Y0], bbox[tlc.X1], bbox[tlc.Y1]]
-    return bbox[label_key], convert_to_xywh(table_format(coordinates), image_width, image_height)  # type: ignore[invalid-return-type]
-
-
-def unpack_boxes(
-    bboxes: list[dict[str, int | float]],
-    class_map: dict[int, int],
-    table_format: Callable[[list[float]], tlc.BoundingBox],
-    image_width: int,
-    image_height: int,
-    label_key: str,
-) -> tuple[np.ndarray, np.ndarray]:
-    classes_list, boxes_list = [], []
-    for bbox in bboxes:
-        _class, box = unpack_box(bbox, table_format, image_width, image_height, label_key)
-
-        # Ignore boxes with non-positive width or height
-        if box[2] > 0 and box[3] > 0:
-            classes_list.append(class_map[_class])
-            boxes_list.append(box)
-
-    # Convert to np array
-    boxes = np.array(boxes_list, ndmin=2, dtype=np.float32)
-    if len(boxes_list) == 0:
-        boxes = boxes.reshape(0, 4)
-
-    classes = np.array(classes_list, dtype=np.float32).reshape((-1, 1))
-    assert classes.shape == (boxes.shape[0], 1)
-    return classes, boxes
-
-
-def tlc_table_row_to_yolo_label(
-    row,
-    detection_factory: Callable[[list[float]], tlc.BoundingBox],
-    class_map: dict[int, int],
-    im_file: str,
-    label_column_name: str,
-    example_id: int,
-) -> dict[str, Any]:
-    """Convert a table row from a 3lc Table to a Ultralytics YOLO label dict.
-
-    :param row: The table row to convert
-    :param detection_factory: Factory function to create bounding boxes
-    :param class_map: A dictionary mapping 3lc class labels to contiguous class labels
-    :param im_file: The path to the image file of the row
-    :param label_column_name: The name of the label column in the table
-    :returns: A dictionary containing the Ultralytics YOLO label information
-    """
-    bounding_boxes_column_key, bounding_boxes_list_key, label_key = label_column_name.split(".")
-
-    classes, bboxes = unpack_boxes(
-        row[bounding_boxes_column_key][bounding_boxes_list_key],
-        class_map,
-        detection_factory,
-        row[bounding_boxes_column_key][tlc.IMAGE_WIDTH],
-        row[bounding_boxes_column_key][tlc.IMAGE_HEIGHT],
-        label_key,
-    )
-
-    return {
-        "im_file": im_file,
-        "shape": (
-            row[bounding_boxes_column_key][tlc.IMAGE_HEIGHT],
-            row[bounding_boxes_column_key][tlc.IMAGE_WIDTH],
-        ),  # format: (height, width)
-        "cls": classes,
-        "bboxes": bboxes,
-        "segments": [],
-        "keypoints": None,
-        "normalized": True,
-        "bbox_format": "xywh",
-        "example_id": example_id,
-    }

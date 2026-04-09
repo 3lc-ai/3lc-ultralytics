@@ -89,7 +89,6 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         instances = Keypoints2D.create_empty(
             image_height=int(h),
             image_width=int(w),
-            include_instance_confidences=True,
         )
         kpts = scaled["kpts"]  # scale_preds outputs scaled keypoints under "kpts"
         for j in range(len(mapped_classes)):
@@ -100,8 +99,6 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                 bbox=scaled["bboxes"][j].cpu().numpy().astype(np.float32).tolist(),
                 label=int(mapped_classes[j]),
                 confidence=kconf,
-                normalized=False,
-                bbox_format="xyxy",
                 instance_confidence=float(scaled["conf"][j]),
             )
         return instances
@@ -110,7 +107,6 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         return Keypoints2D.create_empty(
             image_height=int(h),
             image_width=int(w),
-            include_instance_confidences=True,
         )
 
     def _prepare_loss_fn(self, model):

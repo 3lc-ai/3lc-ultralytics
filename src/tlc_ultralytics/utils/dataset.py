@@ -296,7 +296,7 @@ def get_value_map_from_table(
         except Exception as e:
             raise ValueError("Failed to get value map from table") from e
     else:
-        return table.get_value_map(label_column_name)  # type: ignore[invalid-return-type]
+        return table.get_value_map(label_column_name)  # type: ignore[return-value]
 
 
 def parse_3lc_yaml_file(data_file: str) -> dict[str, tlc.Table]:
