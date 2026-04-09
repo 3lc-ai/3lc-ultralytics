@@ -205,7 +205,6 @@ def construct_bbox_struct(
         bb2d = BoundingBoxes2D.create_empty(
             image_width=image_width,
             image_height=image_height,
-            include_instance_confidences=True,
         )
     else:
         cxywh_norm = np.array([pred["bbox"] for pred in predicted_annotations], dtype=np.float32)

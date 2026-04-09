@@ -89,7 +89,6 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         instances = Keypoints2D.create_empty(
             image_height=int(h),
             image_width=int(w),
-            include_instance_confidences=True,
         )
         kpts = scaled["kpts"]  # scale_preds outputs scaled keypoints under "kpts"
         for j in range(len(mapped_classes)):
@@ -110,7 +109,6 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         return Keypoints2D.create_empty(
             image_height=int(h),
             image_width=int(w),
-            include_instance_confidences=True,
         )
 
     def _prepare_loss_fn(self, model):
