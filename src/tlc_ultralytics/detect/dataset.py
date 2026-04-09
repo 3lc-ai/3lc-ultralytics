@@ -231,7 +231,7 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
             }
 
         # Normalize to [0,1] and convert to centered XYWH (what YOLO expects)
-        normalized = normalize_bbs(bb2d.bbs, width, height)
+        normalized = normalize_bbs(bb2d.bboxes, width, height)
         cxywh = xyxy_to_cxywh(normalized)
 
         # Filter boxes with non-positive width or height and apply class map

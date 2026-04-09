@@ -48,7 +48,7 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
         H = float(instances.image_height)
         W = float(instances.image_width)
         labels = instances.instance_labels.astype(np.int32, copy=False)  # (N,)
-        bboxes_xyxy = instances.instance_bbs.astype(np.float32, copy=False)  # (N,4) [x_min, y_min, x_max, y_max]
+        bboxes_xyxy = instances.bboxes.astype(np.float32, copy=False)  # (N,4) [x_min, y_min, x_max, y_max]
         kxy = instances.keypoints.astype(np.float32, copy=False)  # (N,K,2)
         vis = instances.keypoint_visibilities  # (N,K) or None
 
