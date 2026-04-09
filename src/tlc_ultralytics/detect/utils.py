@@ -89,46 +89,42 @@ def build_tlc_yolo_dataset(
 def check_det_table(
     table: tlc.Table,
     image_column_name: str = tlc.IMAGE,
-    label_column_name: str = f"{tlc.BOUNDING_BOXES}.{tlc.BOUNDING_BOX_LIST}.{tlc.LABEL}",
+    label_column_name: str | None = None,
 ) -> None:
     """Check that a table is compatible with the detection task in the 3LC YOLO integration.
+
+    Supports both legacy (BoundingBoxListSchema) and new (BoundingBoxes2DSchema) formats.
 
     :param table: The table to check.
     :param image_column_name: The name of the column containing image paths.
     :param label_column_name: The full label path of the column containing labels.
+        If None, auto-detected from the table schema.
     :raises: ValueError if the table is not compatible with the detection task.
     """
-    row_schema = table.row_schema.values
+    from tlc.core.helpers.annotation_helper import detect_bounding_box_column, get_label_path
 
-    bounding_boxes_column_key, bounding_boxes_list_key, label_key = label_column_name.split(".")
+    row_schema = table.row_schema.values
 
     try:
         assert image_column_name in row_schema, f"Image column '{image_column_name}' not found."
-        assert bounding_boxes_column_key in row_schema, f"Bounding box column '{bounding_boxes_column_key}' not found."
-        assert bounding_boxes_list_key in row_schema[bounding_boxes_column_key].values, (
-            f"Bounding box list '{bounding_boxes_list_key}' not found in column '{bounding_boxes_column_key}'."
-        )
 
-        assert tlc.IMAGE_HEIGHT in row_schema[bounding_boxes_column_key].values, (
-            f"Bounding box column '{bounding_boxes_column_key}' does not contain a key '{tlc.IMAGE_HEIGHT}'."
-        )
-        assert tlc.IMAGE_WIDTH in row_schema[bounding_boxes_column_key].values, (
-            f"Bounding box column '{bounding_boxes_column_key}' does not contain a key '{tlc.IMAGE_WIDTH}'."
-        )
-
-        for coordinate in [tlc.X0, tlc.Y0, tlc.X1, tlc.Y1]:
-            assert coordinate in row_schema[bounding_boxes_column_key].values[bounding_boxes_list_key].values, (
-                f"Bounding box list '{bounding_boxes_list_key}' in column '{bounding_boxes_column_key}' "
-                f"does not contain a key '{coordinate}'."
+        if label_column_name is not None:
+            # User-provided label path — validate it exists
+            bb_column = label_column_name.split(".")[0]
+            assert bb_column in row_schema, f"Bounding box column '{bb_column}' not found."
+            assert table.get_value_map(label_column_name) is not None, (
+                f"Unable to get value map for label value path {label_column_name}. Ensure that the table is "
+                "compatible with the detection task or provide a `label_column_name` that matches the value path."
             )
-        assert label_key in row_schema[bounding_boxes_column_key].values[bounding_boxes_list_key].values, (
-            f"Bounding box list '{bounding_boxes_list_key}' in column '{bounding_boxes_column_key}' "
-            f"does not contain a key '{label_key}'."
-        )
-        assert table.get_value_map(label_column_name) is not None, (
-            f"Unable to get value map for label value path {label_column_name}. Ensure that the table is compatible "
-            "with the detection task or provide a `label_column_name` that matches the value path to the labels."
-        )
+        else:
+            # Auto-detect bounding box column and label path
+            is_bb, bb_column = detect_bounding_box_column(table)
+            assert is_bb and bb_column, "No bounding box column found in the table."
+            detected_path = get_label_path(table, bb_column)
+            assert detected_path is not None, f"Bounding box column '{bb_column}' found but no label field detected."
+            assert table.get_value_map(detected_path) is not None, (
+                f"Unable to get value map for auto-detected label path '{detected_path}'."
+            )
 
     except (AssertionError, KeyError) as e:
         raise ValueError(f"Table with url {table.url} is not compatible with YOLO object detection. {e}") from None
@@ -137,30 +133,17 @@ def check_det_table(
 def yolo_predicted_bounding_box_schema(
     label_value_map: dict[float, tlc.MapElement],
 ) -> tlc.Schema:
-    """Create a 3LC bounding box schema for YOLO.
+    """Create a 3LC bounding box schema for YOLO predicted boxes.
 
-    :param categories: Categories for the current dataset.
-    :returns: The YOLO bounding box schema for predicted boxes.
+    :param label_value_map: Mapping of class indices to label metadata.
+    :returns: A BoundingBoxes2DSchema for predicted boxes.
     """
-
-    bounding_box_schema = tlc.BoundingBoxListSchema(
-        label_value_map,
-        x0_number_role=tlc.NUMBER_ROLE_BB_CENTER_X,
-        x1_number_role=tlc.NUMBER_ROLE_BB_SIZE_X,
-        y0_number_role=tlc.NUMBER_ROLE_BB_CENTER_Y,
-        y1_number_role=tlc.NUMBER_ROLE_BB_SIZE_Y,
-        x0_unit=tlc.UNIT_RELATIVE,
-        y0_unit=tlc.UNIT_RELATIVE,
-        x1_unit=tlc.UNIT_RELATIVE,
-        y1_unit=tlc.UNIT_RELATIVE,
+    return tlc.BoundingBoxes2DSchema(
+        classes=label_value_map,
+        include_per_instance_confidence=True,
         description="Predicted Bounding Boxes",
         writable=False,
-        is_prediction=True,
-        include_segmentation=False,
-        include_iou=False,
     )
-
-    return bounding_box_schema
 
 
 def yolo_loss_schemas(training: bool = False) -> dict[str, tlc.Schema]:
@@ -204,31 +187,45 @@ def construct_bbox_struct(
     image_height: int,
     inverse_label_mapping: dict[int, int] | None = None,
 ) -> dict:
-    """Construct a 3LC bounding box struct from a list of bounding boxes.
+    """Construct a BoundingBoxes2D prediction and serialize to wire format.
 
-    :param predicted_annotations: A list of predicted bounding boxes.
+    :param predicted_annotations: A list of predicted bounding boxes, each with
+        "category_id", "score", and "bbox" (normalized center-xywh) keys.
     :param image_width: The width of the image.
     :param image_height: The height of the image.
     :param inverse_label_mapping: A mapping from predicted label to category id.
+    :returns: A serialized dict suitable for writing to a 3LC Table.
     """
-    bb_list = []
-    for pred in predicted_annotations:
-        label = pred["category_id"]
-        if inverse_label_mapping is not None:
-            label = inverse_label_mapping[label]
-        bb_list.append(
-            {
-                "label": label,
-                "confidence": pred["score"],
-                "x0": pred["bbox"][0],
-                "y0": pred["bbox"][1],
-                "x1": pred["bbox"][2],
-                "y1": pred["bbox"][3],
-            }
+    import numpy as np
+    from tlc.core.data_formats.bb_conversions import cxywh_to_xyxy, denormalize_bbs
+    from tlc.core.data_formats.bounding_boxes_v2 import BoundingBoxes2D
+    from tlc.core.sample_types.registry import SampleTypeRegistry
+
+    if not predicted_annotations:
+        bb2d = BoundingBoxes2D.create_empty(
+            image_width=image_width,
+            image_height=image_height,
+            include_instance_confidences=True,
+        )
+    else:
+        cxywh_norm = np.array([pred["bbox"] for pred in predicted_annotations], dtype=np.float32)
+        xyxy_norm = cxywh_to_xyxy(cxywh_norm)
+        xyxy_abs = denormalize_bbs(xyxy_norm, image_width, image_height)
+
+        labels = []
+        confidences = []
+        for pred in predicted_annotations:
+            label = pred["category_id"]
+            if inverse_label_mapping is not None:
+                label = inverse_label_mapping[label]
+            labels.append(int(label))
+            confidences.append(float(pred["score"]))
+
+        bb2d = BoundingBoxes2D(
+            bbs=xyxy_abs,
+            per_instance_extras={"label": labels, "confidence": confidences},
+            x_max=float(image_width),
+            y_max=float(image_height),
         )
 
-    return {
-        "bb_list": bb_list,
-        "image_width": image_width,
-        "image_height": image_height,
-    }
+    return SampleTypeRegistry.get("bounding_boxes_2d").to_row(bb2d)

@@ -79,14 +79,14 @@ TASK2MODEL = {
     "obb": "yolo26n-obb.pt",
 }
 TASK2LABEL_COLUMN_NAME = {
-    "detect": "bbs.bb_list.label",
+    "detect": "bbs.instances_additional_data.label",
     "classify": "label",
     "segment": "segmentations.instance_properties.label",
     "pose": "keypoints_2d",
     "obb": "oriented_bbs_2d",
 }
 TASK2PREDICTED_LABEL_COLUMN_NAME = {
-    "detect": "bbs_predicted.bb_list.label",
+    "detect": "bbs_predicted.instances_additional_data.label",
     "classify": "predicted",
     "segment": "segmentations_predicted.instance_properties.label",
     "pose": "keypoints_2d_predicted",
@@ -932,12 +932,17 @@ def test_arbitrary_class_indices(task) -> None:  # noqa: C901
         if task == "detect":
             bbs_edits = []
             for i, row in enumerate(edited_schema_table.table_rows):
-                bb_list_override = []
-                for bb in row["bbs"]["bb_list"]:
-                    bb_list_override.append({**bb, "label": label_map[bb["label"]]})
-
+                remapped_labels = [label_map[label] for label in row["bbs"]["instances_additional_data"]["label"]]
                 bbs_edits.append([i])
-                bbs_edits.append({**row["bbs"], "bb_list": bb_list_override})
+                bbs_edits.append(
+                    {
+                        **row["bbs"],
+                        "instances_additional_data": {
+                            **row["bbs"]["instances_additional_data"],
+                            "label": remapped_labels,
+                        },
+                    }
+                )
 
             edited_tables[split] = tlc.EditedTable(
                 url=edited_schema_table.url.create_sibling(f"edited_value_map_and_values_{task}"),
@@ -998,10 +1003,10 @@ def test_arbitrary_class_indices(task) -> None:  # noqa: C901
 
     if task == "detect":
         for i in range(len(metrics_df)):
-            assert all(bb["label"] <= 0 for bb in metrics_df["bbs_predicted"][i]["bb_list"])
+            assert all(label <= 0 for label in metrics_df["bbs_predicted"][i]["instances_additional_data"]["label"])
 
         # Verify that a giraffe is predicted in the second image
-        predicted_label = np.sqrt(-metrics_df["bbs_predicted"][1]["bb_list"][0]["label"])
+        predicted_label = np.sqrt(-metrics_df["bbs_predicted"][1]["instances_additional_data"]["label"][0])
         assert table_value_map[predicted_label]["internal_name"] == "giraffe"
     elif task == "classify":
         assert all(label <= 0 for label in metrics_df[predicted_label_column_name]), "Predicted label indices mismatch"
