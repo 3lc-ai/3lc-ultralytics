@@ -221,7 +221,7 @@ def construct_bbox_struct(
             confidences.append(float(pred["score"]))
 
         bb2d = BoundingBoxes2D(
-            bbs=xyxy_abs,
+            bboxes=xyxy_abs,
             per_instance_extras={"label": labels, "confidence": confidences},
             x_max=float(image_width),
             y_max=float(image_height),
