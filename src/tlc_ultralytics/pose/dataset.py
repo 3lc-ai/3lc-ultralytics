@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 from tlc.core.builtins.constants import IMAGE, KEYPOINTS_2D
-from tlc.core.sample_types.registry import SampleTypeRegistry
+from tlc.core.data_formats.keypoints import Keypoints2D
 
 from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
 
@@ -42,7 +42,7 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
 
         # Desired fixed K from dataset config (default 17) for empty-case shapes
         kpt_shape = self.data.get("kpt_shape")
-        instances = SampleTypeRegistry.get("keypoints_2d").from_row(label_column_value)
+        instances = Keypoints2D.from_row(label_column_value)
 
         # Image dimensions and raw arrays
         H = float(instances.image_height)
@@ -50,7 +50,7 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
         labels = instances.instance_labels.astype(np.int32, copy=False)  # (N,)
         bboxes_xyxy = instances.bboxes.astype(np.float32, copy=False)  # (N,4) [x_min, y_min, x_max, y_max]
         kxy = instances.keypoints.astype(np.float32, copy=False)  # (N,K,2)
-        vis = instances.keypoint_visibilities  # (N,K) or None
+        vis = instances.keypoint_visibilities  # (N,K) ndarray; empty (0, 0) when no visibilities
 
         # Normalize keypoints to [0,1]
         kxy[..., 0] /= W
@@ -74,8 +74,8 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
             mapped_list = [self._class_map.get(int(v), int(v)) for v in labels.tolist()]
             cls_arr = np.asarray(mapped_list, dtype=np.float32).reshape(-1, 1)
 
-            # Build (N,K,3) with visibilities
-            if vis is None:
+            # Build (N,K,3) with visibilities (empty default → assume all visible).
+            if vis.size == 0:
                 vis_arr = np.ones((kxy.shape[0], kxy.shape[1], 1), dtype=np.float32)
             else:
                 vis_arr = vis.astype(np.float32, copy=False).reshape(kxy.shape[0], kxy.shape[1], 1)

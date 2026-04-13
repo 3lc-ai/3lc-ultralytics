@@ -197,9 +197,8 @@ def construct_bbox_struct(
     :returns: A serialized dict suitable for writing to a 3LC Table.
     """
     import numpy as np
-    from tlc.core.data_formats.bb_conversions import cxywh_to_xyxy, denormalize_bbs
+    from tlc.core.data_formats.bb_conversions import denormalize_bbs
     from tlc.core.data_formats.bounding_boxes_v2 import BoundingBoxes2D
-    from tlc.core.sample_types.registry import SampleTypeRegistry
 
     if not predicted_annotations:
         bb2d = BoundingBoxes2D.create_empty(
@@ -207,9 +206,10 @@ def construct_bbox_struct(
             image_height=image_height,
         )
     else:
+        # Predictions arrive in normalized cxywh (YOLO format); denormalize layout-preserving,
+        # then let the constructor convert cxywh → xyxy via bbox_format.
         cxywh_norm = np.array([pred["bbox"] for pred in predicted_annotations], dtype=np.float32)
-        xyxy_norm = cxywh_to_xyxy(cxywh_norm)
-        xyxy_abs = denormalize_bbs(xyxy_norm, image_width, image_height)
+        cxywh_abs = denormalize_bbs(cxywh_norm, image_width, image_height)
 
         labels = []
         confidences = []
@@ -221,10 +221,12 @@ def construct_bbox_struct(
             confidences.append(float(pred["score"]))
 
         bb2d = BoundingBoxes2D(
-            bboxes=xyxy_abs,
-            per_instance_extras={"label": labels, "confidence": confidences},
+            bboxes=cxywh_abs,
+            bbox_format="cxywh",
+            labels=labels,
+            confidences=confidences,
             x_max=float(image_width),
             y_max=float(image_height),
         )
 
-    return SampleTypeRegistry.get("bounding_boxes_2d").to_row(bb2d)
+    return bb2d.to_row()
