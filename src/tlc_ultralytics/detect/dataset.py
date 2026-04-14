@@ -9,7 +9,7 @@ from tlc.core.data_formats.bb_conversions import (
     normalize_bbs,
     xyxy_to_cxywh,
 )
-from tlc.core.data_formats.bounding_boxes_v2 import BoundingBoxes2D
+from tlc.core.data_formats.bounding_boxes import BoundingBoxes2D
 from tlc.core.data_formats.segmentation import SegmentationPolygons
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.data.utils import check_file_speeds, segments2boxes

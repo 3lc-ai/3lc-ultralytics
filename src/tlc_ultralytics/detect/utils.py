@@ -198,7 +198,7 @@ def construct_bbox_struct(
     """
     import numpy as np
     from tlc.core.data_formats.bb_conversions import denormalize_bbs
-    from tlc.core.data_formats.bounding_boxes_v2 import BoundingBoxes2D
+    from tlc.core.data_formats.bounding_boxes import BoundingBoxes2D
 
     if not predicted_annotations:
         bb2d = BoundingBoxes2D.create_empty(
