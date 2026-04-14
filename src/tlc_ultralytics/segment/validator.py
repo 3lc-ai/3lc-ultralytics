@@ -1,4 +1,3 @@
-import numpy as np
 import tlc
 from ultralytics.models.yolo.segment.val import SegmentationValidator
 from ultralytics.utils import ops
@@ -42,22 +41,14 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         return {tlc.PREDICTED_SEGMENTATIONS: self._process_predictions(preds, batch)}
 
     def _build_annotation(self, scaled, mapped_classes, h, w):
-        masks = scaled["masks"].cpu().numpy()
-        masks = np.transpose(masks, (1, 2, 0))  # (N, H, W) -> (H, W, N)
-        return {
-            tlc.IMAGE_HEIGHT: h,
-            tlc.IMAGE_WIDTH: w,
-            tlc.INSTANCE_PROPERTIES: {
-                tlc.LABEL: mapped_classes,
-                tlc.CONFIDENCE: scaled["conf"].tolist(),
-            },
-            tlc.MASKS: masks,
-        }
+        return tlc.SegmentationMasks(
+            image_height=h,
+            image_width=w,
+            masks=scaled["masks"].cpu().numpy(),  # PyTorch-native (N, H, W); transposed by mask_format below
+            mask_format="nhw",
+            labels=mapped_classes,
+            confidences=scaled["conf"].tolist(),
+        )
 
     def _empty_annotation(self, h, w):
-        return {
-            tlc.IMAGE_HEIGHT: h,
-            tlc.IMAGE_WIDTH: w,
-            tlc.INSTANCE_PROPERTIES: {tlc.LABEL: [], tlc.CONFIDENCE: []},
-            tlc.MASKS: np.zeros((h, w, 0), dtype=np.uint8),
-        }
+        return tlc.SegmentationMasks.create_empty(image_height=h, image_width=w)

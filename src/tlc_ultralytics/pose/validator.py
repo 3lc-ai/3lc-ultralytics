@@ -98,8 +98,8 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
                 keypoints=kxy,
                 bbox=scaled["bboxes"][j].cpu().numpy().astype(np.float32).tolist(),
                 label=int(mapped_classes[j]),
-                confidence=kconf,
-                instance_confidence=float(scaled["conf"][j]),
+                keypoint_confidences=kconf,
+                confidence=float(scaled["conf"][j]),
             )
         return instances
 

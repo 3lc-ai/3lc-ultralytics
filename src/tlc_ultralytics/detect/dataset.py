@@ -9,7 +9,8 @@ from tlc.core.data_formats.bb_conversions import (
     normalize_bbs,
     xyxy_to_cxywh,
 )
-from tlc.core.sample_types.registry import SampleTypeRegistry
+from tlc.core.data_formats.bounding_boxes import BoundingBoxes2D
+from tlc.core.data_formats.segmentation import SegmentationPolygons
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.data.utils import check_file_speeds, segments2boxes
 from ultralytics.utils import LOGGER, colorstr
@@ -212,7 +213,7 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
         if self._is_legacy_bb:
             bb2d = legacy_bb_row_to_bounding_boxes_2d(raw, self._bb_schema)
         else:
-            bb2d = SampleTypeRegistry.get("bounding_boxes_2d").from_row(raw)
+            bb2d = BoundingBoxes2D.from_row(raw)
 
         height = bb2d.image_height
         width = bb2d.image_width
@@ -326,7 +327,7 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
         # Use sample view to get polygons, row is row view
         row = self.table.table_rows[example_id]
         raw_segmentations = row[column_name]
-        segmentations = SampleTypeRegistry.get("segmentation_polygons", relative=True).from_row(raw_segmentations)
+        segmentations = SegmentationPolygons.from_row(raw_segmentations, relative=True)
         height, width = segmentations.image_height, segmentations.image_width
         classes = []
         segments = []
