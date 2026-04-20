@@ -55,6 +55,10 @@ def _reduce_instance_embeddings(
     if method == "pacmap":
         import pacmap
 
+        # PaCMAP needs save_tree=True for the fitted reducer to support .transform()
+        # on new data. We rely on that for GT embeddings and cross-split projection,
+        # so default it on (but let callers override via reducer_args).
+        reducer_args.setdefault("save_tree", True)
         reducer = pacmap.PaCMAP(n_components=n_components, **reducer_args)
         reduced = reducer.fit_transform(all_embeddings)
     elif method == "umap":
