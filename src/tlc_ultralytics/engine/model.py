@@ -129,15 +129,18 @@ class YOLO(YOLOBase):
         if not settings.run_description:
             settings.run_description = DEFAULT_COLLECT_RUN_DESCRIPTION
 
-        # Store progress callback on settings so the validator can use it during reduction
+        # TEMP(instance-embeddings): stash the progress callback on settings so the
+        # in-process reducer can report fit/transform phases. Remove when native
+        # 3LC reduction of variable-length embedding list columns ships upstream.
         if progress_callback is not None:
             settings._reduction_progress_callback = progress_callback
 
         results_dict = {}
 
-        # Ensure train split runs first so its fitted reducer is reused by val.
-        # The validator stores the fitted reducer on settings._fitted_instance_reducer
-        # after fit_transform; subsequent splits see it and use transform instead.
+        # TEMP(instance-embeddings): run the train split first so its fitted reducer
+        # (stored on settings._fitted_instance_reducer) is reused when transforming
+        # subsequent splits. Remove the ordering when upstream reduction lands —
+        # 3LC's native flow handles cross-split fit/transform itself.
         if data and splits:
             ordered = sorted(splits, key=lambda s: 0 if s == "train" else 1)
             for split in ordered:
