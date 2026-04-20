@@ -237,6 +237,7 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
             def make_hook(idx):
                 def hook_fn(_module, _input, output):
                     level_features[idx] = output
+
                 return hook_fn
 
             self._hook_handles.append(target.register_forward_hook(make_hook(level_idx)))
@@ -248,7 +249,8 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
             target_size = level_features[0].shape[2:]
             resized = [
                 F.interpolate(f, size=target_size, mode="bilinear", align_corners=False)
-                if f.shape[2:] != target_size else f
+                if f.shape[2:] != target_size
+                else f
                 for f in level_features
             ]
             self_ref._instance_feature_map = torch.cat(resized, dim=1)

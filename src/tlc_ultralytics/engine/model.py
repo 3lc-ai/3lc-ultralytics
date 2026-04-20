@@ -135,45 +135,49 @@ class YOLO(YOLOBase):
         if progress_callback is not None:
             settings._reduction_progress_callback = progress_callback
 
-        results_dict = {}
+        # Build a uniform {split: val_kwargs} mapping so both the data+splits and
+        # tables branches share a single iteration loop.
+        if data and splits:
+            split_val_kwargs = {s: {"data": data, "split": s} for s in splits}
+        else:
+            assert tables is not None
+            split_val_kwargs = {s: {"table": t} for s, t in tables.items()}
 
         # TEMP(instance-embeddings): run the train split first so its fitted reducer
         # (stored on settings._fitted_instance_reducer) is reused when transforming
         # subsequent splits. Remove the ordering when upstream reduction lands —
         # 3LC's native flow handles cross-split fit/transform itself.
-        if data and splits:
-            ordered = sorted(splits, key=lambda s: 0 if s == "train" else 1)
-            for split in ordered:
-                LOGGER.info(TLC_COLORSTR + f"Collecting metrics for split: {split}")
-                if progress_callback:
-                    progress_callback("split_start", 0, 0)
-                results_dict[split] = self.val(data=data, split=split, settings=settings, **kwargs)
-        elif tables:
-            ordered = sorted(tables.keys(), key=lambda s: 0 if s == "train" else 1)
-            for split in ordered:
-                LOGGER.info(TLC_COLORSTR + f"Collecting metrics for split: {split}")
-                if progress_callback:
-                    progress_callback("split_start", 0, 0)
-                results_dict[split] = self.val(table=tables[split], settings=settings, **kwargs)
+        ordered_splits = sorted(split_val_kwargs, key=lambda s: 0 if s == "train" else 1)
 
-        # Reduce image embeddings (server-side, across all splits)
-        if settings and settings.image_embeddings_dim > 0:
+        results_dict = {}
+        for split in ordered_splits:
+            LOGGER.info(TLC_COLORSTR + f"Collecting metrics for split: {split}")
             if progress_callback:
-                progress_callback("image_embeddings", 0, 0)
+                progress_callback("split_start", 0, 0)
+            results_dict[split] = self.val(settings=settings, **split_val_kwargs[split], **kwargs)
 
-            reduce_embeddings(
-                tlc.active_run(),
-                method=settings.image_embeddings_reducer,
-                n_components=settings.image_embeddings_dim,
-                reducer_args=settings.image_embeddings_reducer_args,
-            )
-
-            if progress_callback:
-                progress_callback("image_embeddings_done", 0, 0)
+        if settings.image_embeddings_dim > 0:
+            self._reduce_image_embeddings(settings, progress_callback)
 
         tlc.active_run().set_status_completed()
 
         return results_dict
+
+    @staticmethod
+    def _reduce_image_embeddings(settings: Settings, progress_callback: object | None) -> None:
+        """Reduce image embeddings server-side across all collected splits."""
+        if progress_callback:
+            progress_callback("image_embeddings", 0, 0)
+
+        reduce_embeddings(
+            tlc.active_run(),
+            method=settings.image_embeddings_reducer,
+            n_components=settings.image_embeddings_dim,
+            reducer_args=settings.image_embeddings_reducer_args,
+        )
+
+        if progress_callback:
+            progress_callback("image_embeddings_done", 0, 0)
 
 
 class TLCYOLO(YOLO):
