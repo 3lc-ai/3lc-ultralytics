@@ -27,7 +27,7 @@ module-name = "tlc_ultralytics"
 
 [dependency-groups]
 dev = [
-    "pytest>=8.3.5",
+    "pytest>=9.0.3",
     "pytest-mock>=3.15.1",
     "pytest-xdist>=3.8.0",
     "ruff>=0.15.0,<0.16",
@@ -38,7 +38,3 @@ dev = [
 default-groups = ["dev"]
 required-version = ">=0.7.19"
 
-[tool.uv.sources]
-"3lc" = [
-    { path = "../tlc-monorepo", editable=true },
-]
