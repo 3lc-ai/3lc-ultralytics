@@ -38,3 +38,7 @@ dev = [
 default-groups = ["dev"]
 required-version = ">=0.7.19"
 
+[tool.uv.sources]
+"3lc" = [
+    { path = "../tlc-monorepo", editable=true },
+]
