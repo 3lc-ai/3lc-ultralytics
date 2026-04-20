@@ -519,6 +519,7 @@ class TLCValidatorMixin(BaseValidator):
                 method=self._settings.image_embeddings_reducer,
                 n_components=self._settings.instance_embeddings_dim,
                 progress_callback=progress_cb,
+                **(self._settings.image_embeddings_reducer_args or {}),
             )
             # Store fitted reducer for subsequent splits to reuse
             if reducer is not None:
