@@ -21,15 +21,15 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         emb_schemas = {}
         if self._settings.instance_embeddings_dim > 0:
-            from tlc_ultralytics.utils.schemas import instance_embeddings_list_schema
+            from tlc_ultralytics.utils.schemas import _instance_embeddings_list_schema
 
             dim = self._settings.instance_embeddings_dim
-            emb_schemas["predicted_instance_embedding"] = instance_embeddings_list_schema(
+            emb_schemas["predicted_instance_embedding"] = _instance_embeddings_list_schema(
                 dim, display_name=f"Predicted Instance Embedding ({dim}D)"
             )
 
             if self._settings.ground_truth_instance_embeddings:
-                emb_schemas["ground_truth_instance_embedding"] = instance_embeddings_list_schema(
+                emb_schemas["ground_truth_instance_embedding"] = _instance_embeddings_list_schema(
                     dim, display_name=f"Ground Truth Instance Embedding ({dim}D)"
                 )
 
@@ -59,7 +59,7 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
 
     def _extract_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
         """Extract per-instance embeddings for OBB using oriented box masks."""
-        from tlc_ultralytics.utils.embeddings import extract_instance_embeddings_mask
+        from tlc_ultralytics.utils.embeddings import _extract_instance_embeddings_mask
 
         feature_map = self._instance_feature_map
 
@@ -89,7 +89,7 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
             obb_masks = _obbs_to_masks(filtered_bboxes, h_in, w_in, device=feature_map.device)
             masks_list.append(obb_masks)
 
-        return extract_instance_embeddings_mask(feature_map, masks_list, image_sizes)
+        return _extract_instance_embeddings_mask(feature_map, masks_list, image_sizes)
 
     def _inject_instance_embeddings(self, batch_metrics, reduced_embeddings):
         """Inject reduced predicted instance embeddings as a top-level metric column."""
@@ -103,7 +103,7 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
 
     def _extract_gt_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
         """Extract per-instance embeddings for ground-truth OBBs using oriented box masks."""
-        from tlc_ultralytics.utils.embeddings import extract_instance_embeddings_mask
+        from tlc_ultralytics.utils.embeddings import _extract_instance_embeddings_mask
 
         feature_map = self._instance_feature_map
 
@@ -123,7 +123,7 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
                 obb_masks = _obbs_to_masks(gt_bboxes, h_in, w_in, device=feature_map.device)
                 masks_list.append(obb_masks)
 
-        return extract_instance_embeddings_mask(feature_map, masks_list, image_sizes)
+        return _extract_instance_embeddings_mask(feature_map, masks_list, image_sizes)
 
     def _inject_gt_instance_embeddings(self, batch_metrics, reduced_embeddings):
         """Inject reduced GT instance embeddings as a top-level metric column."""
