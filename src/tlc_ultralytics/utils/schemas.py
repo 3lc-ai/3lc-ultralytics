@@ -30,30 +30,16 @@ def training_phase_schema() -> tlc.Schema:
     )
 
 
-def instance_embeddings_schema(n_components: int, display_name: str | None = None) -> tlc.Schema:
-    """Create a 3LC schema for per-instance embeddings (reduced).
+def _instance_embeddings_list_schema(n_components: int, display_name: str | None = None) -> tlc.Schema:
+    """TEMP(instance-embeddings): schema for a list of reduced per-instance embeddings.
 
-    :param n_components: The number of reduced dimensions (2 or 3).
-    :param display_name: Optional display name override.
-    :returns: The instance embeddings schema.
-    """
-    return tlc.Schema(
-        value=tlc.Float32Value(number_role=tlc.NUMBER_ROLE_NN_EMBEDDING),
-        size0=tlc.DimensionNumericValue(n_components, n_components),
-        display_name=display_name or f"Instance Embedding ({n_components}D)",
-    )
+    Two-dimensional schema: size0 is the fixed reduced-embedding dimension, size1
+    is the variable-length instance count per image.
 
-
-def instance_embeddings_list_schema(n_components: int, display_name: str | None = None) -> tlc.Schema:
-    """Create a Schema for a list of per-instance embeddings.
-
-    Returns a two-dimensional schema: size0 is the fixed embedding dimension
-    (so the Dashboard recognizes it as an N-D embedding), and size1 is the
-    variable-length instance count.
-
-    Suitable for use via add_sub_schema on instance_properties schemas
-    (e.g., InstanceSegmentationMasks) and in per_instance_schemas dicts
-    (e.g., Geometry2DSchema, Keypoints2DSchema).
+    When upstream 3LC supports native reduction of variable-length embedding list
+    columns, this schema should gain ``number_role=NUMBER_ROLE_NN_EMBEDDING`` on
+    its ``Float32Value`` and the in-process reducer in ``_instance_reduce.py``
+    can be removed.
 
     :param n_components: The number of reduced dimensions (2 or 3).
     :param display_name: Optional display name override.

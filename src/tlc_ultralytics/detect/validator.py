@@ -56,15 +56,15 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
 
         emb_schemas = {}
         if self._settings.instance_embeddings_dim > 0:
-            from tlc_ultralytics.utils.schemas import instance_embeddings_list_schema
+            from tlc_ultralytics.utils.schemas import _instance_embeddings_list_schema
 
             dim = self._settings.instance_embeddings_dim
-            emb_schemas["predicted_instance_embedding"] = instance_embeddings_list_schema(
+            emb_schemas["predicted_instance_embedding"] = _instance_embeddings_list_schema(
                 dim, display_name=f"Predicted Instance Embedding ({dim}D)"
             )
 
             if self._settings.ground_truth_instance_embeddings:
-                emb_schemas["ground_truth_instance_embedding"] = instance_embeddings_list_schema(
+                emb_schemas["ground_truth_instance_embedding"] = _instance_embeddings_list_schema(
                     dim, display_name=f"Ground Truth Instance Embedding ({dim}D)"
                 )
 
@@ -263,7 +263,7 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
 
     def _extract_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
         """Extract per-instance embeddings from the captured feature map using bboxes."""
-        from tlc_ultralytics.utils.embeddings import extract_instance_embeddings_bbox
+        from tlc_ultralytics.utils.embeddings import _extract_instance_embeddings_bbox
 
         feature_map = self._instance_feature_map
 
@@ -292,7 +292,7 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
 
             bboxes_list.append(filtered_bboxes)
 
-        return extract_instance_embeddings_bbox(feature_map, bboxes_list, image_sizes)
+        return _extract_instance_embeddings_bbox(feature_map, bboxes_list, image_sizes)
 
     def _inject_instance_embeddings(self, batch_metrics, reduced_embeddings):
         """Inject reduced predicted instance embeddings as a top-level metric column."""
@@ -306,7 +306,7 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
 
     def _extract_gt_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
         """Extract per-instance embeddings for ground-truth bboxes."""
-        from tlc_ultralytics.utils.embeddings import extract_instance_embeddings_bbox
+        from tlc_ultralytics.utils.embeddings import _extract_instance_embeddings_bbox
 
         feature_map = self._instance_feature_map
 
@@ -324,7 +324,7 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
             else:
                 bboxes_list.append(gt_bboxes.to(feature_map.device))
 
-        return extract_instance_embeddings_bbox(feature_map, bboxes_list, image_sizes)
+        return _extract_instance_embeddings_bbox(feature_map, bboxes_list, image_sizes)
 
     def _inject_gt_instance_embeddings(self, batch_metrics, reduced_embeddings):
         """Inject reduced GT instance embeddings as a top-level metric column."""

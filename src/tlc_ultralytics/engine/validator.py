@@ -83,7 +83,8 @@ class TLCValidatorMixin(BaseValidator):
         self._final_validation = False
         self._hook_handles = []
 
-        # Instance embeddings state
+        # TEMP(instance-embeddings): buffering state for the in-process reducer.
+        # Remove when upstream 3LC reduces variable-length embedding list columns.
         self._instance_feature_map = None
         self._buffered_metrics = []
         self._buffered_raw_instance_embeddings = []
@@ -325,7 +326,9 @@ class TLCValidatorMixin(BaseValidator):
         if RANK >= 0:
             batch_metrics["ddp_rank"] = [RANK] * batch_size
 
-        # Extract and buffer instance embeddings if enabled
+        # TEMP(instance-embeddings): buffer batch so end-of-validation reduction has
+        # all raw embeddings at once. Remove the buffered branch when upstream 3LC
+        # handles variable-length embedding reduction natively.
         if self._settings.instance_embeddings_dim > 0:
             raw_instance_embs = self._extract_instance_embeddings(preds, batch)
             self._buffered_raw_instance_embeddings.extend(raw_instance_embs)
@@ -362,17 +365,17 @@ class TLCValidatorMixin(BaseValidator):
 
         if self._settings.instance_embeddings_dim > 0:
             self._instance_embeddings_channel_size = self._add_instance_embeddings_hook(model)
-            # Schema for instance embeddings is added by subclasses in _get_metrics_schemas
-            # Clear buffers for this validation pass
+            # Schema for instance embeddings is added by subclasses in _get_metrics_schemas.
+            # TEMP(instance-embeddings): clear buffers for this validation pass.
             self._buffered_metrics = []
             self._buffered_raw_instance_embeddings = []
             self._buffered_raw_gt_instance_embeddings = []
 
         if self._settings.ground_truth_instance_embeddings:
-            from tlc_ultralytics.utils.schemas import instance_embeddings_list_schema
+            from tlc_ultralytics.utils.schemas import _instance_embeddings_list_schema
 
             dim = self._settings.instance_embeddings_dim
-            column_schemas["ground_truth_instance_embedding"] = instance_embeddings_list_schema(
+            column_schemas["ground_truth_instance_embedding"] = _instance_embeddings_list_schema(
                 dim, display_name=f"Ground Truth Instance Embedding ({dim}D)"
             )
 
@@ -410,7 +413,7 @@ class TLCValidatorMixin(BaseValidator):
         In DDP mode, gathers metrics_infos and input table URLs from all ranks
         to RANK 0, which then updates the run with all collected data.
         """
-        # If instance embeddings are enabled, reduce and write buffered metrics
+        # TEMP(instance-embeddings): flush buffered metrics through the in-process reducer.
         if self._settings.instance_embeddings_dim > 0 and self._buffered_metrics:
             self._reduce_and_write_buffered_metrics()
 
@@ -468,27 +471,36 @@ class TLCValidatorMixin(BaseValidator):
         self._seen = None
         self._training_phase = None
         self._final_validation = None
+        # TEMP(instance-embeddings): buffering state reset.
         self._instance_feature_map = None
         self._buffered_metrics = []
         self._buffered_raw_instance_embeddings = []
         self._buffered_raw_gt_instance_embeddings = []
 
     def _reduce_and_write_buffered_metrics(self):
-        """Reduce all buffered instance embeddings and write metrics to the writer.
+        """TEMP(instance-embeddings): reduce buffered instance embeddings, write metrics.
 
         If a fitted reducer already exists on ``settings._fitted_instance_reducer``
         (e.g. fitted on the train split during ``collect()``), predicted embeddings
         are *transformed* into that existing space instead of fitting a new one.
         Otherwise a new reducer is fitted and stored on settings for later splits.
+
+        Swap site: when upstream 3LC supports native reduction of variable-length
+        embedding list columns, this whole method goes away — the raw embeddings
+        get written as a NUMBER_ROLE_NN_EMBEDDING column and
+        ``run.reduce_embeddings_by_foreign_table_url`` does the rest.
         """
-        from tlc_ultralytics.utils.embeddings import reduce_instance_embeddings, transform_instance_embeddings
+        from tlc_ultralytics.utils._instance_reduce import (
+            _reduce_instance_embeddings,
+            _transform_instance_embeddings,
+        )
 
         progress_cb = getattr(self._settings, "_reduction_progress_callback", None)
         existing_reducer = getattr(self._settings, "_fitted_instance_reducer", None)
 
         if existing_reducer is not None:
             # Use existing reducer (e.g. val split reusing train's fitted space)
-            reduced_per_image = transform_instance_embeddings(
+            reduced_per_image = _transform_instance_embeddings(
                 self._buffered_raw_instance_embeddings,
                 existing_reducer,
                 n_components=self._settings.instance_embeddings_dim,
@@ -498,7 +510,7 @@ class TLCValidatorMixin(BaseValidator):
             reducer = existing_reducer
         else:
             # Fit new reducer (train split or standalone validation)
-            reduced_per_image, reducer = reduce_instance_embeddings(
+            reduced_per_image, reducer = _reduce_instance_embeddings(
                 self._buffered_raw_instance_embeddings,
                 method=self._settings.image_embeddings_reducer,
                 n_components=self._settings.instance_embeddings_dim,
@@ -512,7 +524,7 @@ class TLCValidatorMixin(BaseValidator):
         gt_reduced_per_image = None
         if self._settings.ground_truth_instance_embeddings and self._buffered_raw_gt_instance_embeddings:
             if reducer is not None:
-                gt_reduced_per_image = transform_instance_embeddings(
+                gt_reduced_per_image = _transform_instance_embeddings(
                     self._buffered_raw_gt_instance_embeddings,
                     reducer,
                     n_components=self._settings.instance_embeddings_dim,
