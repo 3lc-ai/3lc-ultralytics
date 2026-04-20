@@ -244,14 +244,17 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
 
         def combine_hook(_module, _input, _output):
             self_ref = weak_self()
-            if self_ref is None or level_features[0] is None:
+            if self_ref is None:
                 return
-            target_size = level_features[0].shape[2:]
+            features = [f for f in level_features if f is not None]
+            if not features:
+                return
+            target_size = features[0].shape[2:]
             resized = [
                 F.interpolate(f, size=target_size, mode="bilinear", align_corners=False)
                 if f.shape[2:] != target_size
                 else f
-                for f in level_features
+                for f in features
             ]
             self_ref._instance_feature_map = torch.cat(resized, dim=1)
 
