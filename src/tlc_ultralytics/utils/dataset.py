@@ -348,7 +348,7 @@ def _check_tables(tables: object):
     for key, table in tables.items():
         if not isinstance(table, (str, Path, tlc.Url, tlc.Table)):
             msg = (
-                "When providing tables directly, they must be a tlc.Table or a URL to a tlc.Table. ",
+                "When providing tables directly, they must be a tlc.Table or a URL to a tlc.Table. "
                 f"Got {type(table)} for split {key}.",
             )
             raise ValueError(msg)
