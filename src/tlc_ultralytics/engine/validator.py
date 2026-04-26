@@ -530,10 +530,15 @@ class TLCValidatorMixin(BaseValidator):
                     for _ in self._buffered_raw_gt_instance_embeddings
                 ]
 
-        # Inject reduced embeddings into buffered predictions and write
+        # Inject reduced embeddings into buffered predictions and write.
+        # Pop each batch_metrics off the buffer as it's handed to the writer so
+        # the heavy fields (e.g. segmentation masks) are freed once they've been
+        # consumed, rather than held alongside the writer's growing pyarrow
+        # buffer for the whole pass.
         emb_idx = 0
         gt_emb_idx = 0
-        for batch_metrics in self._buffered_metrics:
+        while self._buffered_metrics:
+            batch_metrics = self._buffered_metrics.pop(0)
             batch_size = len(batch_metrics[tlc.EXAMPLE_ID])
             batch_reduced = reduced_per_image[emb_idx : emb_idx + batch_size]
             emb_idx += batch_size
@@ -546,6 +551,7 @@ class TLCValidatorMixin(BaseValidator):
                 self._inject_gt_instance_embeddings(batch_metrics, gt_batch_reduced)
 
             self._metrics_writer.add_batch(batch_metrics)
+            del batch_metrics
 
     def _write_per_class_metrics_tables(self) -> None:
         if self.args.task not in ("detect", "segment", "obb"):
