@@ -6,7 +6,7 @@ import numpy as np
 from tlc.core.builtins.constants.column_names import BOUNDING_BOX_LIST
 from tlc.core.data_formats.bb_conversions import (
     legacy_bb_row_to_bounding_boxes_2d,
-    normalize_bbs,
+    normalize_bbs_2d,
     xyxy_to_cxywh,
 )
 from tlc.core.data_formats.bounding_boxes import BoundingBoxes2D
@@ -215,8 +215,8 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
         else:
             bb2d = BoundingBoxes2D.from_row(raw)
 
-        height = bb2d.image_height
-        width = bb2d.image_width
+        height = bb2d.y_max - (bb2d.y_min or 0)
+        width = bb2d.x_max - (bb2d.x_min or 0)
 
         if bb2d.num_instances == 0 or bb2d.instance_labels is None:
             return {
@@ -232,7 +232,7 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
             }
 
         # Normalize to [0,1] and convert to centered XYWH (what YOLO expects)
-        normalized = normalize_bbs(bb2d.bboxes, width, height)
+        normalized = normalize_bbs_2d(bb2d.bboxes, width, height)
         cxywh = xyxy_to_cxywh(normalized)
 
         # Filter boxes with non-positive width or height and apply class map

@@ -45,8 +45,8 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
         instances = Keypoints2D.from_row(label_column_value)
 
         # Image dimensions and raw arrays
-        H = float(instances.image_height)
-        W = float(instances.image_width)
+        H = float(instances.y_max - (instances.y_min or 0))
+        W = float(instances.x_max - (instances.x_min or 0))
         labels = instances.instance_labels.astype(np.int32, copy=False)  # (N,)
         bboxes_xyxy = instances.bboxes.astype(np.float32, copy=False)  # (N,4) [x_min, y_min, x_max, y_max]
         kxy = instances.keypoints.astype(np.float32, copy=False)  # (N,K,2)
@@ -83,7 +83,7 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
 
         return {
             "im_file": im_file,
-            "shape": (round(instances.image_height), round(instances.image_width)),
+            "shape": (round(H), round(W)),
             "cls": cls_arr,
             "bboxes": bboxes_arr,
             "segments": [],

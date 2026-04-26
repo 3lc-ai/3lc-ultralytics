@@ -197,7 +197,7 @@ def construct_bbox_struct(
     :returns: A serialized dict suitable for writing to a 3LC Table.
     """
     import numpy as np
-    from tlc.core.data_formats.bb_conversions import denormalize_bbs
+    from tlc.core.data_formats.bb_conversions import denormalize_bbs_2d
     from tlc.core.data_formats.bounding_boxes import BoundingBoxes2D
 
     if not predicted_annotations:
@@ -209,7 +209,7 @@ def construct_bbox_struct(
         # Predictions arrive in normalized cxywh (YOLO format); denormalize layout-preserving,
         # then let the constructor convert cxywh → xyxy via bbox_format.
         cxywh_norm = np.array([pred["bbox"] for pred in predicted_annotations], dtype=np.float32)
-        cxywh_abs = denormalize_bbs(cxywh_norm, image_width, image_height)
+        cxywh_abs = denormalize_bbs_2d(cxywh_norm, image_width, image_height)
 
         labels = []
         confidences = []
