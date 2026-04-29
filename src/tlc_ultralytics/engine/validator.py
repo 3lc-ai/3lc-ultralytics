@@ -26,6 +26,7 @@ from tlc_ultralytics.constants import (
 from tlc_ultralytics.engine.utils import _complete_label_column_name, _handle_deprecated_column_name
 from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import image_embeddings_schema, training_phase_schema
+from tlc_ultralytics.utils.schemas import _instance_embeddings_list_schema, _raw_instance_embeddings_schema
 
 
 def execute_when_collecting(method):
@@ -83,12 +84,14 @@ class TLCValidatorMixin(BaseValidator):
         self._final_validation = False
         self._hook_handles = []
 
-        # TEMP(instance-embeddings): buffering state for the in-process reducer.
-        # Remove when upstream 3LC reduces variable-length embedding list columns.
+        # TEMP(instance-embeddings): the cls-head hook stashes its captured feature
+        # map here every forward pass; raw embeddings are extracted from it during
+        # _update_metrics and discarded once written. The two `_raw_*_emb` lists
+        # hold the per-image raw vectors (small — ~hundreds of MB at COCO-train
+        # scale) that the reducer fits on at the end of validation.
         self._instance_feature_map = None
-        self._buffered_metrics = []
-        self._buffered_raw_instance_embeddings = []
-        self._buffered_raw_gt_instance_embeddings = []
+        self._raw_pred_emb: list[np.ndarray] = []
+        self._raw_gt_emb: list[np.ndarray] = []
 
         super().__init__(*args, **kwargs)
 
@@ -259,22 +262,8 @@ class TLCValidatorMixin(BaseValidator):
         """
         raise NotImplementedError("Subclasses must implement this method.")
 
-    def _inject_instance_embeddings(self, batch_metrics, reduced_embeddings):
-        """Inject reduced instance embeddings into the prediction struct.
-
-        Subclasses must implement this for their specific prediction format.
-        """
-        raise NotImplementedError("Subclasses must implement this method.")
-
     def _extract_gt_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
         """Extract per-instance raw embeddings for ground-truth annotations.
-
-        Subclasses must implement this for their specific GT annotation format.
-        """
-        raise NotImplementedError("Subclasses must implement this method.")
-
-    def _inject_gt_instance_embeddings(self, batch_metrics, reduced_embeddings):
-        """Inject reduced ground-truth instance embeddings as a top-level metric column.
 
         Subclasses must implement this for their specific GT annotation format.
         """
@@ -301,8 +290,11 @@ class TLCValidatorMixin(BaseValidator):
         In DDP mode, each rank collects metrics for its portion of the data.
         These are gathered to RANK 0 in _post_validation.
 
-        When instance_embeddings_dim > 0, metrics are buffered instead of
-        being written to the MetricsTableWriter immediately.
+        When instance_embeddings_dim > 0, raw per-instance embeddings are
+        written inline as ``predicted_instance_embedding_raw`` / ``..._raw_gt``
+        and held in a small in-RAM list for fitting the reducer at end-of-pass.
+        Heavy fields like segmentation masks RLE-encode at handoff via
+        ``MetricsTableWriter.add_batch``, so peak memory stays bounded.
         """
         batch_size = self._infer_batch_size(preds, batch)
 
@@ -326,21 +318,24 @@ class TLCValidatorMixin(BaseValidator):
         if RANK >= 0:
             batch_metrics["ddp_rank"] = [RANK] * batch_size
 
-        # TEMP(instance-embeddings): buffer batch so end-of-validation reduction has
-        # all raw embeddings at once. Remove the buffered branch when upstream 3LC
-        # handles variable-length embedding reduction natively.
+        # TEMP(instance-embeddings): write raw vectors inline; the end-of-pass
+        # rewrite swaps them for the reduced column. This goes away when core
+        # 3LC reduces variable-length embedding list columns server-side.
         if self._settings.instance_embeddings_dim > 0:
             raw_instance_embs = self._extract_instance_embeddings(preds, batch)
-            self._buffered_raw_instance_embeddings.extend(raw_instance_embs)
+            batch_metrics["predicted_instance_embedding_raw"] = [
+                (a.tolist() if a.size else []) for a in raw_instance_embs
+            ]
+            self._raw_pred_emb.extend(raw_instance_embs)
 
             if self._settings.ground_truth_instance_embeddings:
                 raw_gt_embs = self._extract_gt_instance_embeddings(preds, batch)
-                self._buffered_raw_gt_instance_embeddings.extend(raw_gt_embs)
+                batch_metrics["ground_truth_instance_embedding_raw"] = [
+                    (a.tolist() if a.size else []) for a in raw_gt_embs
+                ]
+                self._raw_gt_emb.extend(raw_gt_embs)
 
-            self._buffered_metrics.append(batch_metrics)
-        else:
-            self._metrics_writer.add_batch(batch_metrics)
-
+        self._metrics_writer.add_batch(batch_metrics)
         self._seen += batch_size
 
     @execute_when_collecting
@@ -364,20 +359,21 @@ class TLCValidatorMixin(BaseValidator):
             column_schemas["embeddings"] = image_embeddings_schema(activation_size=activation_size)
 
         if self._settings.instance_embeddings_dim > 0:
-            self._instance_embeddings_channel_size = self._add_instance_embeddings_hook(model)
-            # Schema for instance embeddings is added by subclasses in _get_metrics_schemas.
-            # TEMP(instance-embeddings): clear buffers for this validation pass.
-            self._buffered_metrics = []
-            self._buffered_raw_instance_embeddings = []
-            self._buffered_raw_gt_instance_embeddings = []
-
-        if self._settings.ground_truth_instance_embeddings:
-            from tlc_ultralytics.utils.schemas import _instance_embeddings_list_schema
-
-            dim = self._settings.instance_embeddings_dim
-            column_schemas["ground_truth_instance_embedding"] = _instance_embeddings_list_schema(
-                dim, display_name=f"Ground Truth Instance Embedding ({dim}D)"
+            # TEMP(instance-embeddings): write raw embeddings as a column during
+            # the streaming pass; _post_validation rewrites the table with a
+            # reduced column in their place. Goes away once core 3LC reduces
+            # variable-length embedding list columns server-side.
+            c_raw = self._add_instance_embeddings_hook(model)
+            self._instance_embeddings_channel_size = c_raw
+            column_schemas["predicted_instance_embedding_raw"] = _raw_instance_embeddings_schema(
+                c_raw, display_name="Predicted Instance Embedding (raw)"
             )
+            if self._settings.ground_truth_instance_embeddings:
+                column_schemas["ground_truth_instance_embedding_raw"] = _raw_instance_embeddings_schema(
+                    c_raw, display_name="Ground Truth Instance Embedding (raw)"
+                )
+            self._raw_pred_emb = []
+            self._raw_gt_emb = []
 
         if self._epoch is not None:
             column_schemas[TRAINING_PHASE] = training_phase_schema()
@@ -407,20 +403,33 @@ class TLCValidatorMixin(BaseValidator):
     def _post_validation(self):
         """Clean up the validator after one validation pass.
 
-        When instance_embeddings_dim > 0, reduces all buffered instance embeddings
-        and writes them along with buffered metrics to the MetricsTableWriter.
-
-        In DDP mode, gathers metrics_infos and input table URLs from all ranks
-        to RANK 0, which then updates the run with all collected data.
+        Finalizes the streaming metrics writer. When instance_embeddings_dim > 0,
+        fits a reducer on the accumulated raw embeddings and rewrites the metrics
+        table, replacing the raw embedding columns with reduced ones; the raw
+        table is then deleted from disk and the reduced table is registered on
+        the run. In DDP mode, gathers metrics_infos and input table URLs from
+        all ranks to RANK 0, which then updates the run.
         """
-        # TEMP(instance-embeddings): flush buffered metrics through the in-process reducer.
-        if self._settings.instance_embeddings_dim > 0 and self._buffered_metrics:
-            self._reduce_and_write_buffered_metrics()
-
-        # Each rank finalizes its own metrics writer
-        self._metrics_writer.finalize()
+        # Each rank finalizes its streaming writer. The raw table is written to
+        # disk but NOT yet registered with the run (MetricsTableWriter.finalize
+        # only writes; the integration calls run.update_metrics below).
+        raw_table = self._metrics_writer.finalize()
         metrics_infos = self._metrics_writer.get_written_metrics_infos()
         input_table_url = self.dataloader.dataset.table.url.to_str()
+
+        # TEMP(instance-embeddings): on each rank, fit reducer on local raw
+        # embeddings, rewrite the just-finalized raw table into a reduced one,
+        # and delete the raw table on disk. NOTE: under DDP this fits per-rank,
+        # producing reduced spaces that are not comparable across ranks. Same
+        # behavior as before this refactor — fixing it requires gathering raw
+        # embeddings to RANK 0 for a single fit, broadcasting the fitted
+        # reducer back, and per-rank rewrite. Tracked separately.
+        if self._settings.instance_embeddings_dim > 0:
+            reduced_table, reduced_metrics_infos = self._fit_and_rewrite(raw_table)
+            # The raw table was never registered on the run; just remove it
+            # from disk so we don't leave an orphaned directory under the run.
+            self._delete_table_on_disk(raw_table)
+            metrics_infos = reduced_metrics_infos
 
         # Gather metrics from all ranks to RANK 0 in DDP mode
         input_table_urls: list[str] = []
@@ -471,90 +480,149 @@ class TLCValidatorMixin(BaseValidator):
         self._seen = None
         self._training_phase = None
         self._final_validation = None
-        # TEMP(instance-embeddings): buffering state reset.
         self._instance_feature_map = None
-        self._buffered_metrics = []
-        self._buffered_raw_instance_embeddings = []
-        self._buffered_raw_gt_instance_embeddings = []
+        self._raw_pred_emb = []
+        self._raw_gt_emb = []
 
-    def _reduce_and_write_buffered_metrics(self):
-        """TEMP(instance-embeddings): reduce buffered instance embeddings, write metrics.
+    def _fit_and_rewrite(self, raw_table):
+        """TEMP(instance-embeddings): fit the reducer on accumulated raw
+        embeddings, then rewrite the just-finalized metrics table into a new
+        one with reduced ``predicted_instance_embedding`` /
+        ``ground_truth_instance_embedding`` columns in place of the
+        ``..._raw`` columns.
 
-        If a fitted reducer already exists on ``settings._fitted_instance_reducer``
-        (e.g. fitted on the train split during ``collect()``), predicted embeddings
-        are *transformed* into that existing space instead of fitting a new one.
-        Otherwise a new reducer is fitted and stored on settings for later splits.
+        Iterates *raw_table* sample-by-sample (RLE-encoded heavy fields decode
+        to numpy and re-encode through ``add_batch``; this is bounded memory
+        because only one image's worth of samples is materialized at a time
+        before being flushed in a small batch). Cross-split fit/transform is
+        preserved: if ``settings._fitted_instance_reducer`` is set (from an
+        earlier split in the same ``collect()`` call), reused as-is.
 
-        Swap site: when upstream 3LC supports native reduction of variable-length
-        embedding list columns, this whole method goes away — the raw embeddings
-        get written as a NUMBER_ROLE_NN_EMBEDDING column and
-        ``run.reduce_embeddings_by_foreign_table_url`` does the rest.
+        Goes away when core 3LC reduces variable-length embedding list
+        columns server-side. The raw column it leaves behind is already tagged
+        ``NUMBER_ROLE_NN_EMBEDDING`` for that future flow.
         """
         from tlc_ultralytics.utils._instance_reduce import (
             _reduce_instance_embeddings,
             _transform_instance_embeddings,
         )
 
+        n = self._settings.instance_embeddings_dim
+        method = self._settings.image_embeddings_reducer
+        reducer_args = self._settings.image_embeddings_reducer_args or {}
         progress_cb = getattr(self._settings, "_reduction_progress_callback", None)
         existing_reducer = getattr(self._settings, "_fitted_instance_reducer", None)
 
         if existing_reducer is not None:
-            # Use existing reducer (e.g. val split reusing train's fitted space)
-            reduced_per_image = _transform_instance_embeddings(
-                self._buffered_raw_instance_embeddings,
-                existing_reducer,
-                n_components=self._settings.instance_embeddings_dim,
-                progress_callback=progress_cb,
-                label="predicted",
+            pred_reduced = _transform_instance_embeddings(
+                self._raw_pred_emb, existing_reducer, n_components=n,
+                progress_callback=progress_cb, label="predicted",
             )
             reducer = existing_reducer
         else:
-            # Fit new reducer (train split or standalone validation)
-            reduced_per_image, reducer = _reduce_instance_embeddings(
-                self._buffered_raw_instance_embeddings,
-                method=self._settings.image_embeddings_reducer,
-                n_components=self._settings.instance_embeddings_dim,
-                progress_callback=progress_cb,
-                **(self._settings.image_embeddings_reducer_args or {}),
+            pred_reduced, reducer = _reduce_instance_embeddings(
+                self._raw_pred_emb, method=method, n_components=n,
+                progress_callback=progress_cb, **reducer_args,
             )
-            # Store fitted reducer for subsequent splits to reuse
             if reducer is not None:
                 self._settings._fitted_instance_reducer = reducer
 
-        # Transform GT embeddings with the same fitted reducer
-        gt_reduced_per_image = None
-        if self._settings.ground_truth_instance_embeddings and self._buffered_raw_gt_instance_embeddings:
+        if self._settings.ground_truth_instance_embeddings and self._raw_gt_emb:
             if reducer is not None:
-                gt_reduced_per_image = _transform_instance_embeddings(
-                    self._buffered_raw_gt_instance_embeddings,
-                    reducer,
-                    n_components=self._settings.instance_embeddings_dim,
-                    progress_callback=progress_cb,
-                    label="ground-truth",
+                gt_reduced = _transform_instance_embeddings(
+                    self._raw_gt_emb, reducer, n_components=n,
+                    progress_callback=progress_cb, label="ground-truth",
                 )
             else:
-                # No reducer (all predicted were empty) — produce empty GT embeddings too
-                gt_reduced_per_image = [
-                    np.empty((0, self._settings.instance_embeddings_dim), dtype=np.float32)
-                    for _ in self._buffered_raw_gt_instance_embeddings
+                gt_reduced = [
+                    np.empty((0, n), dtype=np.float32) for _ in self._raw_gt_emb
                 ]
+        else:
+            gt_reduced = None
 
-        # Inject reduced embeddings into buffered predictions and write
-        emb_idx = 0
-        gt_emb_idx = 0
-        for batch_metrics in self._buffered_metrics:
-            batch_size = len(batch_metrics[tlc.EXAMPLE_ID])
-            batch_reduced = reduced_per_image[emb_idx : emb_idx + batch_size]
-            emb_idx += batch_size
+        # Drop raw buffers — fit is done and we re-read raw values from the
+        # source table during rewrite (where they're tiny pyarrow lists, not
+        # numpy arrays).
+        self._raw_pred_emb = []
+        self._raw_gt_emb = []
 
-            self._inject_instance_embeddings(batch_metrics, batch_reduced)
+        # Build destination schema: source columns minus the raw embedding
+        # columns, plus the reduced ones.
+        src_schema_values = dict(raw_table.rows_schema.values)
+        src_schema_values.pop("predicted_instance_embedding_raw", None)
+        src_schema_values.pop("ground_truth_instance_embedding_raw", None)
+        src_schema_values["predicted_instance_embedding"] = _instance_embeddings_list_schema(
+            n, display_name=f"Predicted Instance Embedding ({n}D)"
+        )
+        if gt_reduced is not None:
+            src_schema_values["ground_truth_instance_embedding"] = _instance_embeddings_list_schema(
+                n, display_name=f"Ground Truth Instance Embedding ({n}D)"
+            )
 
-            if gt_reduced_per_image is not None:
-                gt_batch_reduced = gt_reduced_per_image[gt_emb_idx : gt_emb_idx + batch_size]
-                gt_emb_idx += batch_size
-                self._inject_gt_instance_embeddings(batch_metrics, gt_batch_reduced)
+        dst_writer = tlc.MetricsTableWriter(
+            run_url=self._run.url,
+            foreign_table_url=self.dataloader.dataset.table.url,
+            column_schemas=src_schema_values,
+        )
 
-            self._metrics_writer.add_batch(batch_metrics)
+        raw_pred_key = "predicted_instance_embedding_raw"
+        raw_gt_key = "ground_truth_instance_embedding_raw"
+        BATCH_SIZE = 32
+
+        chunk: dict[str, list] = {}
+        chunk_size = 0
+        pred_offset = 0
+        gt_offset = 0
+
+        def flush() -> None:
+            nonlocal chunk, chunk_size, pred_offset, gt_offset
+            if chunk_size == 0:
+                return
+            chunk["predicted_instance_embedding"] = [
+                arr.astype(np.float32).tolist()
+                for arr in pred_reduced[pred_offset : pred_offset + chunk_size]
+            ]
+            pred_offset += chunk_size
+            if gt_reduced is not None:
+                chunk["ground_truth_instance_embedding"] = [
+                    arr.astype(np.float32).tolist()
+                    for arr in gt_reduced[gt_offset : gt_offset + chunk_size]
+                ]
+                gt_offset += chunk_size
+            dst_writer.add_batch(chunk)
+            chunk = {}
+            chunk_size = 0
+
+        for sample in raw_table:
+            for col, val in sample.items():
+                if col == raw_pred_key or col == raw_gt_key:
+                    continue
+                chunk.setdefault(col, []).append(val)
+            chunk_size += 1
+            if chunk_size >= BATCH_SIZE:
+                flush()
+        flush()
+
+        dst_table = dst_writer.finalize()
+        return dst_table, dst_writer.get_written_metrics_infos()
+
+    def _delete_table_on_disk(self, table: tlc.Table) -> None:
+        """Best-effort removal of an unregistered intermediate metrics table.
+
+        We keep the raw streaming table around just long enough to read it
+        back during ``_fit_and_rewrite``; after that it's an orphaned
+        directory under the run that nothing references.
+        """
+        try:
+            tlc.ObjectRegistry._delete_object_from_caches(table.url)
+        except Exception:
+            pass
+        try:
+            table.url.delete()
+        except Exception as exc:
+            LOGGER.warning(
+                f"{TLC_COLORSTR}Failed to delete intermediate raw metrics table at {table.url}: {exc}"
+            )
 
     def _write_per_class_metrics_tables(self) -> None:
         if self.args.task not in ("detect", "segment", "obb"):

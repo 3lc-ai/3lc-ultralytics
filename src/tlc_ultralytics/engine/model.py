@@ -135,6 +135,13 @@ class YOLO(YOLOBase):
         if progress_callback is not None:
             settings._reduction_progress_callback = progress_callback
 
+        # TEMP(instance-embeddings): clear any reducer left over from a previous
+        # collect() call on the same Settings instance. Without this, a second
+        # collect() would silently reuse the first call's fitted space (the
+        # cross-split fit/transform mechanism uses this attribute *within* one
+        # collect() to share the train-fit reducer across val splits).
+        settings._fitted_instance_reducer = None
+
         # Build a uniform {split: val_kwargs} mapping so both the data+splits and
         # tables branches share a single iteration loop.
         if data and splits:
