@@ -45,6 +45,27 @@ def _instance_embeddings_list_schema(n_components: int, display_name: str | None
     )
 
 
+def _raw_instance_embeddings_schema(c_raw: int, display_name: str | None = None) -> tlc.Schema:
+    """TEMP(instance-embeddings): schema for raw per-instance embeddings written
+    inline during the validation streaming pass.
+
+    Variable-length list of fixed-size raw feature vectors. ``size0`` is the
+    fixed channel count (e.g. 256 from the cls head), ``size1`` is the
+    variable per-image instance count. Tagged with ``NUMBER_ROLE_NN_EMBEDDING``
+    so a future native 3LC reducer can pick it up server-side.
+
+    Default invisible — these are intermediate values that get rewritten into a
+    reduced ``predicted_instance_embedding`` column at the end of validation.
+    """
+    return tlc.Schema(
+        value=tlc.Float32Value(number_role=tlc.NUMBER_ROLE_NN_EMBEDDING),
+        size0=tlc.DimensionNumericValue(c_raw, c_raw),
+        size1=tlc.DimensionNumericValue(0, 1000),
+        display_name=display_name or f"Instance Embedding (raw, {c_raw}D)",
+        default_visible=False,
+    )
+
+
 def image_embeddings_schema(activation_size=512) -> tlc.Schema:
     """Create a 3LC schema for YOLO image embeddings.
 
