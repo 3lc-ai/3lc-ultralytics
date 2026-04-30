@@ -152,29 +152,25 @@ def yolo_loss_schemas(training: bool = False) -> dict[str, tlc.Schema]:
     :returns: The YOLO loss schemas for each of the three components.
     """
     schemas = {}
-    schemas["box_loss"] = tlc.Schema(
+    schemas["box_loss"] = tlc.schemas.Float32Schema(
         description="Box Loss",
         writable=False,
-        value=tlc.Float32Value(),
         display_importance=3004,
     )
-    schemas["dfl_loss"] = tlc.Schema(
+    schemas["dfl_loss"] = tlc.Float32Schema(
         description="Distribution Focal Loss",
         writable=False,
-        value=tlc.Float32Value(),
         display_importance=3005,
     )
-    schemas["cls_loss"] = tlc.Schema(
+    schemas["cls_loss"] = tlc.Float32Schema(
         description="Classification Loss",
         writable=False,
-        value=tlc.Float32Value(),
         display_importance=3006,
     )
     if training:
-        schemas["loss"] = tlc.Schema(
+        schemas["loss"] = tlc.Float32Schema(
             description="Weighted sum of box, DFL, and classification losses used in training",
             writable=False,
-            value=tlc.Float32Value(),
             display_importance=3007,
         )
     return schemas

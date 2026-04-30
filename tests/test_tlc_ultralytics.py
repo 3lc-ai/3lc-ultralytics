@@ -1298,8 +1298,8 @@ def test_extra_metrics() -> None:
         }
 
     metric_schemas = {
-        "metric_with_schema": tlc.Schema(
-            value=tlc.Int32Value(value_map={float(i): tlc.MapElement(f"value_{i}") for i in range(BATCH_SIZE * 2)}),
+        "metric_with_schema": tlc.schemas.CategoricalLabelSchema(
+            classes=[f"value_{i}" for i in range(BATCH_SIZE * 2)],
         ),
     }
 

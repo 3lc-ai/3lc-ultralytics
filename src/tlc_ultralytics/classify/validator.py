@@ -4,7 +4,6 @@ import weakref
 
 import tlc
 import torch
-from tlc.schemas import CategoricalLabelSchema
 from ultralytics.models import yolo
 
 from tlc_ultralytics.classify.dataset import TLCClassificationDataset
@@ -36,35 +35,29 @@ class TLCClassificationValidator(TLCValidatorMixin, yolo.classify.Classification
         )
 
     def _get_metrics_schemas(self):
-        predicted_value_map = self.data["names_3lc"]
-        predicted_value = CategoricalLabelSchema(classes=predicted_value_map)
-        predicted_schema = tlc.Schema(
-            "Predicted",
-            "The highest confidence class predicted by the model.",
-            writable=False,
-            value=predicted_value,
-        )
 
         column_schemas = {
-            "loss": tlc.Schema("Loss", "Cross Entropy Loss", writable=False, value=tlc.Float32Value()),
-            "predicted": predicted_schema,
-            "confidence": tlc.Schema(
-                "Confidence",
-                "The confidence of the prediction",
-                value=tlc.Float32Value(value_min=0.0, value_max=1.0),
+            "loss": tlc.schemas.Float32Schema(display_name="Loss", description="Cross Entropy Loss", writable=False),
+            "predicted": tlc.schemas.CategoricalLabelSchema(
+                classes=self.data["names_3lc"],
+                display_name="Predicted",
+                description="The highest confidence class predicted by the model.",
+                writable=False,
             ),
-            "top1_accuracy": tlc.Schema(
-                "Top-1 Accuracy",
-                "The correctness of the prediction",
-                value=tlc.Float32Value(),
+            "confidence": tlc.schemas.ConfidenceSchema(
+                display_name="Confidence",
+                description="The confidence of the prediction",
+            ),
+            "top1_accuracy": tlc.schemas.Float32Schema(
+                display_name="Top-1 Accuracy",
+                description="The correctness of the prediction",
             ),
         }
 
-        if len(predicted_value_map) > 5:
-            column_schemas["top5_accuracy"] = tlc.Schema(
-                "Top-5 Accuracy",
-                "The correctness of any of the top five confidence predictions",
-                value=tlc.Float32Value(),
+        if len(self.data["names_3lc"]) > 5:
+            column_schemas["top5_accuracy"] = tlc.schemas.Float32Schema(
+                display_name="Top-5 Accuracy",
+                description="The correctness of any of the top five confidence predictions",
             )
 
         return column_schemas

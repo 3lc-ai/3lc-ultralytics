@@ -11,8 +11,9 @@ def training_phase_schema() -> tlc.Schema:
 
     :returns: The training phase schema.
     """
-    return tlc.Schema(
+    return tlc.schemas.CategoricalLabelSchema(
         display_name=TRAINING_PHASE,
+        classes=["During", "After"],
         description=(
             "'During' metrics are collected with EMA during training, "
             "'After' is with the final model weights after completed training."
@@ -20,14 +21,6 @@ def training_phase_schema() -> tlc.Schema:
         display_importance=4005,  # Right hand side of epoch in the Dashboard
         writable=False,
         computable=False,
-        value=tlc.Int32Value(
-            value_min=0,
-            value_max=1,
-            value_map={
-                float(0): tlc.MapElement(display_name="During"),
-                float(1): tlc.MapElement(display_name="After"),
-            },
-        ),
     )
 
 

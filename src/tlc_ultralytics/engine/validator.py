@@ -8,10 +8,10 @@ from ultralytics.engine.validator import BaseValidator
 from ultralytics.utils import LOGGER, RANK, colorstr
 
 from tlc_ultralytics.constants import (
-    EXAMPLE_ID,
-    FOREIGN_TABLE_ID,
     DEFAULT_COLLECT_RUN_DESCRIPTION,
     EPOCH,
+    EXAMPLE_ID,
+    FOREIGN_TABLE_ID,
     LABEL,
     MAP,
     MAP50_95,
@@ -313,9 +313,8 @@ class TLCValidatorMixin(BaseValidator):
 
         # Add DDP rank column for distributed validation debugging
         if RANK >= 0:
-            column_schemas["ddp_rank"] = tlc.Schema(
+            column_schemas["ddp_rank"] = tlc.schemas.Int32Schema(
                 display_name="DDP rank",
-                value=tlc.Int32Value(),
                 description="DDP rank that processed this sample",
                 default_visible=False,
             )
@@ -443,52 +442,26 @@ class TLCValidatorMixin(BaseValidator):
                 self.dataloader.dataset.table.url.to_relative(self._run.url / "metrics").to_str(),
             ),
             LABEL: tlc.CategoricalLabelSchema(classes={**self.names, self.nc: "all"}),
-            NUM_IMAGES: tlc.Schema(
-                value=tlc.Int32Value(),
+            NUM_IMAGES: tlc.schemas.Int32Schema(
                 description="Number of images with at least one instance of the class",
             ),
-            NUM_INSTANCES: tlc.Schema(
-                value=tlc.Int32Value(),
+            NUM_INSTANCES: tlc.schemas.Int32Schema(
                 description="Total number of instances of the class in all images",
             ),
-            PRECISION: tlc.Schema(
-                value=tlc.Float32Value(),
-                description="Precision of the class",
-            ),
-            RECALL: tlc.Schema(
-                value=tlc.Float32Value(),
-                description="Recall of the class",
-            ),
-            MAP: tlc.Schema(
-                value=tlc.Float32Value(),
-                description="mAP of the class",
-            ),
-            MAP50_95: tlc.Schema(
-                value=tlc.Float32Value(),
-                description="mAP50-95 of the class",
-            ),
+            PRECISION: tlc.schemas.Float32Schema(description="Precision of the class"),
+            RECALL: tlc.schemas.Float32Schema(description="Recall of the class"),
+            MAP: tlc.schemas.Float32Schema(description="mAP of the class"),
+            MAP50_95: tlc.schemas.Float32Schema(description="mAP50-95 of the class"),
         }
 
         if self.args.task == "segment":
-            metrics_schemas[PRECISION_SEG] = tlc.Schema(
-                value=tlc.Float32Value(),
-                description="Mask precision of the class",
-            )
+            metrics_schemas[PRECISION_SEG] = tlc.schemas.Float32Schema(description="Mask precision of the class")
 
-            metrics_schemas[RECALL_SEG] = tlc.Schema(
-                value=tlc.Float32Value(),
-                description="Mask recall of the class",
-            )
+            metrics_schemas[RECALL_SEG] = tlc.schemas.Float32Schema(description="Mask recall of the class")
 
-            metrics_schemas[MAP_SEG] = tlc.Schema(
-                value=tlc.Float32Value(),
-                description="Mask mAP of the class",
-            )
+            metrics_schemas[MAP_SEG] = tlc.schemas.Float32Schema(description="Mask mAP of the class")
 
-            metrics_schemas[MAP50_95_SEG] = tlc.Schema(
-                value=tlc.Float32Value(),
-                description="Mask mAP50-95 of the class",
-            )
+            metrics_schemas[MAP50_95_SEG] = tlc.schemas.Float32Schema(description="Mask mAP50-95 of the class")
         return metrics_schemas
 
     def _generate_per_class_metrics(self):
