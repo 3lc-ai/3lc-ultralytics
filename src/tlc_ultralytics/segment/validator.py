@@ -44,7 +44,7 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         return {PREDICTED_SEGMENTATIONS: self._process_predictions(preds, batch)}
 
     def _build_annotation(self, scaled, mapped_classes, h, w):
-        return tlc.SegmentationMasks(
+        return tlc.data_types.SegmentationMasks(
             image_height=h,
             image_width=w,
             masks=scaled["masks"].cpu().numpy(),  # PyTorch-native (N, H, W); transposed by mask_format below
@@ -54,4 +54,4 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         )
 
     def _empty_annotation(self, h, w):
-        return tlc.SegmentationMasks.create_empty(image_height=h, image_width=w)
+        return tlc.data_types.SegmentationMasks.create_empty(image_height=h, image_width=w)

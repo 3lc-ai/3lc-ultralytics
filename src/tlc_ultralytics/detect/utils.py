@@ -192,8 +192,7 @@ def construct_bbox_struct(
     :returns: A serialized dict suitable for writing to a 3LC Table.
     """
     import numpy as np
-    from tlc import BoundingBoxes2D
-
+    from tlc.data_types import BoundingBoxes2D
     if not predicted_annotations:
         bb2d = BoundingBoxes2D.create_empty(
             image_width=image_width,

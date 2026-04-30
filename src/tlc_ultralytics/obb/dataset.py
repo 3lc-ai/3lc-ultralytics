@@ -4,8 +4,7 @@ from typing import Any
 
 import cv2
 import numpy as np
-from tlc import OrientedBoundingBoxes2D
-
+from tlc.data_types import OrientedBoundingBoxes2D
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, OBB_LABEL_COLUMN_NAME
 from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
 
