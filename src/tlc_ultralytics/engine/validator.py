@@ -4,13 +4,15 @@ import numpy as np
 import tlc
 import torch.distributed as dist
 import ultralytics
-from tlc.constants import EXAMPLE_ID, FOREIGN_TABLE_ID, LABEL
 from ultralytics.engine.validator import BaseValidator
 from ultralytics.utils import LOGGER, RANK, colorstr
 
 from tlc_ultralytics.constants import (
+    EXAMPLE_ID,
+    FOREIGN_TABLE_ID,
     DEFAULT_COLLECT_RUN_DESCRIPTION,
     EPOCH,
+    LABEL,
     MAP,
     MAP50_95,
     MAP50_95_SEG,

@@ -5,8 +5,8 @@ from typing import Any
 import cv2
 import numpy as np
 from tlc import OrientedBoundingBoxes2D
-from tlc.constants import IMAGE, ORIENTED_BBS_2D
 
+from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, OBB_LABEL_COLUMN_NAME
 from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
 
 
@@ -83,8 +83,8 @@ class TLCOBBDataset(BaseTLCYOLODataset):
             data=data,
             exclude_zero=exclude_zero,
             class_map=class_map,
-            image_column_name=image_column_name or IMAGE,
-            label_column_name=label_column_name or ORIENTED_BBS_2D,
+            image_column_name=image_column_name or IMAGE_COLUMN_NAME,
+            label_column_name=label_column_name or OBB_LABEL_COLUMN_NAME,
             **kwargs,
         )
         self._post_init()

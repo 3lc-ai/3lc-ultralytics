@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import tlc
-from tlc.constants import IMAGE
 from tlc.helpers import AnnotationHelper, AnnotationType
 
+from tlc_ultralytics.constants import IMAGE_COLUMN_NAME
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
 
 if TYPE_CHECKING:
@@ -90,7 +90,7 @@ def build_tlc_yolo_dataset(
 
 def check_det_table(
     table: tlc.Table,
-    image_column_name: str = IMAGE,
+    image_column_name: str = IMAGE_COLUMN_NAME,
     label_column_name: str | None = None,
 ) -> None:
     """Check that a table is compatible with the detection task in the 3LC YOLO integration.

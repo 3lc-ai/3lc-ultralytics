@@ -4,13 +4,17 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
-from tlc.constants import KEYPOINTS_2D_PREDICTED
 from tlc.core.builtins.schemas import Keypoints2DSchema
 from tlc.core.data_formats import Keypoints2D
 from ultralytics.models.yolo.pose.val import PoseValidator
 from ultralytics.utils import LOGGER
 
-from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME, TLC_COLORSTR
+from tlc_ultralytics.constants import (
+    IMAGE_COLUMN_NAME,
+    POSE_LABEL_COLUMN_NAME,
+    PREDICTED_KEYPOINTS_2D,
+    TLC_COLORSTR,
+)
 from tlc_ultralytics.engine.validator import TLCValidatorMixin
 from tlc_ultralytics.pose.dataset import TLCYOLOPoseDataset
 from tlc_ultralytics.pose.loss import v8UnreducedPoseLoss
@@ -76,12 +80,12 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         )
 
         loss_schemas = yolo_pose_loss_schemas(training=self._training) if self._settings.collect_loss else {}
-        return {KEYPOINTS_2D_PREDICTED: predicted_pose_schema, **loss_schemas}
+        return {PREDICTED_KEYPOINTS_2D: predicted_pose_schema, **loss_schemas}
 
     def _compute_3lc_metrics(self, preds, batch) -> dict[str, Any]:
         losses = self.loss_fn(self._curr_raw_preds, batch) if self._settings.collect_loss else {}
         return {
-            KEYPOINTS_2D_PREDICTED: self._process_predictions(preds, batch),
+            PREDICTED_KEYPOINTS_2D: self._process_predictions(preds, batch),
             **{k: tensor.mean(dim=1).cpu().numpy() for k, tensor in losses.items()},
         }
 

@@ -3,13 +3,13 @@ from __future__ import annotations
 import weakref
 
 import torch
-from tlc.constants import PREDICTED_BOUNDING_BOXES
 from ultralytics.models.yolo.detect import DetectionValidator
 from ultralytics.utils import LOGGER, ops
 
 from tlc_ultralytics.constants import (
     DETECTION_LABEL_COLUMN_NAME,
     IMAGE_COLUMN_NAME,
+    PREDICTED_BOUNDING_BOXES,
     TLC_COLORSTR,
 )
 from tlc_ultralytics.detect.loss import v8UnreducedDetectionLoss

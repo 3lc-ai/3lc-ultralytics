@@ -1,8 +1,13 @@
 from ultralytics.utils import colorstr
 
 # Column names
+EXAMPLE_ID = "example_id"
+FOREIGN_TABLE_ID = "input_table_id"
 CONFIDENCE = "confidence"
+PREDICTED_BOUNDING_BOXES = "bbs_predicted"
 PREDICTED_SEGMENTATIONS = "segmentations_predicted"
+PREDICTED_KEYPOINTS_2D = "keypoints_2d_predicted"
+LABEL = "label"
 EPOCH = "epoch"
 TRAINING_PHASE = "Training Phase"
 IMAGE_COLUMN_NAME = "image"

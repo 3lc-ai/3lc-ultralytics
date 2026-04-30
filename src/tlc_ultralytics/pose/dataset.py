@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from tlc.constants import IMAGE, KEYPOINTS_2D
-from tlc.core.data_formats.keypoints import Keypoints2D
+import tlc
 
+from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME
 from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
 
 
@@ -30,8 +30,8 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
             data=data,
             exclude_zero=exclude_zero,
             class_map=class_map,
-            image_column_name=image_column_name or IMAGE,
-            label_column_name=label_column_name or KEYPOINTS_2D,
+            image_column_name=image_column_name or IMAGE_COLUMN_NAME,
+            label_column_name=label_column_name or POSE_LABEL_COLUMN_NAME,
             **kwargs,
         )
         self._post_init()
@@ -42,7 +42,7 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
 
         # Desired fixed K from dataset config (default 17) for empty-case shapes
         kpt_shape = self.data.get("kpt_shape")
-        instances = Keypoints2D.from_row(label_column_value)
+        instances = tlc.Keypoints2D.from_row(label_column_value)
 
         # Image dimensions and raw arrays
         H = float(instances.y_max - (instances.y_min or 0))
