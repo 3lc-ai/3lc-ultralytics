@@ -4,6 +4,7 @@ from functools import partial
 from typing import Any
 
 import tlc
+from tlc.constants import IMAGE, LABEL
 from ultralytics.data.dataset import ClassificationDataset
 
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
@@ -45,8 +46,8 @@ class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
         args,
         augment=False,
         prefix="",
-        image_column_name=tlc.IMAGE,
-        label_column_name=tlc.LABEL,
+        image_column_name=IMAGE,
+        label_column_name=LABEL,
         exclude_zero=False,
         class_map=None,
     ):

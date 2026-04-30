@@ -5,10 +5,7 @@ from typing import TYPE_CHECKING, Literal, overload
 
 import tlc
 import yaml
-from tlc.core.builtins.constants import (
-    INSTANCES_ADDITIONAL_DATA,
-    LABEL,
-)
+from tlc.helpers import AnnotationHelper
 from ultralytics.data.utils import check_det_dataset
 from ultralytics.utils import LOGGER, colorstr
 
@@ -285,18 +282,15 @@ def get_value_map_from_table(
     label_column_name: str,
     task: Literal["detect", "segment", "pose", "classify", "obb"],
 ) -> dict[int, str]:
-    if task == "pose":
+    if task in ("pose", "obb"):
+        column_name = label_column_name.split(".")[0]
         try:
-            return table.rows_schema[label_column_name][INSTANCES_ADDITIONAL_DATA][LABEL].value.map
-        except Exception as e:
+            ann = AnnotationHelper.get(table, column_name)
+            assert ann.label_path is not None
+            return table.get_value_map(ann.label_path)  # type: ignore[return-value]
+        except (AssertionError, KeyError, ValueError) as e:
             raise ValueError("Failed to get value map from table") from e
-    elif task == "obb":
-        try:
-            return table.rows_schema[label_column_name][INSTANCES_ADDITIONAL_DATA][LABEL].value.map
-        except Exception as e:
-            raise ValueError("Failed to get value map from table") from e
-    else:
-        return table.get_value_map(label_column_name)  # type: ignore[return-value]
+    return table.get_value_map(label_column_name)  # type: ignore[return-value]
 
 
 def parse_3lc_yaml_file(data_file: str) -> dict[str, tlc.Table]:

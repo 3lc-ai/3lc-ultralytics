@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import tlc
+from tlc.constants import IMAGE
+from tlc.helpers import AnnotationHelper, AnnotationType
 
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
 
@@ -88,7 +90,7 @@ def build_tlc_yolo_dataset(
 
 def check_det_table(
     table: tlc.Table,
-    image_column_name: str = tlc.IMAGE,
+    image_column_name: str = IMAGE,
     label_column_name: str | None = None,
 ) -> None:
     """Check that a table is compatible with the detection task in the 3LC YOLO integration.
@@ -101,8 +103,6 @@ def check_det_table(
         If None, auto-detected from the table schema.
     :raises: ValueError if the table is not compatible with the detection task.
     """
-    from tlc.core.helpers.annotation_helper import detect_bounding_box_column, get_label_path
-
     row_schema = table.row_schema.values
 
     try:
@@ -117,13 +117,12 @@ def check_det_table(
                 "compatible with the detection task or provide a `label_column_name` that matches the value path."
             )
         else:
-            # Auto-detect bounding box column and label path
-            is_bb, bb_column = detect_bounding_box_column(table)
-            assert is_bb and bb_column, "No bounding box column found in the table."
-            detected_path = get_label_path(table, bb_column)
-            assert detected_path is not None, f"Bounding box column '{bb_column}' found but no label field detected."
-            assert table.get_value_map(detected_path) is not None, (
-                f"Unable to get value map for auto-detected label path '{detected_path}'."
+            # Auto-detect bounding box column and label path via AnnotationHelper
+            ann = AnnotationHelper.find(table, type=AnnotationType.BOUNDING_BOXES)
+            assert ann is not None, "No bounding box column found in the table."
+            assert ann.label_path is not None, f"Bounding box column '{ann.name}' found but no label field detected."
+            assert table.get_value_map(ann.label_path) is not None, (
+                f"Unable to get value map for auto-detected label path '{ann.label_path}'."
             )
 
     except (AssertionError, KeyError) as e:

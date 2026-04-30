@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import tlc
+from tlc.helpers import AnnotationHelper, AnnotationType
 
 if TYPE_CHECKING:
     from tlc_ultralytics.settings import Settings
@@ -40,36 +41,14 @@ def check_seg_table(table: tlc.Table, image_column_name: str, label_column_name:
     :param label_column_name: The value path of the label.
     :raises ValueError: If the table is not compatible with instance segmentation.
     """
-    row_schema = table.row_schema.values
-
     label_column_name = label_column_name.split(".")[0]
-
-    # Check that the schema and data are compatible with instance segmentation
     try:
-        # Schema checks
-        assert image_column_name in row_schema, f"Image column '{image_column_name}' not found."
-        assert label_column_name in row_schema, f"Label column '{label_column_name}' not found."
-
-        # Data checks
-        first_row = table.table_rows[0]
-        assert isinstance(first_row[label_column_name], dict), (
-            f"Label column '{label_column_name}' must be a dictionary."
+        assert image_column_name in table.row_schema.values, f"Image column '{image_column_name}' not found."
+        ann = AnnotationHelper.get(table, label_column_name)
+        assert ann.type is AnnotationType.SEGMENTATION, (
+            f"Label column '{label_column_name}' is not a segmentation column (got {ann.type})."
         )
-        assert "rles" in first_row[label_column_name], f"Label column '{label_column_name}' missing rles."
-        assert "image_width" in first_row[label_column_name], f"Label column '{label_column_name}' missing image_width."
-        assert "image_height" in first_row[label_column_name], (
-            f"Label column '{label_column_name}' missing image_height."
-        )
-        assert "instance_properties" in first_row[label_column_name], (
-            f"Label column '{label_column_name}' missing instance_properties."
-        )
-        assert "label" in first_row[label_column_name]["instance_properties"], (
-            f"Label column '{label_column_name}' missing label."
-        )
-        assert image_column_name in first_row, (
-            f"Image column {image_column_name} not found in table with URL {table.url}"
-        )
-
-    except (AssertionError, ValueError) as e:
+        assert ann.label_path is not None, f"Label column '{label_column_name}' missing label."
+    except (AssertionError, KeyError, ValueError) as e:
         msg = f"Validation failed for {label_column_name} column in table with URL {table.url}. {e!s}"
         raise ValueError(msg) from e

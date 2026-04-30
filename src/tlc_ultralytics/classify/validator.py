@@ -4,6 +4,7 @@ import weakref
 
 import tlc
 import torch
+from tlc.schemas import CategoricalLabelSchema
 from ultralytics.models import yolo
 
 from tlc_ultralytics.classify.dataset import TLCClassificationDataset
@@ -36,7 +37,7 @@ class TLCClassificationValidator(TLCValidatorMixin, yolo.classify.Classification
 
     def _get_metrics_schemas(self):
         predicted_value_map = self.data["names_3lc"]
-        predicted_value = tlc.Int32Value(value_map=predicted_value_map, number_role=tlc.NUMBER_ROLE_LABEL)
+        predicted_value = CategoricalLabelSchema(classes=predicted_value_map)
         predicted_schema = tlc.Schema(
             "Predicted",
             "The highest confidence class predicted by the model.",

@@ -4,11 +4,13 @@ import numpy as np
 import tlc
 import torch.distributed as dist
 import ultralytics
+from tlc.constants import EXAMPLE_ID, FOREIGN_TABLE_ID, LABEL
 from ultralytics.engine.validator import BaseValidator
 from ultralytics.utils import LOGGER, RANK, colorstr
 
 from tlc_ultralytics.constants import (
     DEFAULT_COLLECT_RUN_DESCRIPTION,
+    EPOCH,
     MAP,
     MAP50_95,
     MAP50_95_SEG,
@@ -262,7 +264,7 @@ class TLCValidatorMixin(BaseValidator):
         batch_size = self._infer_batch_size(preds, batch)
 
         batch_metrics = {
-            tlc.EXAMPLE_ID: [int(example_id) for example_id in batch["example_id"]],
+            EXAMPLE_ID: [int(example_id) for example_id in batch["example_id"]],
             **self._compute_3lc_metrics(preds, batch),  # Task specific metrics
         }
 
@@ -273,7 +275,7 @@ class TLCValidatorMixin(BaseValidator):
             batch_metrics["embeddings"] = self.embeddings
 
         if self._training:
-            batch_metrics[tlc.EPOCH] = [self._epoch + 1] * batch_size
+            batch_metrics[EPOCH] = [self._epoch + 1] * batch_size
             training_phase = 1 if self._final_validation else 0
             batch_metrics[TRAINING_PHASE] = [training_phase] * batch_size
 
@@ -406,7 +408,7 @@ class TLCValidatorMixin(BaseValidator):
 
         metrics_batch = (
             {
-                tlc.EPOCH: [epoch] * num_classes,
+                EPOCH: [epoch] * num_classes,
                 TRAINING_PHASE: [training_phase] * num_classes,
             }
             if self._training
@@ -415,8 +417,8 @@ class TLCValidatorMixin(BaseValidator):
 
         metrics_batch.update(
             {
-                tlc.FOREIGN_TABLE_ID: [0] * num_classes,
-                tlc.LABEL: list(range(num_classes)),
+                FOREIGN_TABLE_ID: [0] * num_classes,
+                LABEL: list(range(num_classes)),
                 NUM_INSTANCES: np.append(self.metrics.nt_per_class, self.metrics.nt_per_class.sum()),
                 NUM_IMAGES: np.append(self.metrics.nt_per_image, self.seen),
                 **self._generate_per_class_metrics(),
@@ -435,10 +437,10 @@ class TLCValidatorMixin(BaseValidator):
     def _per_class_metrics_schemas(self):
         metrics_schemas = {
             TRAINING_PHASE: training_phase_schema(),
-            tlc.FOREIGN_TABLE_ID: tlc.ForeignTableIdSchema(
+            FOREIGN_TABLE_ID: tlc.ForeignTableIdSchema(
                 self.dataloader.dataset.table.url.to_relative(self._run.url / "metrics").to_str(),
             ),
-            tlc.LABEL: tlc.CategoricalLabelSchema(classes={**self.names, self.nc: "all"}),
+            LABEL: tlc.CategoricalLabelSchema(classes={**self.names, self.nc: "all"}),
             NUM_IMAGES: tlc.Schema(
                 value=tlc.Int32Value(),
                 description="Number of images with at least one instance of the class",

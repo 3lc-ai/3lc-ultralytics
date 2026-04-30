@@ -3,16 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import tlc
-from tlc.core.builtins.constants import (
-    BBS_2D,
-    INSTANCES,
-    INSTANCES_ADDITIONAL_DATA,
-    VERTICES_2D,
-    X_MAX,
-    X_MIN,
-    Y_MAX,
-    Y_MIN,
-)
+from tlc.helpers import AnnotationHelper, AnnotationType
 
 if TYPE_CHECKING:
     from tlc_ultralytics.settings import Settings
@@ -57,25 +48,16 @@ def check_pose_table(table: tlc.Table, image_column_name: str, label_column_name
     :param label_column_name: The name of the pose label root column (e.g., 'pose').
     :raises ValueError: If the table is not compatible with pose.
     """
-    row_schema = table.row_schema.values
-
     label_root = label_column_name.split(".")[0]
 
     try:
-        assert image_column_name in row_schema, f"Image column '{image_column_name}' not found."
-        assert label_root in row_schema, f"Pose column '{label_root}' not found."
-
-        schema = row_schema[label_root]
-        assert hasattr(schema, "values"), f"Pose column '{label_root}' has no values schema."
-        for key in (X_MIN, Y_MIN, X_MAX, Y_MAX, INSTANCES, INSTANCES_ADDITIONAL_DATA):
-            assert key in schema.values, f"Pose column '{label_root}' missing key '{key}'."
-
-        instances_schema = schema.values[INSTANCES]
-        assert hasattr(instances_schema, "values"), "Instances schema must be composite."
-        for k in (VERTICES_2D, BBS_2D):
-            assert k in instances_schema.values, f"Instances missing '{k}'."
-
-    except (AssertionError, KeyError) as e:
+        assert image_column_name in table.row_schema.values, f"Image column '{image_column_name}' not found."
+        ann = AnnotationHelper.get(table, label_root)
+        assert ann.type is AnnotationType.KEYPOINTS, (
+            f"Label column '{label_root}' is not a keypoints column (got {ann.type})."
+        )
+        assert ann.label_path is not None, f"Pose column '{label_root}' missing label."
+    except (AssertionError, KeyError, ValueError) as e:
         raise ValueError(f"Table with url {table.url} is not compatible with YOLO pose. {e}") from None
 
 

@@ -1,14 +1,16 @@
-import tlc
 from ultralytics.utils import colorstr
 
 # Column names
+CONFIDENCE = "confidence"
+PREDICTED_SEGMENTATIONS = "segmentations_predicted"
+EPOCH = "epoch"
 TRAINING_PHASE = "Training Phase"
-IMAGE_COLUMN_NAME = tlc.IMAGE
-CLASSIFY_LABEL_COLUMN_NAME = tlc.LABEL
-DETECTION_LABEL_COLUMN_NAME = f"{tlc.BOUNDING_BOXES}.{tlc.INSTANCES_ADDITIONAL_DATA}.{tlc.LABEL}"
-SEGMENTATION_LABEL_COLUMN_NAME = f"{tlc.SEGMENTATIONS}.{tlc.INSTANCE_PROPERTIES}.{tlc.LABEL}"
-OBB_LABEL_COLUMN_NAME = tlc.ORIENTED_BBS_2D
-POSE_LABEL_COLUMN_NAME = tlc.KEYPOINTS_2D
+IMAGE_COLUMN_NAME = "image"
+CLASSIFY_LABEL_COLUMN_NAME = "label"
+DETECTION_LABEL_COLUMN_NAME = "bbs.instances_additional_data.label"
+SEGMENTATION_LABEL_COLUMN_NAME = "segmentations.instance_properties.label"
+OBB_LABEL_COLUMN_NAME = "oriented_bbs_2d"
+POSE_LABEL_COLUMN_NAME = "keypoints_2d"
 PRECISION = "precision"
 PRECISION_SEG = "precision_seg"
 RECALL = "recall"

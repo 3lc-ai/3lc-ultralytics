@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
-from tlc.core.builtins.constants.column_names import BOUNDING_BOX_LIST
 from tlc.core.data_formats.bb_conversions import (
     legacy_bb_row_to_bounding_boxes_2d,
     normalize_bbs_2d,
@@ -11,6 +10,7 @@ from tlc.core.data_formats.bb_conversions import (
 )
 from tlc.core.data_formats.bounding_boxes import BoundingBoxes2D
 from tlc.core.data_formats.segmentation import SegmentationPolygons
+from tlc.helpers import AnnotationHelper, AnnotationType
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.data.utils import check_file_speeds, segments2boxes
 from ultralytics.utils import LOGGER, colorstr
@@ -189,10 +189,10 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
         """
         # Determine the annotation column name and whether this is a legacy-format table
         column_name = label_column_name.split(".")[0]
-        column_schema = table.rows_schema.values[column_name]
+        ann_col = AnnotationHelper.get(table, column_name)
         self._annotation_column = column_name
-        self._is_legacy_bb = BOUNDING_BOX_LIST in column_schema
-        self._bb_schema = column_schema if self._is_legacy_bb else None
+        self._is_legacy_bb = ann_col.type is AnnotationType.LEGACY_BOUNDING_BOXES
+        self._bb_schema = table.rows_schema.values[column_name] if self._is_legacy_bb else None
 
         super().__init__(
             table,

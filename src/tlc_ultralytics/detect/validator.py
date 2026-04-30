@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import weakref
 
-import tlc
 import torch
+from tlc.constants import PREDICTED_BOUNDING_BOXES
 from ultralytics.models.yolo.detect import DetectionValidator
 from ultralytics.utils import LOGGER, ops
 
@@ -53,7 +53,7 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
         loss_schemas = yolo_loss_schemas(training=self._training) if self._settings.collect_loss else {}
 
         return {
-            tlc.PREDICTED_BOUNDING_BOXES: yolo_predicted_bounding_box_schema(self.data["names_3lc"]),
+            PREDICTED_BOUNDING_BOXES: yolo_predicted_bounding_box_schema(self.data["names_3lc"]),
             **loss_schemas,
         }
 
@@ -61,7 +61,7 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
         losses = self.loss_fn(self._curr_raw_preds, batch) if self._settings.collect_loss else {}
 
         return {
-            tlc.PREDICTED_BOUNDING_BOXES: self._process_predictions(preds, batch),
+            PREDICTED_BOUNDING_BOXES: self._process_predictions(preds, batch),
             **{k: tensor.mean(dim=1).cpu().numpy() for k, tensor in losses.items()},
         }
 
