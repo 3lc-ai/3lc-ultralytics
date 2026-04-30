@@ -4,11 +4,6 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from tlc import BoundingBoxes2D, SegmentationPolygons
-from tlc._core.data_formats.bb_conversions import (
-    legacy_bb_row_to_bounding_boxes_2d,
-    normalize_bbs_2d,
-    xyxy_to_cxywh,
-)
 from tlc.helpers import AnnotationHelper, AnnotationType
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.data.utils import check_file_speeds, segments2boxes
@@ -210,7 +205,7 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
 
         # Get BoundingBoxes2D — handles both legacy and new format
         if self._is_legacy_bb:
-            bb2d = legacy_bb_row_to_bounding_boxes_2d(raw, self._bb_schema)
+            bb2d = BoundingBoxes2D.from_legacy_row(raw, self._bb_schema)
         else:
             bb2d = BoundingBoxes2D.from_row(raw)
 
@@ -231,8 +226,7 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
             }
 
         # Normalize to [0,1] and convert to centered XYWH (what YOLO expects)
-        normalized = normalize_bbs_2d(bb2d.bboxes, width, height)
-        cxywh = xyxy_to_cxywh(normalized)
+        cxywh = bb2d.bboxes_cxywh / np.array([width, height, width, height], dtype=np.float32)
 
         # Filter boxes with non-positive width or height and apply class map
         widths = cxywh[:, 2]

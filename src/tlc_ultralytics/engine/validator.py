@@ -4,6 +4,7 @@ import numpy as np
 import tlc
 import torch.distributed as dist
 import ultralytics
+from tlc._core.object_registry import ObjectRegistry
 from ultralytics.engine.validator import BaseValidator
 from ultralytics.utils import LOGGER, RANK, colorstr
 
@@ -378,7 +379,7 @@ class TLCValidatorMixin(BaseValidator):
 
             # Improve memory usage - don't cache metrics data
             for metrics_info in metrics_infos:
-                tlc.ObjectRegistry._delete_object_from_caches(tlc.Url(metrics_info["url"]).to_absolute(self._run.url))
+                ObjectRegistry._delete_object_from_caches(tlc.Url(metrics_info["url"]).to_absolute(self._run.url))
 
             self._run.set_status_running()
 
@@ -438,10 +439,10 @@ class TLCValidatorMixin(BaseValidator):
     def _per_class_metrics_schemas(self):
         metrics_schemas = {
             TRAINING_PHASE: training_phase_schema(),
-            FOREIGN_TABLE_ID: tlc.ForeignTableIdSchema(
+            FOREIGN_TABLE_ID: tlc.schemas.ForeignTableIdSchema(
                 self.dataloader.dataset.table.url.to_relative(self._run.url / "metrics").to_str(),
             ),
-            LABEL: tlc.CategoricalLabelSchema(classes={**self.names, self.nc: "all"}),
+            LABEL: tlc.schemas.CategoricalLabelSchema(classes={**self.names, self.nc: "all"}),
             NUM_IMAGES: tlc.schemas.Int32Schema(
                 description="Number of images with at least one instance of the class",
             ),

@@ -12,15 +12,14 @@ def training_phase_schema() -> tlc.Schema:
     :returns: The training phase schema.
     """
     return tlc.schemas.CategoricalLabelSchema(
-        display_name=TRAINING_PHASE,
         classes=["During", "After"],
+        display_name=TRAINING_PHASE,
         description=(
             "'During' metrics are collected with EMA during training, "
             "'After' is with the final model weights after completed training."
         ),
         display_importance=4005,  # Right hand side of epoch in the Dashboard
         writable=False,
-        computable=False,
     )
 
 
@@ -34,6 +33,5 @@ def image_embeddings_schema(activation_size=512) -> tlc.Schema:
         display_name="Embedding",
         description="Large NN embedding",
         writable=False,
-        computable=False,
         shape=(activation_size,),
     )

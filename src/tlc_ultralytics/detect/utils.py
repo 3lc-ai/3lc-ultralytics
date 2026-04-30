@@ -137,7 +137,7 @@ def yolo_predicted_bounding_box_schema(
     :param label_value_map: Mapping of class indices to label metadata.
     :returns: A BoundingBoxes2DSchema for predicted boxes.
     """
-    return tlc.BoundingBoxes2DSchema(
+    return tlc.schemas.BoundingBoxes2DSchema(
         classes=label_value_map,
         include_per_instance_confidence=True,
         description="Predicted Bounding Boxes",
@@ -157,18 +157,18 @@ def yolo_loss_schemas(training: bool = False) -> dict[str, tlc.Schema]:
         writable=False,
         display_importance=3004,
     )
-    schemas["dfl_loss"] = tlc.Float32Schema(
+    schemas["dfl_loss"] = tlc.schemas.Float32Schema(
         description="Distribution Focal Loss",
         writable=False,
         display_importance=3005,
     )
-    schemas["cls_loss"] = tlc.Float32Schema(
+    schemas["cls_loss"] = tlc.schemas.Float32Schema(
         description="Classification Loss",
         writable=False,
         display_importance=3006,
     )
     if training:
-        schemas["loss"] = tlc.Float32Schema(
+        schemas["loss"] = tlc.schemas.Float32Schema(
             description="Weighted sum of box, DFL, and classification losses used in training",
             writable=False,
             display_importance=3007,
@@ -193,7 +193,6 @@ def construct_bbox_struct(
     """
     import numpy as np
     from tlc import BoundingBoxes2D
-    from tlc._core.data_formats.bb_conversions import denormalize_bbs_2d
 
     if not predicted_annotations:
         bb2d = BoundingBoxes2D.create_empty(
@@ -201,10 +200,9 @@ def construct_bbox_struct(
             image_height=image_height,
         )
     else:
-        # Predictions arrive in normalized cxywh (YOLO format); denormalize layout-preserving,
-        # then let the constructor convert cxywh → xyxy via bbox_format.
+        # Predictions arrive in normalized cxywh (YOLO format); the constructor handles
+        # both denormalization (via image_width/height + normalized=True) and cxywh → xyxy.
         cxywh_norm = np.array([pred["bbox"] for pred in predicted_annotations], dtype=np.float32)
-        cxywh_abs = denormalize_bbs_2d(cxywh_norm, image_width, image_height)
 
         labels = []
         confidences = []
@@ -216,12 +214,13 @@ def construct_bbox_struct(
             confidences.append(float(pred["score"]))
 
         bb2d = BoundingBoxes2D(
-            bboxes=cxywh_abs,
+            bboxes=cxywh_norm,
             bbox_format="cxywh",
+            normalized=True,
+            image_width=image_width,
+            image_height=image_height,
             labels=labels,
             confidences=confidences,
-            x_max=float(image_width),
-            y_max=float(image_height),
         )
 
     return bb2d.to_row()
