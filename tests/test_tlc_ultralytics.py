@@ -19,6 +19,7 @@ import tlc
 import yaml
 from PIL import Image
 from testing_helpers import check_pose_table_and_metrics_tables, compare_dataset_values, plot_ultralytics
+from tlc.helpers import KeypointHelper
 from ultralytics.cfg import ASSETS
 from ultralytics.models.yolo import YOLO
 from ultralytics.models.yolo.detect import DetectionTrainer
@@ -53,9 +54,9 @@ from tlc_ultralytics.utils import check_tlc_dataset
 DUMMY_IMAGE_FILE = Path(__file__).parent.parent / "src" / "tlc_ultralytics" / "_static" / "dashboard.png"
 TMP = Path(__file__).parent / "tmp"
 TMP_PROJECT_ROOT_URL = tlc.Url(TMP / "3LC")
-tlc.UrlAliasRegistry.instance().register_url_alias("<TEST_ALIAS>", "/test/alias")
+tlc.register_url_alias("<TEST_ALIAS>", "/test/alias")
 tlc.Configuration.instance().project_root_url = TMP_PROJECT_ROOT_URL
-tlc.TableIndexingTable.instance().add_scan_url(
+tlc._core.objects.tables.system_tables.indexing_tables.table_indexing_table.TableIndexingTable.instance().add_scan_url(
     {
         "url": tlc.Url(TMP_PROJECT_ROOT_URL),
         "layout": "project",
@@ -109,8 +110,8 @@ TASK2ULTRALYTICS_TRAINER = {
 }
 
 COCO_POSE_SETTINGS_OVERRIDES = {
-    "points": tlc.KeypointHelper.COCO_KEYPOINT_DEFAULT_POSE,
-    "lines": tlc.KeypointHelper.COCO_SKELETON,
+    "points": KeypointHelper.COCO_KEYPOINT_DEFAULT_POSE,
+    "lines": KeypointHelper.COCO_SKELETON,
     "point_attributes": [f"p{i}" for i in range(17)],
     "line_attributes": [f"l{i}" for i in range(16)],
 }

@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
-from tlc.core.builtins.schemas import Keypoints2DSchema
-from tlc.core.data_formats import Keypoints2D
+from tlc import Keypoints2D
+from tlc.schemas import Keypoints2DSchema
 from ultralytics.models.yolo.pose.val import PoseValidator
 from ultralytics.utils import LOGGER
 

@@ -3,13 +3,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
-from tlc.core.data_formats.bb_conversions import (
+from tlc import BoundingBoxes2D, SegmentationPolygons
+from tlc._core.data_formats.bb_conversions import (
     legacy_bb_row_to_bounding_boxes_2d,
     normalize_bbs_2d,
     xyxy_to_cxywh,
 )
-from tlc.core.data_formats.bounding_boxes import BoundingBoxes2D
-from tlc.core.data_formats.segmentation import SegmentationPolygons
 from tlc.helpers import AnnotationHelper, AnnotationType
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.data.utils import check_file_speeds, segments2boxes
@@ -18,7 +17,7 @@ from ultralytics.utils import LOGGER, colorstr
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
 
 if TYPE_CHECKING:
-    from tlc.core.objects.table import Table
+    from tlc import Table
 
 SegmentType = Literal["absolute", "relative"]
 

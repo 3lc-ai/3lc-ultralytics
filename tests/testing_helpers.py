@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 import tlc
 import torch
-from tlc.core.builtins.constants.column_names import (
+from tlc.constants._column_names import (
     CONFIDENCE,
     INSTANCES,
     INSTANCES_ADDITIONAL_DATA,

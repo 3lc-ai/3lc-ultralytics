@@ -192,8 +192,8 @@ def construct_bbox_struct(
     :returns: A serialized dict suitable for writing to a 3LC Table.
     """
     import numpy as np
-    from tlc.core.data_formats.bb_conversions import denormalize_bbs_2d
-    from tlc.core.data_formats.bounding_boxes import BoundingBoxes2D
+    from tlc import BoundingBoxes2D
+    from tlc._core.data_formats.bb_conversions import denormalize_bbs_2d
 
     if not predicted_annotations:
         bb2d = BoundingBoxes2D.create_empty(
