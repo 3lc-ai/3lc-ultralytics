@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 import tlc
 import torch
-from tlc.core.builtins.constants.column_names import (
+from tlc.constants._column_names import (
     CONFIDENCE,
     INSTANCES,
     INSTANCES_ADDITIONAL_DATA,
@@ -174,12 +174,12 @@ def plot_matplotlib(sample, name: str) -> None:
 
 def check_pose_table_and_metrics_tables(table, metrics_table, overrides: dict[str, Any]):
     # Fetch table metadata.
-    table_points = tlc.KeypointHelper.get_points_from_table(table)
-    table_lines = tlc.KeypointHelper.get_lines_from_table(table)
-    table_point_attributes = tlc.KeypointHelper.get_keypoint_attributes_from_table(table)
-    table_line_attributes = tlc.KeypointHelper.get_line_attributes_from_table(table)
-    table_oks_sigmas = tlc.KeypointHelper.get_oks_sigmas_from_table(table)
-    table_flip_indices = tlc.KeypointHelper.get_flip_indices_from_table(table)
+    table_points = tlc.helpers.KeypointHelper.get_points_from_table(table)
+    table_lines = tlc.helpers.KeypointHelper.get_lines_from_table(table)
+    table_point_attributes = tlc.helpers.KeypointHelper.get_keypoint_attributes_from_table(table)
+    table_line_attributes = tlc.helpers.KeypointHelper.get_line_attributes_from_table(table)
+    table_oks_sigmas = tlc.helpers.KeypointHelper.get_oks_sigmas_from_table(table)
+    table_flip_indices = tlc.helpers.KeypointHelper.get_flip_indices_from_table(table)
 
     # Check table metadata correctness.
     assert table_points == overrides["points"]
@@ -191,12 +191,12 @@ def check_pose_table_and_metrics_tables(table, metrics_table, overrides: dict[st
 
     # Fetch metrics table metadata.
     pred_column = "keypoints_2d_predicted"
-    metrics_table_points = tlc.KeypointHelper.get_points_from_table(metrics_table, pred_column)
-    metrics_table_lines = tlc.KeypointHelper.get_lines_from_table(metrics_table, pred_column)
-    metrics_table_point_attr = tlc.KeypointHelper.get_keypoint_attributes_from_table(metrics_table, pred_column)
-    metrics_table_line_attr = tlc.KeypointHelper.get_line_attributes_from_table(metrics_table, pred_column)
-    metrics_table_oks_sigmas = tlc.KeypointHelper.get_oks_sigmas_from_table(metrics_table, pred_column)
-    metrics_table_flip_indices = tlc.KeypointHelper.get_flip_indices_from_table(metrics_table, pred_column)
+    metrics_table_points = tlc.helpers.KeypointHelper.get_points_from_table(metrics_table, pred_column)
+    metrics_table_lines = tlc.helpers.KeypointHelper.get_lines_from_table(metrics_table, pred_column)
+    metrics_table_point_attr = tlc.helpers.KeypointHelper.get_keypoint_attributes_from_table(metrics_table, pred_column)
+    metrics_table_line_attr = tlc.helpers.KeypointHelper.get_line_attributes_from_table(metrics_table, pred_column)
+    metrics_table_oks_sigmas = tlc.helpers.KeypointHelper.get_oks_sigmas_from_table(metrics_table, pred_column)
+    metrics_table_flip_indices = tlc.helpers.KeypointHelper.get_flip_indices_from_table(metrics_table, pred_column)
 
     # Check metrics table correctness.
     assert metrics_table_points == table_points

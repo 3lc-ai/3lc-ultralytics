@@ -18,7 +18,7 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         return {
-            "oriented_bbs_2d_predicted": tlc.OrientedBoundingBoxes2DSchema(
+            "oriented_bbs_2d_predicted": tlc.schemas.OrientedBoundingBoxes2DSchema(
                 classes=self.data["names"],
                 include_per_instance_confidence=True,
             )
@@ -29,7 +29,7 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
 
     def _build_annotation(self, scaled, mapped_classes, h, w):
         # OrientedBoundingBoxes2D stores all OBBs in a single (N, 5) ndarray.
-        return tlc.OrientedBoundingBoxes2D(
+        return tlc.data_types.OrientedBoundingBoxes2D(
             obbs=scaled["bboxes"].cpu().numpy().astype("float32"),
             labels=[int(c) for c in mapped_classes],
             confidences=scaled["conf"].cpu().numpy().astype("float32").tolist(),
@@ -38,4 +38,4 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
         )
 
     def _empty_annotation(self, h, w):
-        return tlc.OrientedBoundingBoxes2D.create_empty(image_width=w, image_height=h)
+        return tlc.data_types.OrientedBoundingBoxes2D.create_empty(image_width=w, image_height=h)

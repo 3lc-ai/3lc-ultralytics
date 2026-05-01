@@ -4,23 +4,8 @@ from typing import Any
 
 import cv2
 import numpy as np
-from tlc.core.builtins.constants import (
-    CENTER_X,
-    CENTER_Y,
-    IMAGE,
-    INSTANCES,
-    INSTANCES_ADDITIONAL_DATA,
-    LABEL,
-    ORIENTED_BBS_2D,
-    ROTATION,
-    SIZE_X,
-    SIZE_Y,
-    X_MAX,
-    X_MIN,
-    Y_MAX,
-    Y_MIN,
-)
-
+from tlc.data_types import OrientedBoundingBoxes2D
+from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, OBB_LABEL_COLUMN_NAME
 from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
 
 
@@ -97,45 +82,33 @@ class TLCOBBDataset(BaseTLCYOLODataset):
             data=data,
             exclude_zero=exclude_zero,
             class_map=class_map,
-            image_column_name=image_column_name or IMAGE,
-            label_column_name=label_column_name or ORIENTED_BBS_2D,
+            image_column_name=image_column_name or IMAGE_COLUMN_NAME,
+            label_column_name=label_column_name or OBB_LABEL_COLUMN_NAME,
             **kwargs,
         )
         self._post_init()
 
     def _get_label_from_row(self, im_file: str, row: Any, example_id: int) -> dict[str, Any]:
         label_root = self._label_column_name.split(".")[0]
-        label_column_value = row[label_root]
+        instances = OrientedBoundingBoxes2D.from_row(row[label_root])
 
-        x_min = label_column_value[X_MIN]
-        y_min = label_column_value[Y_MIN]
-        x_max = label_column_value[X_MAX]
-        y_max = label_column_value[Y_MAX]
-        image_width = x_max - x_min
-        image_height = y_max - y_min
+        image_width = float(instances.x_max - (instances.x_min or 0))
+        image_height = float(instances.y_max - (instances.y_min or 0))
 
-        # Get classes
-        cls_arr = np.array(
-            label_column_value[INSTANCES_ADDITIONAL_DATA][LABEL],
-            dtype=np.float32,
-        ).reshape(-1, 1)
+        cls_arr = instances.instance_labels.astype(np.float32).reshape(-1, 1)
 
-        # Get bboxes
         boxes = []
-
         segments = []
-        for instance in label_column_value[INSTANCES]:
-            xc = instance[ORIENTED_BBS_2D][0][CENTER_X] / image_width
-            yc = instance[ORIENTED_BBS_2D][0][CENTER_Y] / image_height
-            w = instance[ORIENTED_BBS_2D][0][SIZE_X] / image_width
-            h = instance[ORIENTED_BBS_2D][0][SIZE_Y] / image_height
-            r = instance[ORIENTED_BBS_2D][0][ROTATION]
-
-            r = r * 180 / np.pi  # Convert radians to degrees
-            corner_points = cv2.boxPoints(((xc, yc), (w, h), r))
+        # obbs has shape (N, 5): [center_x, center_y, size_x, size_y, rotation_radians]
+        for cx, cy, sx, sy, r in instances.obbs:
+            xc_n = cx / image_width
+            yc_n = cy / image_height
+            w_n = sx / image_width
+            h_n = sy / image_height
+            r_deg = r * 180 / np.pi  # cv2.boxPoints expects degrees
+            corner_points = cv2.boxPoints(((xc_n, yc_n), (w_n, h_n), r_deg))
             segments.append(corner_points)
-            box = corner_points_to_xywh(corner_points)
-            boxes.append(box)
+            boxes.append(corner_points_to_xywh(corner_points))
 
         bboxes_arr = np.array(boxes, ndmin=2, dtype=np.float32)
         if len(boxes) == 0:

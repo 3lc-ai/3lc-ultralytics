@@ -5,10 +5,7 @@ from typing import TYPE_CHECKING, Literal, overload
 
 import tlc
 import yaml
-from tlc.core.builtins.constants import (
-    INSTANCES_ADDITIONAL_DATA,
-    LABEL,
-)
+from tlc.helpers import AnnotationHelper
 from ultralytics.data.utils import check_det_dataset
 from ultralytics.utils import LOGGER, colorstr
 
@@ -185,21 +182,23 @@ def check_tlc_dataset(  # noqa: C901
     first_split = next(iter(tables.keys()))
 
     value_map = get_value_map_from_table(tables[first_split], label_column_name, task)
-    names = tlc.SchemaHelper.to_simple_value_map(value_map)
+    names = tlc.helpers.SchemaHelper.to_simple_value_map(value_map)
     if task == "pose":
-        kpt_shape = tlc.KeypointHelper.get_keypoint_shape_from_table(tables[first_split], label_column_name)
-        flip_idx = tlc.KeypointHelper.get_flip_indices_from_table(tables[first_split], label_column_name)
-        keypoint_attributes = tlc.KeypointHelper.get_keypoint_attributes_from_table(
+        kpt_shape = tlc.helpers.KeypointHelper.get_keypoint_shape_from_table(tables[first_split], label_column_name)
+        flip_idx = tlc.helpers.KeypointHelper.get_flip_indices_from_table(tables[first_split], label_column_name)
+        keypoint_attributes = tlc.helpers.KeypointHelper.get_keypoint_attributes_from_table(
             tables[first_split], label_column_name
         )
-        lines = tlc.KeypointHelper.get_lines_from_table(tables[first_split], label_column_name)
-        line_attributes = tlc.KeypointHelper.get_line_attributes_from_table(tables[first_split], label_column_name)
-        triangles = tlc.KeypointHelper.get_triangles_from_table(tables[first_split], label_column_name)
-        triangle_attributes = tlc.KeypointHelper.get_triangle_attributes_from_table(
+        lines = tlc.helpers.KeypointHelper.get_lines_from_table(tables[first_split], label_column_name)
+        line_attributes = tlc.helpers.KeypointHelper.get_line_attributes_from_table(
             tables[first_split], label_column_name
         )
-        oks_sigmas = tlc.KeypointHelper.get_oks_sigmas_from_table(tables[first_split], label_column_name)
-        points = tlc.KeypointHelper.get_points_from_table(tables[first_split], label_column_name)
+        triangles = tlc.helpers.KeypointHelper.get_triangles_from_table(tables[first_split], label_column_name)
+        triangle_attributes = tlc.helpers.KeypointHelper.get_triangle_attributes_from_table(
+            tables[first_split], label_column_name
+        )
+        oks_sigmas = tlc.helpers.KeypointHelper.get_oks_sigmas_from_table(tables[first_split], label_column_name)
+        points = tlc.helpers.KeypointHelper.get_points_from_table(tables[first_split], label_column_name)
     else:
         kpt_shape = [17, 3]  # yolo default
         flip_idx, keypoint_attributes, lines, line_attributes, triangles, triangle_attributes, oks_sigmas, points = (
@@ -221,7 +220,7 @@ def check_tlc_dataset(  # noqa: C901
             continue
 
         split_value_map = get_value_map_from_table(split_table, label_column_name, task)
-        split_names = tlc.SchemaHelper.to_simple_value_map(split_value_map)
+        split_names = tlc.helpers.SchemaHelper.to_simple_value_map(split_value_map)
 
         if split_names is None:
             raise ValueError(f"Failed to get value map for table with Url: {tables[split].url}")
@@ -285,18 +284,15 @@ def get_value_map_from_table(
     label_column_name: str,
     task: Literal["detect", "segment", "pose", "classify", "obb"],
 ) -> dict[int, str]:
-    if task == "pose":
+    if task in ("pose", "obb"):
+        column_name = label_column_name.split(".")[0]
         try:
-            return table.rows_schema[label_column_name][INSTANCES_ADDITIONAL_DATA][LABEL].value.map
-        except Exception as e:
+            ann = AnnotationHelper.get(table, column_name)
+            assert ann.label_path is not None
+            return table.get_value_map(ann.label_path)  # type: ignore[return-value]
+        except (AssertionError, KeyError, ValueError) as e:
             raise ValueError("Failed to get value map from table") from e
-    elif task == "obb":
-        try:
-            return table.rows_schema[label_column_name][INSTANCES_ADDITIONAL_DATA][LABEL].value.map
-        except Exception as e:
-            raise ValueError("Failed to get value map from table") from e
-    else:
-        return table.get_value_map(label_column_name)  # type: ignore[return-value]
+    return table.get_value_map(label_column_name)  # type: ignore[return-value]
 
 
 def parse_3lc_yaml_file(data_file: str) -> dict[str, tlc.Table]:
@@ -435,7 +431,7 @@ def _get_existing_table(
     if_exists: Literal["raise", "reuse", "rename", "overwrite"],
 ) -> tlc.Table | None:
     """Check if a table already exists and return it if if_exists is 'reuse'."""
-    final_table_url = tlc.ProjectLayout.table_url(
+    final_table_url = tlc.helpers.ProjectLayout.table_url(
         table_name="initial", dataset_name=dataset_name, project_name=project_name
     )
 
@@ -531,7 +527,7 @@ def create_tables_from_yaml_file(
 
     # Set up project name
     default_project_name = _get_default_names(dataset, "")[0] if not project_name else project_name
-    project_url = tlc.ProjectLayout.project_url(project_name=default_project_name, root_url=root_url)
+    project_url = tlc.helpers.ProjectLayout.project_url(project_name=default_project_name, root_url=root_url)
     resolved_project_name = project_url.name
 
     if task == "pose":

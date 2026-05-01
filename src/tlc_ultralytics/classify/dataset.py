@@ -6,6 +6,7 @@ from typing import Any
 import tlc
 from ultralytics.data.dataset import ClassificationDataset
 
+from tlc_ultralytics.constants import CLASSIFY_LABEL_COLUMN_NAME, IMAGE_COLUMN_NAME
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
 
 
@@ -45,8 +46,8 @@ class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
         args,
         augment=False,
         prefix="",
-        image_column_name=tlc.IMAGE,
-        label_column_name=tlc.LABEL,
+        image_column_name=IMAGE_COLUMN_NAME,
+        label_column_name=CLASSIFY_LABEL_COLUMN_NAME,
         exclude_zero=False,
         class_map=None,
     ):

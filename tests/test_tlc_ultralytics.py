@@ -19,6 +19,9 @@ import tlc
 import yaml
 from PIL import Image
 from testing_helpers import check_pose_table_and_metrics_tables, compare_dataset_values, plot_ultralytics
+from tlc._core.objects.tables.from_table.edited_table import EditedTable
+from tlc._core.objects.tables.null_overlay import NullOverlay
+from tlc.helpers import KeypointHelper
 from ultralytics.cfg import ASSETS
 from ultralytics.models.yolo import YOLO
 from ultralytics.models.yolo.detect import DetectionTrainer
@@ -31,6 +34,9 @@ from tlc_ultralytics import Settings
 from tlc_ultralytics.classify.trainer import TLCClassificationTrainer
 from tlc_ultralytics.constants import (
     DEFAULT_COLLECT_RUN_DESCRIPTION,
+    EPOCH,
+    FOREIGN_TABLE_ID,
+    LABEL,
     MAP,
     MAP50_95,
     NUM_IMAGES,
@@ -49,13 +55,15 @@ from tlc_ultralytics.pose.trainer import TLCPoseTrainer
 from tlc_ultralytics.segment.trainer import TLCSegmentationTrainer
 from tlc_ultralytics.segment.utils import check_seg_table
 from tlc_ultralytics.utils import check_tlc_dataset
+from tlc._core.objects.tables.from_table import PacmapTable
+from tlc.constants._run_status import RUN_STATUS_COMPLETED
 
 DUMMY_IMAGE_FILE = Path(__file__).parent.parent / "src" / "tlc_ultralytics" / "_static" / "dashboard.png"
 TMP = Path(__file__).parent / "tmp"
 TMP_PROJECT_ROOT_URL = tlc.Url(TMP / "3LC")
-tlc.UrlAliasRegistry.instance().register_url_alias("<TEST_ALIAS>", "/test/alias")
+tlc.register_url_alias("<TEST_ALIAS>", "/test/alias")
 tlc.Configuration.instance().project_root_url = TMP_PROJECT_ROOT_URL
-tlc.TableIndexingTable.instance().add_scan_url(
+tlc._core.objects.tables.system_tables.indexing_tables.table_indexing_table.TableIndexingTable.instance().add_scan_url(
     {
         "url": tlc.Url(TMP_PROJECT_ROOT_URL),
         "layout": "project",
@@ -109,8 +117,8 @@ TASK2ULTRALYTICS_TRAINER = {
 }
 
 COCO_POSE_SETTINGS_OVERRIDES = {
-    "points": tlc.KeypointHelper.COCO_KEYPOINT_DEFAULT_POSE,
-    "lines": tlc.KeypointHelper.COCO_SKELETON,
+    "points": KeypointHelper.COCO_KEYPOINT_DEFAULT_POSE,
+    "lines": KeypointHelper.COCO_SKELETON,
     "point_attributes": [f"p{i}" for i in range(17)],
     "line_attributes": [f"l{i}" for i in range(16)],
 }
@@ -240,7 +248,7 @@ def test_training(task: str) -> None:
     # Get 3LC run and inspect the results
     run = _get_run_from_settings(settings)
 
-    assert run.status == tlc.RUN_STATUS_COMPLETED, "Run status not set to completed after training"
+    assert run.status == RUN_STATUS_COMPLETED, "Run status not set to completed after training"
 
     assert run.project_name == settings.project_name, "Project name mismatch"
     assert run.description == settings.run_description, "Description mismatch"
@@ -307,9 +315,9 @@ def test_training(task: str) -> None:
     assert foreign_table_url.to_absolute(per_class_metrics_tables[0].url).exists()
 
     assert TRAINING_PHASE in per_class_metrics_df.columns, "Expected training phase column in per-class metrics"
-    assert tlc.EPOCH in per_class_metrics_df.columns, "Expected epoch column in per-class metrics"
-    assert tlc.FOREIGN_TABLE_ID in per_class_metrics_df.columns, "Expected foreign_table_id column in per-class metrics"
-    assert tlc.LABEL in per_class_metrics_df.columns, "Expected label column in per-class metrics"
+    assert EPOCH in per_class_metrics_df.columns, "Expected epoch column in per-class metrics"
+    assert FOREIGN_TABLE_ID in per_class_metrics_df.columns, "Expected foreign_table_id column in per-class metrics"
+    assert LABEL in per_class_metrics_df.columns, "Expected label column in per-class metrics"
     assert PRECISION in per_class_metrics_df.columns, "Expected precision column in per-class metrics"
     assert RECALL in per_class_metrics_df.columns, "Expected recall column in per-class metrics"
     assert MAP in per_class_metrics_df.columns, "Expected mAP column in per-class metrics"
@@ -464,7 +472,7 @@ def test_classify_training() -> None:
 
     run = _get_run_from_settings(settings)
 
-    assert run.status == tlc.RUN_STATUS_COMPLETED, "Run status not set to completed after training"
+    assert run.status == RUN_STATUS_COMPLETED, "Run status not set to completed after training"
     assert not run.description, "Description mismatch, default should be empty string"
 
     # Imagenet should get special treatment with label display name overrides
@@ -552,7 +560,7 @@ def test_metrics_collection_only(task) -> None:
         ignore_index=True,
     )
     assert "loss" not in metrics_df.columns, "Expected no loss column"
-    assert run.status == tlc.RUN_STATUS_COMPLETED, "Run status not set to completed after training"
+    assert run.status == RUN_STATUS_COMPLETED, "Run status not set to completed after training"
     assert run.description == DEFAULT_COLLECT_RUN_DESCRIPTION, "Description mismatch"
     assert len(metrics_tables[PER_CLASS_METRICS_STREAM_NAME]) == 2, "Expected 2 per-class metrics tables (train, val)"
 
@@ -561,7 +569,7 @@ def test_metrics_collection_only(task) -> None:
         ignore_index=True,
     )
     assert TRAINING_PHASE not in per_class_metrics_df.columns, "Expected no training phase column"
-    assert tlc.EPOCH not in per_class_metrics_df.columns, "Expected no epoch column"
+    assert EPOCH not in per_class_metrics_df.columns, "Expected no epoch column"
 
 
 def test_embeddings_collection() -> None:
@@ -582,12 +590,12 @@ def test_embeddings_collection() -> None:
 
     run = _get_run_from_settings(settings)
     assert len(run.metrics_tables) == 2, "Expected 2 metrics tables to be written"
-    assert any(isinstance(metrics_table, tlc.PacmapTable) for metrics_table in run.metrics_tables), (
+    assert any(isinstance(metrics_table, PacmapTable) for metrics_table in run.metrics_tables), (
         "Expected a PaCMAPTable"
     )
 
     embeddings_table = next(
-        metrics_table for metrics_table in run.metrics_tables if isinstance(metrics_table, tlc.PacmapTable)
+        metrics_table for metrics_table in run.metrics_tables if isinstance(metrics_table, PacmapTable)
     )
     assert "embeddings_pacmap" in embeddings_table.columns, "Expected embeddings column"
 
@@ -657,7 +665,7 @@ def test_table_resolving() -> None:
     train_table = trainer.data["train"]
 
     # Create an edited version of the train table
-    train_table_edited = tlc.NullOverlay(
+    train_table_edited = NullOverlay(
         train_table.url.create_sibling("peter").create_unique(),
         input_table_url=train_table,
     )
@@ -692,7 +700,7 @@ def test_seg_table_checker() -> None:
     check_seg_table(trainer.data["train"], "image", "segmentations")
 
     # The same data in a new table, but backed by a row cache, is also valid
-    overlay_table_url = tlc.NullOverlay(
+    overlay_table_url = NullOverlay(
         url=trainer.data["train"].url.create_sibling("overlay_table"), input_table_url=trainer.data["train"]
     ).write_to_url()
     overlay_table = tlc.Table.from_url(overlay_table_url)
@@ -728,7 +736,7 @@ def test_sampling_weights() -> None:
 
     # Create edited table where one sample has weight increased to 2
     train_table = trainer.data["train"]
-    edited_table = tlc.EditedTable(
+    edited_table = EditedTable(
         url=train_table.url.create_sibling("jonas"),
         input_table_url=train_table,
         edits={train_table.weights_column_name: {"runs_and_values": [[0], 2.0]}},
@@ -769,7 +777,7 @@ def test_exclude_zero_weight_training() -> None:
 
     # Create edited table where one sample has weight increased to 2
     train_table = trainer.data["train"]
-    edited_table = tlc.EditedTable(
+    edited_table = EditedTable(
         url=train_table.url.create_sibling("jonas"),
         input_table_url=train_table,
         edits={train_table.weights_column_name: {"runs_and_values": [[0], 0.0]}},
@@ -802,7 +810,7 @@ def test_exclude_zero_weight_collection(task) -> None:
 
     # Create edited table where several samples have weight 0
     train_table = trainer.data["train"]
-    edited_table = tlc.EditedTable(
+    edited_table = EditedTable(
         url=train_table.url.create_sibling(f"erna_{task}"),
         input_table_url=train_table,
         edits={train_table.weights_column_name: {"runs_and_values": [[0, 3], 0.0]}},
@@ -944,7 +952,7 @@ def test_arbitrary_class_indices(task) -> None:  # noqa: C901
                     }
                 )
 
-            edited_tables[split] = tlc.EditedTable(
+            edited_tables[split] = EditedTable(
                 url=edited_schema_table.url.create_sibling(f"edited_value_map_and_values_{task}"),
                 input_table_url=edited_schema_table,
                 edits={"bbs": {"runs_and_values": bbs_edits}},
@@ -955,7 +963,7 @@ def test_arbitrary_class_indices(task) -> None:  # noqa: C901
                 edits.append([i])
                 edits.append(label_map[row[label_column_name]])
 
-            edited_tables[split] = tlc.EditedTable(
+            edited_tables[split] = EditedTable(
                 url=edited_schema_table.url.create_sibling(f"edited_value_map_and_values_{task}"),
                 input_table_url=edited_schema_table,
                 edits={label_column_name: {"runs_and_values": edits}},
@@ -976,7 +984,7 @@ def test_arbitrary_class_indices(task) -> None:  # noqa: C901
 
                 edits.append(segmentations_edit)
 
-            edited_tables[split] = tlc.EditedTable(
+            edited_tables[split] = EditedTable(
                 url=edited_schema_table.url.create_sibling(f"edited_value_map_and_values_{task}"),
                 input_table_url=edited_schema_table,
                 edits={
@@ -1051,8 +1059,14 @@ def test_check_tlc_dataset_different_categories(train_classes, val_classes, desc
     # Test that an error is raised if the categories of the tables are different
     project_name = f"test_check_tlc_dataset_different_categories_{description.lower().replace(' ', '_')}"
 
-    train_structure = {"image": tlc.ImageUrlSchema(), "label": tlc.CategoricalLabelSchema(classes=train_classes)}
-    val_structure = {"image": tlc.ImageUrlSchema(), "label": tlc.CategoricalLabelSchema(classes=val_classes)}
+    train_structure = {
+        "image": tlc.schemas.ImageUrlSchema(),
+        "label": tlc.schemas.CategoricalLabelSchema(classes=train_classes),
+    }
+    val_structure = {
+        "image": tlc.schemas.ImageUrlSchema(),
+        "label": tlc.schemas.CategoricalLabelSchema(classes=val_classes),
+    }
 
     train_table = tlc.Table.from_dict(
         {"image": ["a.jpg", "b.jpg"], "label": [0, 1]},
@@ -1104,7 +1118,10 @@ def test_check_tlc_dataset_string_tables_converted_before_split_filter() -> None
     Later code then called .get_value_map() on the string, causing AttributeError.
     """
     # Create a minimal table to use as the "train" split
-    train_schema = {"image": tlc.ImageUrlSchema(), "label": tlc.CategoricalLabelSchema(classes=["a", "b"])}
+    train_schema = {
+        "image": tlc.schemas.ImageUrlSchema(),
+        "label": tlc.schemas.CategoricalLabelSchema(classes=["a", "b"]),
+    }
     train_table = tlc.Table.from_dict(
         {"image": [str(DUMMY_IMAGE_FILE)], "label": [0]},
         schema=train_schema,
@@ -1136,8 +1153,8 @@ def test_check_tlc_dataset_string_tables_converted_before_split_filter() -> None
 def test_small_segmentations() -> None:
     # Test that small segmentations are skipped properly
     structure = {
-        "image": tlc.ImageUrlSchema(),
-        "segmentations": tlc.SegmentationPolygonsSchema(
+        "image": tlc.schemas.ImageUrlSchema(),
+        "segmentations": tlc.schemas.SegmentationPolygonsSchema(
             classes=["a", "b", "c"],
             relative=True,
         ),
@@ -1189,8 +1206,8 @@ def test_small_segmentations() -> None:
 def test_absolute_segmentation_polygons() -> None:
     # Test that absolute segmentation polygons are handled correctly
     structure = {
-        "image": tlc.ImageUrlSchema(),
-        "segmentations": tlc.SegmentationPolygonsSchema(
+        "image": tlc.schemas.ImageUrlSchema(),
+        "segmentations": tlc.schemas.SegmentationPolygonsSchema(
             classes=["a", "b", "c"],
             relative=False,
         ),
@@ -1258,7 +1275,7 @@ def test_absolutize_image_url() -> None:
         TLCDatasetMixin._absolutize_image_url(url, tlc.Url("some_table_url"))
 
     # Non-file schemes should fail
-    for scheme in (tlc.Scheme.S3, tlc.Scheme.GS, tlc.Scheme.ABFS):
+    for scheme in (tlc.url.Scheme.S3, tlc.url.Scheme.GS, tlc.url.Scheme.ABFS):
         url = tlc.Url(f"{scheme}://some/remote/url.png")
         with pytest.raises(ValueError):
             TLCDatasetMixin._absolutize_image_url(url, tlc.Url("some_table_url"))
@@ -1267,21 +1284,21 @@ def test_absolutize_image_url() -> None:
     url = tlc.Url("<TEST_ALIAS>/in/my/url.png")
     result = TLCDatasetMixin._absolutize_image_url(url, tlc.Url("some_table_url"))
     assert result == "/test/alias/in/my/url.png"
-    assert tlc.Url(result).scheme == tlc.Scheme.FILE
+    assert tlc.Url(result).scheme == tlc.url.Scheme.FILE
 
     # Relative URLs should be made absolute
     relative_url = tlc.Url("../some/relative/url.png")
-    assert relative_url.scheme == tlc.Scheme.RELATIVE
+    assert relative_url.scheme == tlc.url.Scheme.RELATIVE
     result = TLCDatasetMixin._absolutize_image_url(relative_url, tlc.Url("/one/two/table"))
     assert result == "/one/two/some/relative/url.png"
-    assert tlc.Url(result).scheme == tlc.Scheme.FILE
+    assert tlc.Url(result).scheme == tlc.url.Scheme.FILE
 
     # Absolute URLs should remain unchanged
     absolute_url = tlc.Url("/some/absolute/url.png")
-    assert absolute_url.scheme == tlc.Scheme.FILE
+    assert absolute_url.scheme == tlc.url.Scheme.FILE
     result = TLCDatasetMixin._absolutize_image_url(absolute_url, tlc.Url("/one/two/table"))
     assert result == "/some/absolute/url.png"
-    assert tlc.Url(result).scheme == tlc.Scheme.FILE
+    assert tlc.Url(result).scheme == tlc.url.Scheme.FILE
 
 
 def test_extra_metrics() -> None:
@@ -1298,8 +1315,8 @@ def test_extra_metrics() -> None:
         }
 
     metric_schemas = {
-        "metric_with_schema": tlc.Schema(
-            value=tlc.Int32Value(value_map={float(i): tlc.MapElement(f"value_{i}") for i in range(BATCH_SIZE * 2)}),
+        "metric_with_schema": tlc.schemas.CategoricalLabelSchema(
+            classes=[f"value_{i}" for i in range(BATCH_SIZE * 2)],
         ),
     }
 

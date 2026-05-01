@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import tlc
+from tlc.helpers import AnnotationHelper, AnnotationType
 
+from tlc_ultralytics.constants import IMAGE_COLUMN_NAME
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
 
 if TYPE_CHECKING:
@@ -88,7 +90,7 @@ def build_tlc_yolo_dataset(
 
 def check_det_table(
     table: tlc.Table,
-    image_column_name: str = tlc.IMAGE,
+    image_column_name: str = IMAGE_COLUMN_NAME,
     label_column_name: str | None = None,
 ) -> None:
     """Check that a table is compatible with the detection task in the 3LC YOLO integration.
@@ -101,8 +103,6 @@ def check_det_table(
         If None, auto-detected from the table schema.
     :raises: ValueError if the table is not compatible with the detection task.
     """
-    from tlc.core.helpers.annotation_helper import detect_bounding_box_column, get_label_path
-
     row_schema = table.row_schema.values
 
     try:
@@ -117,13 +117,12 @@ def check_det_table(
                 "compatible with the detection task or provide a `label_column_name` that matches the value path."
             )
         else:
-            # Auto-detect bounding box column and label path
-            is_bb, bb_column = detect_bounding_box_column(table)
-            assert is_bb and bb_column, "No bounding box column found in the table."
-            detected_path = get_label_path(table, bb_column)
-            assert detected_path is not None, f"Bounding box column '{bb_column}' found but no label field detected."
-            assert table.get_value_map(detected_path) is not None, (
-                f"Unable to get value map for auto-detected label path '{detected_path}'."
+            # Auto-detect bounding box column and label path via AnnotationHelper
+            ann = AnnotationHelper.find(table, type=AnnotationType.BOUNDING_BOXES)
+            assert ann is not None, "No bounding box column found in the table."
+            assert ann.label_path is not None, f"Bounding box column '{ann.name}' found but no label field detected."
+            assert table.get_value_map(ann.label_path) is not None, (
+                f"Unable to get value map for auto-detected label path '{ann.label_path}'."
             )
 
     except (AssertionError, KeyError) as e:
@@ -138,7 +137,7 @@ def yolo_predicted_bounding_box_schema(
     :param label_value_map: Mapping of class indices to label metadata.
     :returns: A BoundingBoxes2DSchema for predicted boxes.
     """
-    return tlc.BoundingBoxes2DSchema(
+    return tlc.schemas.BoundingBoxes2DSchema(
         classes=label_value_map,
         include_per_instance_confidence=True,
         description="Predicted Bounding Boxes",
@@ -153,29 +152,25 @@ def yolo_loss_schemas(training: bool = False) -> dict[str, tlc.Schema]:
     :returns: The YOLO loss schemas for each of the three components.
     """
     schemas = {}
-    schemas["box_loss"] = tlc.Schema(
+    schemas["box_loss"] = tlc.schemas.Float32Schema(
         description="Box Loss",
         writable=False,
-        value=tlc.Float32Value(),
         display_importance=3004,
     )
-    schemas["dfl_loss"] = tlc.Schema(
+    schemas["dfl_loss"] = tlc.schemas.Float32Schema(
         description="Distribution Focal Loss",
         writable=False,
-        value=tlc.Float32Value(),
         display_importance=3005,
     )
-    schemas["cls_loss"] = tlc.Schema(
+    schemas["cls_loss"] = tlc.schemas.Float32Schema(
         description="Classification Loss",
         writable=False,
-        value=tlc.Float32Value(),
         display_importance=3006,
     )
     if training:
-        schemas["loss"] = tlc.Schema(
+        schemas["loss"] = tlc.schemas.Float32Schema(
             description="Weighted sum of box, DFL, and classification losses used in training",
             writable=False,
-            value=tlc.Float32Value(),
             display_importance=3007,
         )
     return schemas
@@ -197,19 +192,16 @@ def construct_bbox_struct(
     :returns: A serialized dict suitable for writing to a 3LC Table.
     """
     import numpy as np
-    from tlc.core.data_formats.bb_conversions import denormalize_bbs_2d
-    from tlc.core.data_formats.bounding_boxes import BoundingBoxes2D
-
+    from tlc.data_types import BoundingBoxes2D
     if not predicted_annotations:
         bb2d = BoundingBoxes2D.create_empty(
             image_width=image_width,
             image_height=image_height,
         )
     else:
-        # Predictions arrive in normalized cxywh (YOLO format); denormalize layout-preserving,
-        # then let the constructor convert cxywh → xyxy via bbox_format.
+        # Predictions arrive in normalized cxywh (YOLO format); the constructor handles
+        # both denormalization (via image_width/height + normalized=True) and cxywh → xyxy.
         cxywh_norm = np.array([pred["bbox"] for pred in predicted_annotations], dtype=np.float32)
-        cxywh_abs = denormalize_bbs_2d(cxywh_norm, image_width, image_height)
 
         labels = []
         confidences = []
@@ -221,12 +213,13 @@ def construct_bbox_struct(
             confidences.append(float(pred["score"]))
 
         bb2d = BoundingBoxes2D(
-            bboxes=cxywh_abs,
+            bboxes=cxywh_norm,
             bbox_format="cxywh",
+            normalized=True,
+            image_width=image_width,
+            image_height=image_height,
             labels=labels,
             confidences=confidences,
-            x_max=float(image_width),
-            y_max=float(image_height),
         )
 
     return bb2d.to_row()

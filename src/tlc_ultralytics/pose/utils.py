@@ -3,16 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import tlc
-from tlc.core.builtins.constants import (
-    BBS_2D,
-    INSTANCES,
-    INSTANCES_ADDITIONAL_DATA,
-    VERTICES_2D,
-    X_MAX,
-    X_MIN,
-    Y_MAX,
-    Y_MIN,
-)
+from tlc.helpers import AnnotationHelper, AnnotationType
 
 if TYPE_CHECKING:
     from tlc_ultralytics.settings import Settings
@@ -57,25 +48,16 @@ def check_pose_table(table: tlc.Table, image_column_name: str, label_column_name
     :param label_column_name: The name of the pose label root column (e.g., 'pose').
     :raises ValueError: If the table is not compatible with pose.
     """
-    row_schema = table.row_schema.values
-
     label_root = label_column_name.split(".")[0]
 
     try:
-        assert image_column_name in row_schema, f"Image column '{image_column_name}' not found."
-        assert label_root in row_schema, f"Pose column '{label_root}' not found."
-
-        schema = row_schema[label_root]
-        assert hasattr(schema, "values"), f"Pose column '{label_root}' has no values schema."
-        for key in (X_MIN, Y_MIN, X_MAX, Y_MAX, INSTANCES, INSTANCES_ADDITIONAL_DATA):
-            assert key in schema.values, f"Pose column '{label_root}' missing key '{key}'."
-
-        instances_schema = schema.values[INSTANCES]
-        assert hasattr(instances_schema, "values"), "Instances schema must be composite."
-        for k in (VERTICES_2D, BBS_2D):
-            assert k in instances_schema.values, f"Instances missing '{k}'."
-
-    except (AssertionError, KeyError) as e:
+        assert image_column_name in table.row_schema.values, f"Image column '{image_column_name}' not found."
+        ann = AnnotationHelper.get(table, label_root)
+        assert ann.type is AnnotationType.KEYPOINTS, (
+            f"Label column '{label_root}' is not a keypoints column (got {ann.type})."
+        )
+        assert ann.label_path is not None, f"Pose column '{label_root}' missing label."
+    except (AssertionError, KeyError, ValueError) as e:
         raise ValueError(f"Table with url {table.url} is not compatible with YOLO pose. {e}") from None
 
 
@@ -86,43 +68,37 @@ def yolo_pose_loss_schemas(training: bool = False) -> dict[str, tlc.Schema]:
     :returns: The YOLO pose loss schemas for each component.
     """
     schemas: dict[str, tlc.Schema] = {}
-    schemas["box_loss"] = tlc.Schema(
+    schemas["box_loss"] = tlc.schemas.Float32Schema(
         description="Box Loss",
         writable=False,
-        value=tlc.Float32Value(),
         display_importance=3004,
     )
-    schemas["dfl_loss"] = tlc.Schema(
+    schemas["dfl_loss"] = tlc.schemas.Float32Schema(
         description="Distribution Focal Loss",
         writable=False,
-        value=tlc.Float32Value(),
         display_importance=3005,
     )
-    schemas["cls_loss"] = tlc.Schema(
+    schemas["cls_loss"] = tlc.schemas.Float32Schema(
         description="Classification Loss",
         writable=False,
-        value=tlc.Float32Value(),
         display_importance=3006,
     )
-    schemas["pose_loss"] = tlc.Schema(
+    schemas["pose_loss"] = tlc.schemas.Float32Schema(
         description="Keypoint location loss",
         writable=False,
-        value=tlc.Float32Value(),
         display_importance=3008,
     )
-    schemas["kobj_loss"] = tlc.Schema(
+    schemas["kobj_loss"] = tlc.schemas.Float32Schema(
         description="Keypoint visibility/objectness loss",
         writable=False,
-        value=tlc.Float32Value(),
         display_importance=3009,
     )
     if training:
-        schemas["loss"] = tlc.Schema(
+        schemas["loss"] = tlc.schemas.Float32Schema(
             description=(
                 "Weighted sum of box, DFL, classification, keypoint location and visibility losses used in training"
             ),
             writable=False,
-            value=tlc.Float32Value(),
             display_importance=3010,
         )
     return schemas
