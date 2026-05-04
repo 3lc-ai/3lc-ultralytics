@@ -49,8 +49,8 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
             image_width=w,
             masks=scaled["masks"].cpu().numpy(),  # PyTorch-native (N, H, W); transposed by mask_format below
             mask_format="nhw",
-            labels=mapped_classes,
-            confidences=scaled["conf"].tolist(),
+            instance_labels=mapped_classes,
+            instance_confidences=scaled["conf"].tolist(),
         )
 
     def _empty_annotation(self, h, w):

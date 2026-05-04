@@ -193,6 +193,7 @@ def construct_bbox_struct(
     """
     import numpy as np
     from tlc.data_types import BoundingBoxes2D
+
     if not predicted_annotations:
         bb2d = BoundingBoxes2D.create_empty(
             image_width=image_width,
@@ -213,13 +214,13 @@ def construct_bbox_struct(
             confidences.append(float(pred["score"]))
 
         bb2d = BoundingBoxes2D(
-            bboxes=cxywh_norm,
-            bbox_format="cxywh",
+            bbs=cxywh_norm,
+            bb_format="cxywh",
             normalized=True,
             image_width=image_width,
             image_height=image_height,
-            labels=labels,
-            confidences=confidences,
+            instance_labels=labels,
+            instance_confidences=confidences,
         )
 
     return bb2d.to_row()

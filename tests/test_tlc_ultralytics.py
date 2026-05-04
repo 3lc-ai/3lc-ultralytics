@@ -19,8 +19,10 @@ import tlc
 import yaml
 from PIL import Image
 from testing_helpers import check_pose_table_and_metrics_tables, compare_dataset_values, plot_ultralytics
+from tlc._core.objects.tables.from_table import PacmapTable
 from tlc._core.objects.tables.from_table.edited_table import EditedTable
 from tlc._core.objects.tables.null_overlay import NullOverlay
+from tlc.constants._run_status import RUN_STATUS_COMPLETED
 from tlc.helpers import KeypointHelper
 from ultralytics.cfg import ASSETS
 from ultralytics.models.yolo import YOLO
@@ -55,8 +57,6 @@ from tlc_ultralytics.pose.trainer import TLCPoseTrainer
 from tlc_ultralytics.segment.trainer import TLCSegmentationTrainer
 from tlc_ultralytics.segment.utils import check_seg_table
 from tlc_ultralytics.utils import check_tlc_dataset
-from tlc._core.objects.tables.from_table import PacmapTable
-from tlc.constants._run_status import RUN_STATUS_COMPLETED
 
 DUMMY_IMAGE_FILE = Path(__file__).parent.parent / "src" / "tlc_ultralytics" / "_static" / "dashboard.png"
 TMP = Path(__file__).parent / "tmp"
@@ -590,9 +590,7 @@ def test_embeddings_collection() -> None:
 
     run = _get_run_from_settings(settings)
     assert len(run.metrics_tables) == 2, "Expected 2 metrics tables to be written"
-    assert any(isinstance(metrics_table, PacmapTable) for metrics_table in run.metrics_tables), (
-        "Expected a PaCMAPTable"
-    )
+    assert any(isinstance(metrics_table, PacmapTable) for metrics_table in run.metrics_tables), "Expected a PaCMAPTable"
 
     embeddings_table = next(
         metrics_table for metrics_table in run.metrics_tables if isinstance(metrics_table, PacmapTable)
