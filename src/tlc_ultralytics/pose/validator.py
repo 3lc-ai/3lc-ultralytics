@@ -100,7 +100,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             kconf = kpts[j, :, 2].cpu().numpy().astype(np.float32).tolist() if kpts.shape[2] == 3 else None
             instances.add_instance(
                 keypoints=kxy,
-                bb=scaled["bboxes"][j].cpu().numpy().astype(np.float32).tolist(),
+                bounding_box=scaled["bboxes"][j].cpu().numpy().astype(np.float32).tolist(),
                 label=int(mapped_classes[j]),
                 keypoint_confidences=kconf,
                 confidence=float(scaled["conf"][j]),

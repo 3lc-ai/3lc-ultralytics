@@ -31,8 +31,8 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
         # OrientedBoundingBoxes2D stores all OBBs in a single (N, 5) ndarray.
         return tlc.data_types.OrientedBoundingBoxes2D(
             obbs=scaled["bboxes"].cpu().numpy().astype("float32"),
-            instance_labels=[int(c) for c in mapped_classes],
-            instance_confidences=scaled["conf"].cpu().numpy().astype("float32").tolist(),
+            labels=[int(c) for c in mapped_classes],
+            confidences=scaled["conf"].cpu().numpy().astype("float32").tolist(),
             x_max=w,
             y_max=h,
         )

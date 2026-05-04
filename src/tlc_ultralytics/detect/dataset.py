@@ -212,7 +212,7 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
         height = bb2d.y_max - (bb2d.y_min or 0)
         width = bb2d.x_max - (bb2d.x_min or 0)
 
-        if bb2d.num_instances == 0 or bb2d.instance_labels is None:
+        if bb2d.num_instances == 0 or bb2d.labels is None:
             return {
                 "im_file": im_file,
                 "shape": (height, width),
@@ -226,7 +226,7 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
             }
 
         # Normalize to [0,1] and convert to centered XYWH (what YOLO expects)
-        cxywh = bb2d.bbs_cxywh / np.array([width, height, width, height], dtype=np.float32)
+        cxywh = bb2d.bounding_boxes_cxywh / np.array([width, height, width, height], dtype=np.float32)
 
         # Filter boxes with non-positive width or height and apply class map
         widths = cxywh[:, 2]
@@ -234,7 +234,7 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
         valid = (widths > 0) & (heights > 0)
 
         valid_boxes = cxywh[valid]
-        valid_labels = bb2d.instance_labels[valid]
+        valid_labels = bb2d.labels[valid]
         classes = np.array([self._class_map[int(lbl)] for lbl in valid_labels], dtype=np.float32).reshape(-1, 1)
 
         return {
@@ -327,7 +327,7 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
 
         for i, (category, polygon) in enumerate(
             zip(
-                segmentations.instance_labels,
+                segmentations.labels,
                 segmentations.polygons,
                 strict=False,
             )

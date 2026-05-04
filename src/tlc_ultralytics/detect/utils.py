@@ -214,13 +214,13 @@ def construct_bbox_struct(
             confidences.append(float(pred["score"]))
 
         bb2d = BoundingBoxes2D(
-            bbs=cxywh_norm,
-            bb_format="cxywh",
+            bounding_boxes=cxywh_norm,
+            bounding_box_format="cxywh",
             normalized=True,
             image_width=image_width,
             image_height=image_height,
-            instance_labels=labels,
-            instance_confidences=confidences,
+            labels=labels,
+            confidences=confidences,
         )
 
     return bb2d.to_row()
