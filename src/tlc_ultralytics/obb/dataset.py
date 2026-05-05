@@ -5,6 +5,7 @@ from typing import Any
 import cv2
 import numpy as np
 from tlc.data_types import OrientedBoundingBoxes2D
+
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, OBB_LABEL_COLUMN_NAME
 from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
 
@@ -95,7 +96,7 @@ class TLCOBBDataset(BaseTLCYOLODataset):
         image_width = float(instances.x_max - (instances.x_min or 0))
         image_height = float(instances.y_max - (instances.y_min or 0))
 
-        cls_arr = instances.instance_labels.astype(np.float32).reshape(-1, 1)
+        cls_arr = instances.labels.astype(np.float32).reshape(-1, 1)
 
         boxes = []
         segments = []
