@@ -519,14 +519,20 @@ class TLCValidatorMixin(BaseValidator):
 
         if existing_reducer is not None:
             pred_reduced = _transform_instance_embeddings(
-                self._raw_pred_emb, existing_reducer, n_components=n,
-                progress_callback=progress_cb, label="predicted",
+                self._raw_pred_emb,
+                existing_reducer,
+                n_components=n,
+                progress_callback=progress_cb,
+                label="predicted",
             )
             reducer = existing_reducer
         else:
             pred_reduced, reducer = _reduce_instance_embeddings(
-                self._raw_pred_emb, method=method, n_components=n,
-                progress_callback=progress_cb, **reducer_args,
+                self._raw_pred_emb,
+                method=method,
+                n_components=n,
+                progress_callback=progress_cb,
+                **reducer_args,
             )
             if reducer is not None:
                 self._settings._fitted_instance_reducer = reducer
@@ -534,13 +540,14 @@ class TLCValidatorMixin(BaseValidator):
         if self._settings.ground_truth_instance_embeddings and self._raw_gt_emb:
             if reducer is not None:
                 gt_reduced = _transform_instance_embeddings(
-                    self._raw_gt_emb, reducer, n_components=n,
-                    progress_callback=progress_cb, label="ground-truth",
+                    self._raw_gt_emb,
+                    reducer,
+                    n_components=n,
+                    progress_callback=progress_cb,
+                    label="ground-truth",
                 )
             else:
-                gt_reduced = [
-                    np.empty((0, n), dtype=np.float32) for _ in self._raw_gt_emb
-                ]
+                gt_reduced = [np.empty((0, n), dtype=np.float32) for _ in self._raw_gt_emb]
         else:
             gt_reduced = None
 
@@ -583,14 +590,12 @@ class TLCValidatorMixin(BaseValidator):
             if chunk_size == 0:
                 return
             chunk["predicted_instance_embedding"] = [
-                arr.astype(np.float32).tolist()
-                for arr in pred_reduced[pred_offset : pred_offset + chunk_size]
+                arr.astype(np.float32).tolist() for arr in pred_reduced[pred_offset : pred_offset + chunk_size]
             ]
             pred_offset += chunk_size
             if gt_reduced is not None:
                 chunk["ground_truth_instance_embedding"] = [
-                    arr.astype(np.float32).tolist()
-                    for arr in gt_reduced[gt_offset : gt_offset + chunk_size]
+                    arr.astype(np.float32).tolist() for arr in gt_reduced[gt_offset : gt_offset + chunk_size]
                 ]
                 gt_offset += chunk_size
             dst_writer.add_batch(chunk)
@@ -624,9 +629,7 @@ class TLCValidatorMixin(BaseValidator):
         try:
             table.url.delete()
         except Exception as exc:
-            LOGGER.warning(
-                f"{TLC_COLORSTR}Failed to delete intermediate raw metrics table at {table.url}: {exc}"
-            )
+            LOGGER.warning(f"{TLC_COLORSTR}Failed to delete intermediate raw metrics table at {table.url}: {exc}")
 
     def _write_per_class_metrics_tables(self) -> None:
         if self.args.task not in ("detect", "segment", "obb"):
