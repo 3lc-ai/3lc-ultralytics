@@ -429,7 +429,7 @@ class TLCValidatorMixin(BaseValidator):
         # embeddings to RANK 0 for a single fit, broadcasting the fitted
         # reducer back, and per-rank rewrite. Tracked separately.
         if self._settings.instance_embeddings_dim > 0:
-            reduced_table, reduced_metrics_infos = self._fit_and_rewrite(raw_table)
+            _, reduced_metrics_infos = self._fit_and_rewrite(raw_table)
             # The raw table was never registered on the run; just remove it
             # from disk so we don't leave an orphaned directory under the run.
             self._delete_table_on_disk(raw_table)
@@ -488,7 +488,7 @@ class TLCValidatorMixin(BaseValidator):
         self._raw_pred_emb = []
         self._raw_gt_emb = []
 
-    def _fit_and_rewrite(self, raw_table):
+    def _fit_and_rewrite(self, raw_table):  # noqa: C901
         """TEMP(instance-embeddings): fit the reducer on accumulated raw
         embeddings, then rewrite the just-finalized metrics table into a new
         one with reduced ``predicted_instance_embedding`` /

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import weakref
+from typing import TYPE_CHECKING
 
-import numpy as np
 import torch
 from ultralytics.models.yolo.detect import DetectionValidator
 from ultralytics.utils import LOGGER, ops
@@ -22,6 +22,9 @@ from tlc_ultralytics.detect.utils import (
 )
 from tlc_ultralytics.engine.validator import TLCValidatorMixin
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
