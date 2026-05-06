@@ -18,7 +18,7 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         return {
-            "oriented_bbs_2d_predicted": tlc.schemas.OrientedBoundingBoxes2DSchema(
+            "oriented_bbs_2d_predicted": tlc.data_types.OrientedBoundingBoxes2D.schema(
                 classes=self.data["names"],
                 include_per_instance_confidence=True,
             )

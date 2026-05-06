@@ -95,7 +95,7 @@ def check_det_table(
 ) -> None:
     """Check that a table is compatible with the detection task in the 3LC YOLO integration.
 
-    Supports both legacy (BoundingBoxListSchema) and new (BoundingBoxes2DSchema) formats.
+    Supports both legacy (BoundingBoxListSchema) and new (BoundingBoxes2D) formats.
 
     :param table: The table to check.
     :param image_column_name: The name of the column containing image paths.
@@ -135,9 +135,9 @@ def yolo_predicted_bounding_box_schema(
     """Create a 3LC bounding box schema for YOLO predicted boxes.
 
     :param label_value_map: Mapping of class indices to label metadata.
-    :returns: A BoundingBoxes2DSchema for predicted boxes.
+    :returns: A schema for bounding boxes.
     """
-    return tlc.schemas.BoundingBoxes2DSchema(
+    return tlc.data_types.BoundingBoxes2D.schema(
         classes=label_value_map,
         include_per_instance_confidence=True,
         description="Predicted Bounding Boxes",
