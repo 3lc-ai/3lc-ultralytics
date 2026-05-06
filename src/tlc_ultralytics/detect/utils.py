@@ -135,7 +135,7 @@ def yolo_predicted_bounding_box_schema(
     """Create a 3LC bounding box schema for YOLO predicted boxes.
 
     :param label_value_map: Mapping of class indices to label metadata.
-    :returns: A schema for bounding boxes.
+    :returns: A schema for predicted bounding boxes.
     """
     return tlc.data_types.BoundingBoxes2D.schema(
         classes=label_value_map,
