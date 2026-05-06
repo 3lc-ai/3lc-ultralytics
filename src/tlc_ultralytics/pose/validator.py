@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import torch
 from tlc.data_types import Keypoints2D
-from tlc.schemas import Keypoints2DSchema
 from ultralytics.models.yolo.pose.val import PoseValidator
 from ultralytics.utils import LOGGER
 
@@ -65,7 +64,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         return super().postprocess(preds)
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
-        predicted_pose_schema = Keypoints2DSchema(
+        predicted_pose_schema = Keypoints2D.schema(
             classes=self.data["names"],
             num_keypoints=self.kpt_shape[0],
             points=self.data.get("points"),

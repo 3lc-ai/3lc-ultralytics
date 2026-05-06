@@ -1152,7 +1152,7 @@ def test_small_segmentations() -> None:
     # Test that small segmentations are skipped properly
     structure = {
         "image": tlc.schemas.ImageUrlSchema(),
-        "segmentations": tlc.schemas.SegmentationPolygonsSchema(
+        "segmentations": tlc.data_types.SegmentationPolygons.schema(
             classes=["a", "b", "c"],
             relative=True,
         ),
@@ -1205,7 +1205,7 @@ def test_absolute_segmentation_polygons() -> None:
     # Test that absolute segmentation polygons are handled correctly
     structure = {
         "image": tlc.schemas.ImageUrlSchema(),
-        "segmentations": tlc.schemas.SegmentationPolygonsSchema(
+        "segmentations": tlc.data_types.SegmentationPolygons.schema(
             classes=["a", "b", "c"],
             relative=False,
         ),
