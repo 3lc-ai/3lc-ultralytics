@@ -402,6 +402,7 @@ class TLCValidatorMixin(BaseValidator):
         metrics_writer = tlc.MetricsTableWriter(
             run_url=self._run.url,
             schema=self._per_class_metrics_schemas(),
+            stream_name=PER_CLASS_METRICS_STREAM_NAME,
         )
 
         epoch = self._epoch + 1 if self._epoch is not None else -1
@@ -429,12 +430,6 @@ class TLCValidatorMixin(BaseValidator):
 
         metrics_writer.add_batch(metrics_batch)
         metrics_writer.finalize()
-        metrics_infos = metrics_writer.get_written_metrics_infos()
-        for m in metrics_infos:
-            # Set the stream name to the per-class metrics stream
-            # TODO: This should be a constructor argument to MetricsTableWriter
-            m["stream_name"] = PER_CLASS_METRICS_STREAM_NAME
-        self._run.update_metrics(metrics_infos)
 
     def _per_class_metrics_schemas(self):
         metrics_schemas = {
