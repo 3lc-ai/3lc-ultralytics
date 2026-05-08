@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any
 
 import numpy as np
 from tlc.data_types import BoundingBoxes2D, SegmentationPolygons
@@ -10,11 +10,6 @@ from ultralytics.data.utils import check_file_speeds, segments2boxes
 from ultralytics.utils import LOGGER, colorstr
 
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
-
-if TYPE_CHECKING:
-    from tlc import Table
-
-SegmentType = Literal["absolute", "relative"]
 
 
 class IdentityDict(dict):
@@ -272,7 +267,6 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
         :param image_column_name: Name of the image column in the table
         :param label_column_name: Name of the label column in the table
         """
-        self._segment_type: SegmentType = self._get_segment_type(table, label_column_name)
         super().__init__(
             table,
             data=data,
@@ -284,37 +278,14 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
             **kwargs,
         )
 
-    def _get_segment_type(self, table: Table, label_column_name: str) -> SegmentType:
-        """Verify the table format and check if the polygons are relative.
-
-        :param table: The 3LC table containing the dataset
-        :param label_column_name: The name of the label column in the table
-        :returns: The segment type ("absolute" or "relative")
-        """
-        column_name, _instances_name, _label_key = label_column_name.split(".")
-
-        try:
-            rles_schema_value = table.rows_schema.values[column_name].values["rles"].value
-            segment_type = "relative" if getattr(rles_schema_value, "polygons_are_relative", False) else "absolute"
-        except Exception as e:
-            raise ValueError(f"Table {table.url} is not a segmentation table: {e}") from None
-
-        return segment_type
-
-    def _normalize_segments(self, segments: list[np.ndarray], width: int, height: int) -> list[np.ndarray]:
-        """Normalize segments to relative coordinates if they are absolute.
-
-        :param segments: List of segment coordinates
-        :param width: Image width
-        :param height: Image height
-        :return: Normalized segments
-        """
-        if self._segment_type == "absolute":
-            return segments / np.array([width, height], dtype=np.float32)
-        return segments
-
     def _get_label_from_row(self, im_file: str, row: Any, example_id: int) -> dict[str, Any]:
-        """Get the segmentation label for a row."""
+        """Get the segmentation label for a row.
+
+        Polygons are always requested in relative ([0, 1]) coordinates from
+        ``SegmentationPolygons.from_row``; the SampleType registry handles the conversion
+        from RLE storage regardless of how the source table was authored. YOLO consumes
+        relative segments directly, so no further normalization is performed here.
+        """
         column_name, _, _ = self._label_column_name.split(".")
 
         # Use sample view to get polygons, row is row view
@@ -339,10 +310,20 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
 
             classes.append(self._class_map[category])
             row_segments = np.array(polygon, dtype=np.float32).reshape(-1, 2)
-            segments.append(self._normalize_segments(row_segments, width, height))
+            segments.append(row_segments)
 
-        # Compute bounding boxes from segments
+        # Sanity check: SegmentationPolygons.from_row(relative=True) is contracted to return
+        # coordinates in [0, 1]. If it doesn't, training silently produces zero gradients —
+        # fail loudly with an actionable message instead.
         if segments:
+            max_coord = float(max(np.max(s) for s in segments))
+            if max_coord > 1.0 + 1e-3:
+                raise ValueError(
+                    f"Segmentation polygons for example_id={example_id} have coordinates outside [0, 1] "
+                    f"(max={max_coord:.4f}). SegmentationPolygons.from_row(relative=True) should return "
+                    f"normalized polygons; this indicates the SampleType registry isn't honoring the "
+                    f"relative kwarg. Check the 3LC version or the table's segmentation column schema."
+                )
             bboxes = segments2boxes(segments)
         else:
             bboxes = np.zeros((0, 4), dtype=np.float32)
