@@ -265,6 +265,17 @@ def test_training(task: str) -> None:
 
     # Check that there is a per-epoch value written
     assert len(run.constants["outputs"]) > 0, "No outputs written"
+
+    # Each metrics table URL must be registered under exactly one stream. A previous bug had
+    # the per-class writer auto-register under default_stream and then re-register under
+    # per_class_metrics, which polluted default_stream with per-class rows lacking
+    # example_id/predictions, breaking dashboard rendering.
+    url_streams: dict[str, list[str]] = defaultdict(list)
+    for info in run.metrics:
+        url_streams[info["url"]].append(info["stream_name"])
+    duplicates = {url: streams for url, streams in url_streams.items() if len(streams) > 1}
+    assert not duplicates, f"Metrics URLs registered under multiple streams: {duplicates}"
+
     metrics_tables = get_metrics_tables_from_run(run)
 
     # Check that the desired metrics were written
