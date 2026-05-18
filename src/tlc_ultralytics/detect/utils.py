@@ -103,7 +103,7 @@ def check_det_table(
         If None, auto-detected from the table schema.
     :raises: ValueError if the table is not compatible with the detection task.
     """
-    row_schema = table.row_schema.values
+    row_schema = table.rows_schema.values
 
     try:
         assert image_column_name in row_schema, f"Image column '{image_column_name}' not found."

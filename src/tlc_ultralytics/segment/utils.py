@@ -43,7 +43,7 @@ def check_seg_table(table: tlc.Table, image_column_name: str, label_column_name:
     """
     label_column_name = label_column_name.split(".")[0]
     try:
-        assert image_column_name in table.row_schema.values, f"Image column '{image_column_name}' not found."
+        assert image_column_name in table.rows_schema.values, f"Image column '{image_column_name}' not found."
         ann = AnnotationHelper.get(table, label_column_name)
         assert ann.type is AnnotationType.SEGMENTATION, (
             f"Label column '{label_column_name}' is not a segmentation column (got {ann.type})."

@@ -51,7 +51,7 @@ def check_pose_table(table: tlc.Table, image_column_name: str, label_column_name
     label_root = label_column_name.split(".")[0]
 
     try:
-        assert image_column_name in table.row_schema.values, f"Image column '{image_column_name}' not found."
+        assert image_column_name in table.rows_schema.values, f"Image column '{image_column_name}' not found."
         ann = AnnotationHelper.get(table, label_root)
         assert ann.type is AnnotationType.KEYPOINTS, (
             f"Label column '{label_root}' is not a keypoints column (got {ann.type})."

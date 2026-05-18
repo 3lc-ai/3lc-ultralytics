@@ -61,7 +61,7 @@ def get_or_create_cls_table(
 
 def check_cls_table(table: tlc.Table, image_column_name: str, label_column_name: str) -> None:
     """Check that a table is compatible with the current task."""
-    row_schema = table.row_schema.values
+    row_schema = table.rows_schema.values
 
     try:
         # Check for image and label columns in schema
