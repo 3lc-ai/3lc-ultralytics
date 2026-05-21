@@ -1,6 +1,6 @@
 import tlc
 from tlc.data_types import SegmentationMasks
-from tlc.schemas import ConfidenceSchema
+from tlc.schemas import FractionSchema
 from ultralytics.models.yolo.segment.val import SegmentationValidator
 from ultralytics.utils import ops
 
@@ -28,9 +28,8 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         self.process = ops.process_mask_native
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
-        # TODO: Ensure class  mapping is the same as in input table
         instance_properties_structure = {
-            CONFIDENCE: ConfidenceSchema(),
+            CONFIDENCE: FractionSchema(role="confidence", writable=False),
         }
 
         segment_schema = SegmentationMasks.schema(

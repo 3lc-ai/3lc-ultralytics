@@ -19,8 +19,8 @@ import tlc
 import yaml
 from PIL import Image
 from testing_helpers import check_pose_table_and_metrics_tables, compare_dataset_values, plot_ultralytics
-from tlc._core.objects.tables.from_table import PacmapTable
 from tlc._core.objects.tables.from_table.edited_table import EditedTable
+from tlc._core.objects.tables.from_table.pacmap_table import PacmapTable
 from tlc._core.objects.tables.null_overlay import NullOverlay
 from tlc.constants._run_status import RUN_STATUS_COMPLETED
 from tlc.helpers import KeypointHelper
@@ -1069,11 +1069,11 @@ def test_check_tlc_dataset_different_categories(train_classes, val_classes, desc
     project_name = f"test_check_tlc_dataset_different_categories_{description.lower().replace(' ', '_')}"
 
     train_structure = {
-        "image": tlc.schemas.ImageUrlSchema(),
+        "image": tlc.schemas.ImageSchema(),
         "label": tlc.schemas.CategoricalLabelSchema(classes=train_classes),
     }
     val_structure = {
-        "image": tlc.schemas.ImageUrlSchema(),
+        "image": tlc.schemas.ImageSchema(),
         "label": tlc.schemas.CategoricalLabelSchema(classes=val_classes),
     }
 
@@ -1128,7 +1128,7 @@ def test_check_tlc_dataset_string_tables_converted_before_split_filter() -> None
     """
     # Create a minimal table to use as the "train" split
     train_schema = {
-        "image": tlc.schemas.ImageUrlSchema(),
+        "image": tlc.schemas.ImageSchema(),
         "label": tlc.schemas.CategoricalLabelSchema(classes=["a", "b"]),
     }
     train_table = tlc.Table.from_dict(
@@ -1162,7 +1162,7 @@ def test_check_tlc_dataset_string_tables_converted_before_split_filter() -> None
 def test_small_segmentations() -> None:
     # Test that small segmentations are skipped properly
     structure = {
-        "image": tlc.schemas.ImageUrlSchema(),
+        "image": tlc.schemas.ImageSchema(),
         "segmentations": tlc.data_types.SegmentationPolygons.schema(
             classes=["a", "b", "c"],
             relative=True,
@@ -1172,18 +1172,17 @@ def test_small_segmentations() -> None:
 
     relative_polygons_sample = {
         "image": zidane_image_path,
-        "segmentations": {
-            "image_width": 10,
-            "image_height": 10,
-            "instance_properties": {
-                "label": [0, 1, 2],
-            },
-            "polygons": [
+        "segmentations": tlc.data_types.SegmentationPolygons(
+            image_width=10,
+            image_height=10,
+            relative=True,
+            labels=[0, 1, 2],
+            polygons=[
                 [0.0, 0.0, 0.0, 1.0, 1.0, 0.0],  # Should be fine
                 [0.0, 0.0, 0.5, 0.0, 1.0, 0.0],  # A line with no area, should be ignored
                 [0.0, 0.0, 0.01, 0.0, 0.01, 0.01, 0.0, 0.01],  # Should become a one pixel mask, which should be ignored
             ],
-        },
+        ),
     }
 
     table_writer = tlc.TableWriter(
@@ -1215,7 +1214,7 @@ def test_small_segmentations() -> None:
 def test_absolute_segmentation_polygons() -> None:
     # Test that absolute segmentation polygons are handled correctly
     structure = {
-        "image": tlc.schemas.ImageUrlSchema(),
+        "image": tlc.schemas.ImageSchema(),
         "segmentations": tlc.data_types.SegmentationPolygons.schema(
             classes=["a", "b", "c"],
             relative=False,

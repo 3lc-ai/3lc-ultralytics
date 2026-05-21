@@ -71,27 +71,22 @@ def yolo_pose_loss_schemas(training: bool = False) -> dict[str, tlc.Schema]:
     schemas["box_loss"] = tlc.schemas.Float32Schema(
         description="Box Loss",
         writable=False,
-        display_importance=3004,
     )
     schemas["dfl_loss"] = tlc.schemas.Float32Schema(
         description="Distribution Focal Loss",
         writable=False,
-        display_importance=3005,
     )
     schemas["cls_loss"] = tlc.schemas.Float32Schema(
         description="Classification Loss",
         writable=False,
-        display_importance=3006,
     )
     schemas["pose_loss"] = tlc.schemas.Float32Schema(
         description="Keypoint location loss",
         writable=False,
-        display_importance=3008,
     )
     schemas["kobj_loss"] = tlc.schemas.Float32Schema(
         description="Keypoint visibility/objectness loss",
         writable=False,
-        display_importance=3009,
     )
     if training:
         schemas["loss"] = tlc.schemas.Float32Schema(
@@ -99,6 +94,5 @@ def yolo_pose_loss_schemas(training: bool = False) -> dict[str, tlc.Schema]:
                 "Weighted sum of box, DFL, classification, keypoint location and visibility losses used in training"
             ),
             writable=False,
-            display_importance=3010,
         )
     return schemas

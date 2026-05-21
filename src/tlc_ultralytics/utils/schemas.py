@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tlc
-from tlc.schemas import EmbeddingSchema
+from tlc.schemas import Float32Schema
 
 from tlc_ultralytics.constants import TRAINING_PHASE
 
@@ -18,7 +18,6 @@ def training_phase_schema() -> tlc.Schema:
             "'During' metrics are collected with EMA during training, "
             "'After' is with the final model weights after completed training."
         ),
-        display_importance=4005,  # Right hand side of epoch in the Dashboard
         writable=False,
     )
 
@@ -29,9 +28,10 @@ def image_embeddings_schema(activation_size=512) -> tlc.Schema:
     :param activation_size: The size of the activation tensor.
     :returns: The YOLO image embeddings schema.
     """
-    return EmbeddingSchema(
+    return Float32Schema(
         display_name="Embedding",
         description="Large NN embedding",
+        number_role="nn_embedding",
         writable=False,
         shape=(activation_size,),
     )

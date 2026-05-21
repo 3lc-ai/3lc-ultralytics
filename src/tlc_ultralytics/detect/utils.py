@@ -130,7 +130,7 @@ def check_det_table(
 
 
 def yolo_predicted_bounding_box_schema(
-    label_value_map: dict[float, tlc.MapElement],
+    label_value_map: dict[float, tlc.schemas.MapElement],
 ) -> tlc.Schema:
     """Create a 3LC bounding box schema for YOLO predicted boxes.
 
@@ -155,23 +155,19 @@ def yolo_loss_schemas(training: bool = False) -> dict[str, tlc.Schema]:
     schemas["box_loss"] = tlc.schemas.Float32Schema(
         description="Box Loss",
         writable=False,
-        display_importance=3004,
     )
     schemas["dfl_loss"] = tlc.schemas.Float32Schema(
         description="Distribution Focal Loss",
         writable=False,
-        display_importance=3005,
     )
     schemas["cls_loss"] = tlc.schemas.Float32Schema(
         description="Classification Loss",
         writable=False,
-        display_importance=3006,
     )
     if training:
         schemas["loss"] = tlc.schemas.Float32Schema(
             description="Weighted sum of box, DFL, and classification losses used in training",
             writable=False,
-            display_importance=3007,
         )
     return schemas
 

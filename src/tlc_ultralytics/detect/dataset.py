@@ -281,17 +281,18 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
     def _get_label_from_row(self, im_file: str, row: Any, example_id: int) -> dict[str, Any]:
         """Get the segmentation label for a row.
 
-        Polygons are always requested in relative ([0, 1]) coordinates from
-        ``SegmentationPolygons.from_row``; the SampleType registry handles the conversion
-        from RLE storage regardless of how the source table was authored. YOLO consumes
-        relative segments directly, so no further normalization is performed here.
+        Polygons are always requested in relative ([0, 1]) coordinates. The dataclass
+        helper ``.to_relative()`` does the conversion from the absolute pixel coords
+        produced by ``SegmentationPolygons.from_row``, regardless of how the source
+        table was authored. YOLO consumes relative segments directly, so no further
+        normalization is performed here.
         """
         column_name, _, _ = self._label_column_name.split(".")
 
         # Use sample view to get polygons, row is row view
         row = self.table.table_rows[example_id]
         raw_segmentations = row[column_name]
-        segmentations = SegmentationPolygons.from_row(raw_segmentations, relative=True)
+        segmentations = SegmentationPolygons.from_row(raw_segmentations).to_relative()
         height, width = segmentations.image_height, segmentations.image_width
         classes = []
         segments = []
@@ -312,17 +313,17 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
             row_segments = np.array(polygon, dtype=np.float32).reshape(-1, 2)
             segments.append(row_segments)
 
-        # Sanity check: SegmentationPolygons.from_row(relative=True) is contracted to return
-        # coordinates in [0, 1]. If it doesn't, training silently produces zero gradients —
-        # fail loudly with an actionable message instead.
+        # Sanity check: ``.to_relative()`` is contracted to return coordinates in [0, 1].
+        # If it doesn't, training silently produces zero gradients — fail loudly with
+        # an actionable message instead.
         if segments:
             max_coord = float(max(np.max(s) for s in segments))
             if max_coord > 1.0 + 1e-3:
                 raise ValueError(
                     f"Segmentation polygons for example_id={example_id} have coordinates outside [0, 1] "
-                    f"(max={max_coord:.4f}). SegmentationPolygons.from_row(relative=True) should return "
-                    f"normalized polygons; this indicates the SampleType registry isn't honoring the "
-                    f"relative kwarg. Check the 3LC version or the table's segmentation column schema."
+                    f"(max={max_coord:.4f}). SegmentationPolygons.from_row(...).to_relative() should "
+                    f"return normalized polygons; this indicates a 3LC / segmentation-schema mismatch. "
+                    f"Check the 3LC version or the table's segmentation column schema."
                 )
             bboxes = segments2boxes(segments)
         else:
