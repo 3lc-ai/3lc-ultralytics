@@ -44,8 +44,7 @@ class TLCClassificationValidator(TLCValidatorMixin, yolo.classify.Classification
                 description="The highest confidence class predicted by the model.",
                 writable=False,
             ),
-            "confidence": tlc.schemas.FractionSchema(
-                role="confidence",
+            "confidence": tlc.schemas.ConfidenceSchema(
                 display_name="Confidence",
                 description="The confidence of the prediction",
                 writable=False,
