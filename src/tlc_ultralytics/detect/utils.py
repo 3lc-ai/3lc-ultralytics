@@ -1,50 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import tlc
 from tlc.helpers import AnnotationHelper, AnnotationType
 
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
-
-if TYPE_CHECKING:
-    from tlc_ultralytics.settings import Settings
-
-
-def get_or_create_det_table(
-    key: str,
-    data_dict: dict[str, object],
-    image_column_name: str,
-    label_column_name: str,
-    project_name: str,
-    dataset_name: str,
-    table_name: str,
-    settings: Settings | None = None,
-) -> tlc.Table:
-    """Get or create a detection table from a dataset dictionary.
-
-    :param key: The key of the dataset dictionary (the split to use)
-    :param data_dict: Dictionary of dataset information
-    :param project_name: Name of the project
-    :param dataset_name: Name of the dataset
-    :param table_name: Name of the table
-    :param image_column_name: Name of the column containing image paths
-    :param label_column_name: Name of the column containing labels
-    :return: A tlc.Table.from_yolo() table
-    """
-    return tlc.Table.from_yolo(
-        dataset_yaml_file=data_dict["yaml_file"],
-        split=key,
-        override_split_path=data_dict[key],
-        task="detect",
-        project_name=project_name,
-        dataset_name=dataset_name,
-        table_name=table_name,
-        if_exists="reuse",
-        add_weight_column=True,
-        description="Created with 3LC YOLO integration",
-    )
 
 
 def build_tlc_yolo_dataset(

@@ -1,43 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import tlc
 from tlc.helpers import AnnotationHelper, AnnotationType
-
-if TYPE_CHECKING:
-    from tlc_ultralytics.settings import Settings
-
-
-def get_or_create_pose_table(
-    key: str,
-    data_dict: dict[str, object],
-    image_column_name: str,
-    label_column_name: str,
-    project_name: str,
-    dataset_name: str,
-    table_name: str,
-    settings: Settings | None = None,
-) -> tlc.Table:
-    return tlc.Table.from_yolo(
-        dataset_yaml_file=data_dict["yaml_file"],
-        split=key,
-        override_split_path=data_dict[key],
-        task="pose",
-        project_name=project_name,
-        dataset_name=dataset_name,
-        table_name=table_name,
-        if_exists="reuse",
-        add_weight_column=True,
-        description="Created with 3LC YOLO integration",
-        points=settings.points,
-        lines=settings.lines,
-        triangles=settings.triangles,
-        point_attributes=settings.point_attributes,
-        line_attributes=settings.line_attributes,
-        triangle_attributes=settings.triangle_attributes,
-        flip_indices=settings.flip_indices,
-    )
 
 
 def check_pose_table(table: tlc.Table, image_column_name: str, label_column_name: str) -> None:
