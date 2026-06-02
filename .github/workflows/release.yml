@@ -78,10 +78,12 @@ jobs:
             ${{ steps.changelog.outputs.changelog }}
             
             ## Installation
-            
+
             ```bash
-            pip install 3lc-ultralytics==${{ steps.version.outputs.version }}
+            pip install 3lc-ultralytics==${{ steps.version.outputs.version }} --extra-index-url https://pypi.3lc.ai/public/repositories/releases-public
             ```
+
+            > The `--extra-index-url` is required because recent versions of `3lc` are published on 3LC's public package index, not on PyPI.
           draft: false
           prerelease: false
           generate_release_notes: false 

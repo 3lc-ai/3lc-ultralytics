@@ -6,6 +6,10 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Changed
+
+- `3lc` version `2.23` installed from [3LC's public package index](https://pypi.3lc.ai/public/repositories/releases-public) rather than PyPI (recent `3lc` releases are no longer published to PyPI). The index is declared in `pyproject.toml` so `uv` workflows and CI pick it up automatically; `pip` users must pass `--extra-index-url https://pypi.3lc.ai/public/repositories/releases-public`.
+
 ## [0.2.0] - 2026-02-12
 
 ### Added
