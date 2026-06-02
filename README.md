@@ -39,10 +39,23 @@
 Install the package and requirements into a virtual environment:
 
 ```bash
-pip install 3lc-ultralytics
+pip install 3lc-ultralytics --extra-index-url https://pypi.3lc.ai/public/repositories/releases-public
 ```
 
-> This installs both [`3lc`](https://pypi.org/project/3lc/) and [`ultralytics`](https://pypi.org/project/ultralytics/), which are dependencies of `3lc-ultralytics`. Refer to the respective projects for how to set up a 3LC user and the Ultralytics License.
+> `3lc` is published on [3LC's public package index](https://pypi.3lc.ai/public/repositories/releases-public), not on PyPI, so the `--extra-index-url` above is required for `pip` to find it. This installs both [`3lc`](https://3lc.ai) and [`ultralytics`](https://pypi.org/project/ultralytics/), which are dependencies of `3lc-ultralytics`. Refer to the respective projects for how to set up a 3LC user and the Ultralytics License.
+
+If you use [`uv`](https://docs.astral.sh/uv/), add the index to your project's `pyproject.toml` instead so it is applied automatically:
+
+```toml
+[[tool.uv.index]]
+name = "3lc"
+url = "https://pypi.3lc.ai/public/repositories/releases-public"
+
+[tool.uv]
+# 3LC's index responds to any package name, so let uv match versions across all
+# indexes (PyPI for everything else) rather than stopping at the first match.
+index-strategy = "unsafe-best-match"
+```
 
 ### Basic Training
 
