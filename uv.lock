@@ -12,7 +12,7 @@ resolution-markers = [
 
 [[package]]
 name = "3lc"
-version = "2.23.0"
+version = "2.23"
 source = { registry = "https://pypi.3lc.ai/public/repositories/releases-public" }
 dependencies = [
     { name = "anyio" },

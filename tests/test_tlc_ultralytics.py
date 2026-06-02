@@ -63,7 +63,7 @@ skip_pacmap_on_macos = pytest.mark.skipif(
 DUMMY_IMAGE_FILE = Path(__file__).parent.parent / "src" / "tlc_ultralytics" / "_static" / "dashboard.png"
 TMP = Path(__file__).parent / "tmp"
 TMP_PROJECT_ROOT_URL = tlc.Url(TMP / "3LC")
-tlc.UrlAliasRegistry.instance().register_url_alias("<TEST_ALIAS>", "/test/alias")
+tlc.register_url_alias("<TEST_ALIAS>", "/test/alias")
 tlc.Configuration.instance().project_root_url = TMP_PROJECT_ROOT_URL
 tlc.TableIndexingTable.instance().add_scan_url(
     {
@@ -597,14 +597,15 @@ def test_embeddings_collection() -> None:
 
     run = _get_run_from_settings(settings)
     assert len(run.metrics_tables) == 2, "Expected 2 metrics tables to be written"
-    # 3lc 2.23 renamed PaCMAPTable -> PacmapTable; the now-deprecated PaCMAPTable is a
-    # *subclass*, so the reduced table is no longer an instance of it. Check the base class.
-    assert any(isinstance(metrics_table, tlc.PacmapTable) for metrics_table in run.metrics_tables), (
-        "Expected a PacmapTable"
+    # 3lc 2.23 renamed PaCMAPTable -> PacmapTable (the old name became a subclass), so the
+    # reduced table is a PacmapTable there. Support both 2.22 (PaCMAPTable) and 2.23+ (PacmapTable).
+    pacmap_table_cls = getattr(tlc, "PacmapTable", None) or tlc.PaCMAPTable
+    assert any(isinstance(metrics_table, pacmap_table_cls) for metrics_table in run.metrics_tables), (
+        "Expected a PaCMAP table"
     )
 
     embeddings_table = next(
-        metrics_table for metrics_table in run.metrics_tables if isinstance(metrics_table, tlc.PacmapTable)
+        metrics_table for metrics_table in run.metrics_tables if isinstance(metrics_table, pacmap_table_cls)
     )
     assert "embeddings_pacmap" in embeddings_table.columns, "Expected embeddings column"
 
