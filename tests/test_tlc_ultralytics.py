@@ -71,8 +71,8 @@ skip_pacmap_on_macos = pytest.mark.skipif(
 DUMMY_IMAGE_FILE = Path(__file__).parent.parent / "src" / "tlc_ultralytics" / "_static" / "dashboard.png"
 TMP = Path(__file__).parent / "tmp"
 TMP_PROJECT_ROOT_URL = tlc.Url(TMP / "3LC")
-tlc.register_url_alias("<TEST_ALIAS>", "/test/alias")
-tlc.Configuration.instance().project_root_url = TMP_PROJECT_ROOT_URL
+tlc.url.register_url_alias("<TEST_ALIAS>", "/test/alias")
+tlc.configuration.Configuration.instance().project_root_url = TMP_PROJECT_ROOT_URL
 tlc._core.objects.tables.system_tables.indexing_tables.table_indexing_table.TableIndexingTable.instance().add_scan_url(
     {
         "url": tlc.Url(TMP_PROJECT_ROOT_URL),
