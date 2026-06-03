@@ -40,7 +40,9 @@ def get_or_create_cls_table(
 
     if is_imagenet:
         label_overrides = YAML.load(ROOT / "cfg/datasets/ImageNet.yaml")["map"]
-        label_overrides = {k: tlc.schemas.MapElement(internal_name=k, display_name=v) for k, v in label_overrides.items()}
+        label_overrides = {
+            k: tlc.schemas.MapElement(internal_name=k, display_name=v) for k, v in label_overrides.items()
+        }
     else:
         label_overrides = None
 

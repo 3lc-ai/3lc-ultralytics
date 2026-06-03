@@ -539,9 +539,9 @@ def test_classify_training() -> None:
     if not PACMAP_BROKEN_ON_MACOS:
         embeddings_column_name = f"embeddings_{settings.image_embeddings_reducer}"
         assert embeddings_column_name in metrics_df.columns, "Expected embeddings column missing"
-        assert (
-            len(metrics_df[embeddings_column_name][0]) == settings.image_embeddings_dim
-        ), "Embeddings dimension mismatch"
+        assert len(metrics_df[embeddings_column_name][0]) == settings.image_embeddings_dim, (
+            "Embeddings dimension mismatch"
+        )
 
     # Test metrics collection only here with the same weights (since there are no readily available pretrained weights
     # for the ten-class case)
