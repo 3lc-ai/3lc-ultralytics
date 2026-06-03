@@ -6,6 +6,16 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+This release moves the integration onto `3lc` 3.0, which was released on 2026-06-02.
+
+Like `3lc` 2.23, `3lc` 3.0 is published on [3LC's public package index](https://pypi.3lc.ai/public/repositories/releases-public), not on PyPI. `pip` users must pass `--extra-index-url https://pypi.3lc.ai/public/repositories/releases-public` when installing. See README.md for further details.
+
+### Changed
+
+- Bump the supported `3lc` range from `>=2.22.0,<3.0.0` to `>=3.0.0,<4.0.0`. This drops support for `3lc` 2.x. The integration's internals were migrated to the `3lc` 3.0 API, and the deprecation warnings that the integration emitted under `3lc` 2.23 are resolved.
+- Update the documentation and examples for the `3lc` 3.0 API.
+- The default detection `label_column_name` changed from `bbs.bb_list.label` to `bbs.instances_additional_data.label`, reflecting the `3lc` 3.0 bounding-box schema. Tables created via `tlc.Table.from_yolo_url()` (i.e. when you pass a YOLO dataset through `data`) are unaffected, since the label path is resolved automatically. Only users who pass their own `tables` with non-default column names *and* explicitly set this detection label path in `Settings` need to update it to the new value.
+
 ## [0.2.1] - 2026-06-02
 
 ### Changed
