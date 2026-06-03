@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-03
+
 This release moves the integration onto `3lc` 3.0, which was released on 2026-06-02.
 
 Like `3lc` 2.23, `3lc` 3.0 is published on [3LC's public package index](https://pypi.3lc.ai/public/repositories/releases-public), not on PyPI. `pip` users must pass `--extra-index-url https://pypi.3lc.ai/public/repositories/releases-public` when installing. See README.md for further details.
