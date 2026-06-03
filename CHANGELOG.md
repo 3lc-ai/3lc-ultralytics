@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-02
+
 ### Changed
 
 - `3lc` is now installed from [3LC's public package index](https://pypi.3lc.ai/public/repositories/releases-public) rather than PyPI, as recent `3lc` releases are no longer published to PyPI. The index is declared in `pyproject.toml` so `uv` workflows and CI pick it up automatically; `pip` users must pass `--extra-index-url https://pypi.3lc.ai/public/repositories/releases-public`. The supported `3lc` range is unchanged (`>=2.22.0,<3.0.0`), and CI now runs the test suite against both `3lc` 2.22 and 2.23. When running with `3lc` 2.23, some 3LC APIs used by the integration emit deprecation warnings; these are harmless and will be addressed in an upcoming release targeting `3lc` 3.0.
@@ -13,6 +15,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 - Consolidate predicted-metrics handling across the detection, segmentation, pose, and OBB tasks ([#54](https://github.com/3lc-ai/3lc-ultralytics/pull/54)).
 
 - Update development dependencies to versions without known vulnerabilities ([#63](https://github.com/3lc-ai/3lc-ultralytics/pull/63)).
+
+- Constrain `pacmap` to `>=0.8.0,<0.9`. `pacmap` 0.9 replaced its `annoy` backend with `faiss-cpu`, which breaks 3LC's embedding reduction (`No module named 'annoy'`, resulting in no embeddings being collected).
 
 ### Fixed
 

@@ -71,6 +71,9 @@ jobs:
       - name: Pin 3lc to ${{ matrix.tlc-version }}.*
         # Installs into the project .venv created by `uv sync` above; the test step
         # uses --no-sync so this pinned version is what actually runs.
+        # `shell: bash` is required so the `\` line continuations below work on the
+        # Windows runners, whose default shell (PowerShell) does not understand them.
+        shell: bash
         run: |
           uv pip install \
             --index-url https://pypi.org/simple \
