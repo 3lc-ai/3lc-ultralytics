@@ -5,6 +5,7 @@ import logging
 import os
 import pathlib
 import random
+import sys
 from collections import defaultdict
 from contextlib import contextmanager
 from copy import deepcopy
@@ -57,6 +58,15 @@ from tlc_ultralytics.pose.trainer import TLCPoseTrainer
 from tlc_ultralytics.segment.trainer import TLCSegmentationTrainer
 from tlc_ultralytics.segment.utils import check_seg_table
 from tlc_ultralytics.utils import check_tlc_dataset
+
+# PaCMAP embedding reduction is known not to work on macOS: the reducer collects
+# zero embeddings and silently produces no reduced table. Embedding-specific
+# checks are therefore skipped on macOS (everything else still runs there).
+PACMAP_BROKEN_ON_MACOS = sys.platform == "darwin"
+skip_pacmap_on_macos = pytest.mark.skipif(
+    PACMAP_BROKEN_ON_MACOS,
+    reason="PaCMAP embedding reduction does not work on macOS",
+)
 
 DUMMY_IMAGE_FILE = Path(__file__).parent.parent / "src" / "tlc_ultralytics" / "_static" / "dashboard.png"
 TMP = Path(__file__).parent / "tmp"
@@ -525,9 +535,13 @@ def test_classify_training() -> None:
     assert np.isclose(metrics_top1_accuracy, results_3lc.top1)
     assert np.isclose(metrics_top5_accuracy, results_3lc.top5)
 
-    embeddings_column_name = f"embeddings_{settings.image_embeddings_reducer}"
-    assert embeddings_column_name in metrics_df.columns, "Expected embeddings column missing"
-    assert len(metrics_df[embeddings_column_name][0]) == settings.image_embeddings_dim, "Embeddings dimension mismatch"
+    # PaCMAP embedding reduction does not work on macOS; skip the embedding checks there.
+    if not PACMAP_BROKEN_ON_MACOS:
+        embeddings_column_name = f"embeddings_{settings.image_embeddings_reducer}"
+        assert embeddings_column_name in metrics_df.columns, "Expected embeddings column missing"
+        assert (
+            len(metrics_df[embeddings_column_name][0]) == settings.image_embeddings_dim
+        ), "Embeddings dimension mismatch"
 
     # Test metrics collection only here with the same weights (since there are no readily available pretrained weights
     # for the ten-class case)
@@ -583,6 +597,7 @@ def test_metrics_collection_only(task) -> None:
     assert EPOCH not in per_class_metrics_df.columns, "Expected no epoch column"
 
 
+@skip_pacmap_on_macos
 def test_embeddings_collection() -> None:
     settings = Settings(
         project_name="test_embeddings_collection_project",

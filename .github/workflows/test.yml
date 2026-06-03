@@ -11,11 +11,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    strategy:
-      matrix:
-        os: ${{ fromJSON(inputs.os-matrix || '["ubuntu-latest"]') }}
-    runs-on: ${{ matrix.os }}
+  lint:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -35,7 +32,6 @@ jobs:
           uv sync --group dev --no-sources
 
       - name: Run linting
-        if: matrix.os == 'ubuntu-latest'
         run: |
           uv run --no-sources ruff check .
 
@@ -43,18 +39,51 @@ jobs:
         run: |
           uv run --no-sources ty check .
 
-      - name: Run tests with Python 3.10
-        run: |
-          uv run --python 3.10 --no-sources pytest tests/ -v -n 1
-        env:
-          TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
-          ${{ secrets.VARIABLE_NAME }}: ${{ secrets.VARIABLE_VALUE }}
-          ${{ secrets.RUNTIME_NAME }}: ${{ secrets.RUNTIME_VALUE }}
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.os-matrix || '["ubuntu-latest"]') }}
+        python-version: ['3.10', '3.13']
+        # 3lc is released only on 3LC's public index (not PyPI). We support 2.22+,
+        # so test against the latest patch of each supported minor. 2.23 emits
+        # deprecation warnings the integration intentionally still triggers.
+        tlc-version: ['2.22', '2.23']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Run tests with Python 3.13 for highest resolution
-        if: matrix.os == 'ubuntu-latest'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v2
+        with:
+          version: "latest"
+
+      - name: Install dependencies
         run: |
-          uv run --resolution highest --python 3.13 --no-sources pytest tests/ -v -n 1
+          uv sync --group dev --no-sources --python ${{ matrix.python-version }}
+
+      - name: Pin 3lc to ${{ matrix.tlc-version }}.*
+        # Installs into the project .venv created by `uv sync` above; the test step
+        # uses --no-sync so this pinned version is what actually runs.
+        # `shell: bash` is required so the `\` line continuations below work on the
+        # Windows runners, whose default shell (PowerShell) does not understand them.
+        shell: bash
+        run: |
+          uv pip install \
+            --index-url https://pypi.org/simple \
+            --extra-index-url https://pypi.3lc.ai/public/repositories/releases-public \
+            --index-strategy unsafe-best-match \
+            "3lc==${{ matrix.tlc-version }}.*"
+
+      - name: Run tests (3lc ${{ matrix.tlc-version }}, Python ${{ matrix.python-version }})
+        run: |
+          uv run --no-sources --no-sync --python ${{ matrix.python-version }} pytest tests/ -v -n 1
         env:
           TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
           ${{ secrets.VARIABLE_NAME }}: ${{ secrets.VARIABLE_VALUE }}
