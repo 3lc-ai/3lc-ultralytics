@@ -25,7 +25,8 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v2
         with:
-          version: "latest"
+          # Pin to match requirement in pyproject.toml
+          version: "0.7.19"
 
       - name: Install dependencies
         run: |
@@ -61,7 +62,13 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v2
         with:
-          version: "latest"
+          # Pin to match build-system.requires (uv_build>=0.7.19,<0.8.0). When
+          # uv's bundled uv_build satisfies that range it builds this project
+          # with the bundled backend and makes no network request. A newer uv
+          # (e.g. "latest") would instead fetch an old uv-build from an index,
+          # and unsafe-best-match routes that fetch to the (sometimes slow) 3lc
+          # index, which can time out. release.yml pins the same version.
+          version: "0.7.19"
 
       - name: Install dependencies
         run: |
