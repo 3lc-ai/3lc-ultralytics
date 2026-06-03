@@ -268,7 +268,7 @@ Use `exclude_zero_weight_training=True` (only applies to training) and `exclude_
 
 ### Column names
 
-When providing `tables` directly or through a 3LC YOLO YAML file which have non-default column names, set the `image_column_name` and `label_column_name` in the `Settings` object. While `image_column_name` needs to be the top-level column name of image column, the `label_column_name` can be either the top level column (such as `"bbs"` for detection) or a value path to the label inside the detection column (such as `"bbs.bb_list.label"` for detection).
+When providing `tables` directly or through a 3LC YOLO YAML file which have non-default column names, set the `image_column_name` and `label_column_name` in the `Settings` object. While `image_column_name` needs to be the top-level column name of image column, the `label_column_name` can be either the top level column (such as `"bbs"` for detection) or a value path to the label inside the detection column (such as `"bbs.instances_additional_data.label"` for detection).
 
 ## Dashboard Output
 
