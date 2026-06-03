@@ -45,10 +45,9 @@ jobs:
       matrix:
         os: ${{ fromJSON(inputs.os-matrix || '["ubuntu-latest"]') }}
         python-version: ['3.10', '3.13']
-        # 3lc is released only on 3LC's public index (not PyPI). We support 2.22+,
-        # so test against the latest patch of each supported minor. 2.23 emits
-        # deprecation warnings the integration intentionally still triggers.
-        tlc-version: ['2.22', '2.23']
+        # 3lc is released only on 3LC's public index (not PyPI). We test against
+        # the latest 3lc minor (3.0), pinned to its latest patch.
+        tlc-version: ['3.0']
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
