@@ -1,10 +1,13 @@
-import numpy as np
 import tlc
+from tlc.data_types import SegmentationMasks
+from tlc.schemas import ConfidenceSchema
 from ultralytics.models.yolo.segment.val import SegmentationValidator
 from ultralytics.utils import ops
 
 from tlc_ultralytics.constants import (
+    CONFIDENCE,
     IMAGE_COLUMN_NAME,
+    PREDICTED_SEGMENTATIONS,
     SEGMENTATION_LABEL_COLUMN_NAME,
 )
 from tlc_ultralytics.detect.validator import TLCDetectionValidator
@@ -25,40 +28,30 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         self.process = ops.process_mask_native
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
-        # TODO: Ensure class  mapping is the same as in input table
         instance_properties_structure = {
-            tlc.LABEL: tlc.CategoricalLabel(name=tlc.LABEL, classes=self.data["names_3lc"]),
-            tlc.CONFIDENCE: tlc.Float(name=tlc.CONFIDENCE, number_role=tlc.NUMBER_ROLE_CONFIDENCE),
+            CONFIDENCE: ConfidenceSchema(writable=False),
         }
 
-        segment_sample_type = tlc.InstanceSegmentationMasks(
-            name=tlc.PREDICTED_SEGMENTATIONS,
-            instance_properties_structure=instance_properties_structure,
-            is_prediction=True,
+        segment_schema = SegmentationMasks.schema(
+            classes=self.data["names_3lc"],
+            per_instance_schemas=instance_properties_structure,
+            writable=False,
         )
 
-        return {tlc.PREDICTED_SEGMENTATIONS: segment_sample_type.schema}
+        return {PREDICTED_SEGMENTATIONS: segment_schema}
 
     def _compute_3lc_metrics(self, preds, batch):
-        return {tlc.PREDICTED_SEGMENTATIONS: self._process_predictions(preds, batch)}
+        return {PREDICTED_SEGMENTATIONS: self._process_predictions(preds, batch)}
 
     def _build_annotation(self, scaled, mapped_classes, h, w):
-        masks = scaled["masks"].cpu().numpy()
-        masks = np.transpose(masks, (1, 2, 0))  # (N, H, W) -> (H, W, N)
-        return {
-            tlc.IMAGE_HEIGHT: h,
-            tlc.IMAGE_WIDTH: w,
-            tlc.INSTANCE_PROPERTIES: {
-                tlc.LABEL: mapped_classes,
-                tlc.CONFIDENCE: scaled["conf"].tolist(),
-            },
-            tlc.MASKS: masks,
-        }
+        return tlc.data_types.SegmentationMasks(
+            image_height=h,
+            image_width=w,
+            masks=scaled["masks"].cpu().numpy(),  # PyTorch-native (N, H, W); transposed by mask_format below
+            mask_format="nhw",
+            labels=mapped_classes,
+            confidences=scaled["conf"].tolist(),
+        )
 
     def _empty_annotation(self, h, w):
-        return {
-            tlc.IMAGE_HEIGHT: h,
-            tlc.IMAGE_WIDTH: w,
-            tlc.INSTANCE_PROPERTIES: {tlc.LABEL: [], tlc.CONFIDENCE: []},
-            tlc.MASKS: np.zeros((h, w, 0), dtype=np.uint8),
-        }
+        return tlc.data_types.SegmentationMasks.create_empty(image_height=h, image_width=w)

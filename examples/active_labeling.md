@@ -7,16 +7,21 @@ Active Labeling is a technique that can significantly accelerate dataset labelin
 1. **Start with an unlabeled YOLO dataset** and create an initial `tlc.Table`:
 
     ```python
-    import tlc
+    from tlc_ultralytics import create_tables_from_yaml_file
 
-    table = tlc.Table.from_yolo(
-        dataset_yaml_file="/path/to/yolo/dataset.yaml",
-        split="train",
+    tables = create_tables_from_yaml_file(
+        "/path/to/yolo/dataset.yaml",
+        task="detect",
         project_name="Active Labeling Example",
-        dataset_name="train",
-        table_name="initial",
+        splits=("train",),
     )
+    table = tables["train"]
     ```
+
+    `create_tables_from_yaml_file` parses the YOLO dataset YAML — including the `names` map — and calls
+    `tlc.Table.from_yolo_url()` once per split. If you instead have a single folder/text file of images and the
+    category map at hand, you can call `tlc.Table.from_yolo_url(images_url=..., categories=..., task="detect")`
+    directly.
 
     Open the `tlc.Table` in the [3LC Dashboard](dashboard.3lc.ai) and manually label a diverse set of images. Aim to label images that represent different object categories and scene variations. Set the weights of labeled images to one and unlabeled images to zero.
 

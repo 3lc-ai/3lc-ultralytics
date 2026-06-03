@@ -1,16 +1,4 @@
-import numpy as np
 import tlc
-from tlc.core.builtins.constants import (
-    CONFIDENCE,
-    INSTANCES,
-    INSTANCES_ADDITIONAL_DATA,
-    LABEL,
-    X_MAX,
-    X_MIN,
-    Y_MAX,
-    Y_MIN,
-)
-from tlc.core.builtins.schemas import CategoricalLabelListSchema, Float32ListSchema, Geometry2DSchema
 from ultralytics.models.yolo.obb.val import OBBValidator
 
 from tlc_ultralytics.constants import (
@@ -30,12 +18,9 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         return {
-            "oriented_bbs_2d_predicted": Geometry2DSchema(
-                include_2d_oriented_bounding_boxes=True,
-                per_instance_schemas={
-                    LABEL: CategoricalLabelListSchema(classes=self.data["names"]),
-                    CONFIDENCE: Float32ListSchema(),
-                },
+            "oriented_bbs_2d_predicted": tlc.data_types.OrientedBoundingBoxes2D.schema(
+                classes=self.data["names_3lc"],
+                include_per_instance_confidence=True,
             )
         }
 
@@ -43,40 +28,14 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
         return {"oriented_bbs_2d_predicted": self._process_predictions(preds, batch)}
 
     def _build_annotation(self, scaled, mapped_classes, h, w):
-        instances = []
-        for j in range(len(mapped_classes)):
-            bb = scaled["bboxes"][j].cpu().numpy().astype(np.float32).tolist()
-            instances.append(
-                {
-                    "oriented_bbs_2d": [
-                        {
-                            "center_x": bb[0],
-                            "center_y": bb[1],
-                            "size_x": bb[2],
-                            "size_y": bb[3],
-                            "rotation": bb[4],
-                        }
-                    ],
-                }
-            )
-        return {
-            X_MIN: 0,
-            Y_MIN: 0,
-            X_MAX: w,
-            Y_MAX: h,
-            INSTANCES: instances,
-            INSTANCES_ADDITIONAL_DATA: {
-                LABEL: [int(c) for c in mapped_classes],
-                CONFIDENCE: scaled["conf"].cpu().numpy().astype(np.float32).tolist(),
-            },
-        }
+        # OrientedBoundingBoxes2D stores all OBBs in a single (N, 5) ndarray.
+        return tlc.data_types.OrientedBoundingBoxes2D(
+            obbs=scaled["bboxes"].cpu().numpy().astype("float32"),
+            labels=[int(c) for c in mapped_classes],
+            confidences=scaled["conf"].cpu().numpy().astype("float32").tolist(),
+            x_max=w,
+            y_max=h,
+        )
 
     def _empty_annotation(self, h, w):
-        return {
-            X_MIN: 0,
-            Y_MIN: 0,
-            X_MAX: w,
-            Y_MAX: h,
-            INSTANCES: [],
-            INSTANCES_ADDITIONAL_DATA: {LABEL: [], CONFIDENCE: []},
-        }
+        return tlc.data_types.OrientedBoundingBoxes2D.create_empty(image_width=w, image_height=h)

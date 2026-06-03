@@ -8,10 +8,7 @@ authors = [
 ]
 requires-python = ">=3.10,<3.14"
 dependencies = [
-    "3lc>=2.22.0,<3.0.0",
-    # Cap below 0.9: pacmap 0.9 dropped its `annoy` backend for `faiss-cpu`, but
-    # 3lc's embedding reduction relies on the annoy-based 0.8.x API. With 0.9 the
-    # reducer fails ("No module named 'annoy'") and silently collects no embeddings.
+    "3lc<4.0.0,>=3.0.0",
     "pacmap>=0.8.0,<0.9",
     "ultralytics>=8.4.0,<8.4.7",
 ]
@@ -30,6 +27,7 @@ module-name = "tlc_ultralytics"
 
 [dependency-groups]
 dev = [
+    "3lc[pandas]>=3.0.0,<4.0.0",
     "pytest>=9.0.3",
     "pytest-mock>=3.15.1",
     "pytest-xdist>=3.8.0",

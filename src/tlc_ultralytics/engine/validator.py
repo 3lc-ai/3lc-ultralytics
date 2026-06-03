@@ -4,11 +4,16 @@ import numpy as np
 import tlc
 import torch.distributed as dist
 import ultralytics
+from tlc._core.object_registry import ObjectRegistry
 from ultralytics.engine.validator import BaseValidator
 from ultralytics.utils import LOGGER, RANK, colorstr
 
 from tlc_ultralytics.constants import (
     DEFAULT_COLLECT_RUN_DESCRIPTION,
+    EPOCH,
+    EXAMPLE_ID,
+    FOREIGN_TABLE_ID,
+    LABEL,
     MAP,
     MAP50_95,
     MAP50_95_SEG,
@@ -262,7 +267,7 @@ class TLCValidatorMixin(BaseValidator):
         batch_size = self._infer_batch_size(preds, batch)
 
         batch_metrics = {
-            tlc.EXAMPLE_ID: [int(example_id) for example_id in batch["example_id"]],
+            EXAMPLE_ID: [int(example_id) for example_id in batch["example_id"]],
             **self._compute_3lc_metrics(preds, batch),  # Task specific metrics
         }
 
@@ -273,7 +278,7 @@ class TLCValidatorMixin(BaseValidator):
             batch_metrics["embeddings"] = self.embeddings
 
         if self._training:
-            batch_metrics[tlc.EPOCH] = [self._epoch + 1] * batch_size
+            batch_metrics[EPOCH] = [self._epoch + 1] * batch_size
             training_phase = 1 if self._final_validation else 0
             batch_metrics[TRAINING_PHASE] = [training_phase] * batch_size
 
@@ -309,9 +314,8 @@ class TLCValidatorMixin(BaseValidator):
 
         # Add DDP rank column for distributed validation debugging
         if RANK >= 0:
-            column_schemas["ddp_rank"] = tlc.Schema(
+            column_schemas["ddp_rank"] = tlc.schemas.Int32Schema(
                 display_name="DDP rank",
-                value=tlc.Int32Value(),
                 description="DDP rank that processed this sample",
                 default_visible=False,
             )
@@ -323,7 +327,7 @@ class TLCValidatorMixin(BaseValidator):
         self._metrics_writer = tlc.MetricsTableWriter(
             run_url=self._run.url,
             foreign_table_url=self.dataloader.dataset.table.url,
-            column_schemas=column_schemas,
+            schema=column_schemas,
         )
 
         self._seen = 0
@@ -375,7 +379,7 @@ class TLCValidatorMixin(BaseValidator):
 
             # Improve memory usage - don't cache metrics data
             for metrics_info in metrics_infos:
-                tlc.ObjectRegistry._delete_object_from_caches(tlc.Url(metrics_info["url"]).to_absolute(self._run.url))
+                ObjectRegistry._delete_object_from_caches(tlc.Url(metrics_info["url"]).to_absolute(self._run.url))
 
             self._run.set_status_running()
 
@@ -397,7 +401,8 @@ class TLCValidatorMixin(BaseValidator):
 
         metrics_writer = tlc.MetricsTableWriter(
             run_url=self._run.url,
-            column_schemas=self._per_class_metrics_schemas(),
+            schema=self._per_class_metrics_schemas(),
+            stream_name=PER_CLASS_METRICS_STREAM_NAME,
         )
 
         epoch = self._epoch + 1 if self._epoch is not None else -1
@@ -406,7 +411,7 @@ class TLCValidatorMixin(BaseValidator):
 
         metrics_batch = (
             {
-                tlc.EPOCH: [epoch] * num_classes,
+                EPOCH: [epoch] * num_classes,
                 TRAINING_PHASE: [training_phase] * num_classes,
             }
             if self._training
@@ -415,8 +420,8 @@ class TLCValidatorMixin(BaseValidator):
 
         metrics_batch.update(
             {
-                tlc.FOREIGN_TABLE_ID: [0] * num_classes,
-                tlc.LABEL: list(range(num_classes)),
+                FOREIGN_TABLE_ID: [0] * num_classes,
+                LABEL: list(range(num_classes)),
                 NUM_INSTANCES: np.append(self.metrics.nt_per_class, self.metrics.nt_per_class.sum()),
                 NUM_IMAGES: np.append(self.metrics.nt_per_image, np.int64(self.seen)),
                 **self._generate_per_class_metrics(),
@@ -425,66 +430,34 @@ class TLCValidatorMixin(BaseValidator):
 
         metrics_writer.add_batch(metrics_batch)
         metrics_writer.finalize()
-        metrics_infos = metrics_writer.get_written_metrics_infos()
-        for m in metrics_infos:
-            # Set the stream name to the per-class metrics stream
-            # TODO: This should be a constructor argument to MetricsTableWriter
-            m["stream_name"] = PER_CLASS_METRICS_STREAM_NAME
-        self._run.update_metrics(metrics_infos)
 
     def _per_class_metrics_schemas(self):
         metrics_schemas = {
             TRAINING_PHASE: training_phase_schema(),
-            tlc.FOREIGN_TABLE_ID: tlc.ForeignTableIdSchema(
+            FOREIGN_TABLE_ID: tlc.schemas.ForeignTableIdSchema(
                 self.dataloader.dataset.table.url.to_relative(self._run.url / "metrics").to_str(),
             ),
-            tlc.LABEL: tlc.CategoricalLabel("class", {**self.names, self.nc: "all"}).schema,
-            NUM_IMAGES: tlc.Schema(
-                value=tlc.Int32Value(),
+            LABEL: tlc.schemas.CategoricalLabelSchema(classes={**self.names, self.nc: "all"}),
+            NUM_IMAGES: tlc.schemas.Int32Schema(
                 description="Number of images with at least one instance of the class",
             ),
-            NUM_INSTANCES: tlc.Schema(
-                value=tlc.Int32Value(),
+            NUM_INSTANCES: tlc.schemas.Int32Schema(
                 description="Total number of instances of the class in all images",
             ),
-            PRECISION: tlc.Schema(
-                value=tlc.Float32Value(),
-                description="Precision of the class",
-            ),
-            RECALL: tlc.Schema(
-                value=tlc.Float32Value(),
-                description="Recall of the class",
-            ),
-            MAP: tlc.Schema(
-                value=tlc.Float32Value(),
-                description="mAP of the class",
-            ),
-            MAP50_95: tlc.Schema(
-                value=tlc.Float32Value(),
-                description="mAP50-95 of the class",
-            ),
+            PRECISION: tlc.schemas.Float32Schema(description="Precision of the class"),
+            RECALL: tlc.schemas.Float32Schema(description="Recall of the class"),
+            MAP: tlc.schemas.Float32Schema(description="mAP of the class"),
+            MAP50_95: tlc.schemas.Float32Schema(description="mAP50-95 of the class"),
         }
 
         if self.args.task == "segment":
-            metrics_schemas[PRECISION_SEG] = tlc.Schema(
-                value=tlc.Float32Value(),
-                description="Mask precision of the class",
-            )
+            metrics_schemas[PRECISION_SEG] = tlc.schemas.Float32Schema(description="Mask precision of the class")
 
-            metrics_schemas[RECALL_SEG] = tlc.Schema(
-                value=tlc.Float32Value(),
-                description="Mask recall of the class",
-            )
+            metrics_schemas[RECALL_SEG] = tlc.schemas.Float32Schema(description="Mask recall of the class")
 
-            metrics_schemas[MAP_SEG] = tlc.Schema(
-                value=tlc.Float32Value(),
-                description="Mask mAP of the class",
-            )
+            metrics_schemas[MAP_SEG] = tlc.schemas.Float32Schema(description="Mask mAP of the class")
 
-            metrics_schemas[MAP50_95_SEG] = tlc.Schema(
-                value=tlc.Float32Value(),
-                description="Mask mAP50-95 of the class",
-            )
+            metrics_schemas[MAP50_95_SEG] = tlc.schemas.Float32Schema(description="Mask mAP50-95 of the class")
         return metrics_schemas
 
     def _generate_per_class_metrics(self):
