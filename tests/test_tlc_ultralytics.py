@@ -741,6 +741,48 @@ def test_seg_table_checker() -> None:
         check_seg_table(invalid_schema_seg_table, "image", "segmentations")
 
 
+def test_legacy_bb_table_default_label_path() -> None:
+    # A legacy-format (bb_list) detection table should work with the default label column
+    # name, which points at the new-format path (bbs.instances_additional_data.label).
+    from tlc.schemas._annotations._bounding_box_list_schema import _BoundingBoxListSchema
+
+    from tlc_ultralytics.constants import DETECTION_LABEL_COLUMN_NAME
+    from tlc_ultralytics.detect.utils import check_det_table
+    from tlc_ultralytics.utils.dataset import get_value_map_from_table, resolve_label_value_path
+
+    classes = {0: tlc.schemas.MapElement("cat"), 1: tlc.schemas.MapElement("dog")}
+    writer = tlc.TableWriter(
+        table_name="legacy_bbs",
+        dataset_name="test_legacy_bb_table",
+        project_name="test_legacy_bb_table",
+        schema={"image": tlc.schemas.ImageSchema(), "bbs": _BoundingBoxListSchema(classes=classes)},
+    )
+    writer.add_row(
+        {
+            "image": str(DUMMY_IMAGE_FILE),
+            "bbs": {
+                "image_width": 100,
+                "image_height": 100,
+                "bb_list": [{"x0": 10.0, "y0": 10.0, "x1": 50.0, "y1": 50.0, "label": 1, "segmentation": []}],
+            },
+        }
+    )
+    table = writer.finalize()
+
+    # The default (new-format) label path resolves to the legacy path
+    assert resolve_label_value_path(table, DETECTION_LABEL_COLUMN_NAME) == "bbs.bb_list.label"
+
+    # Table check and value map lookup work with the default label column name
+    check_det_table(table, "image", DETECTION_LABEL_COLUMN_NAME)
+    value_map = get_value_map_from_table(table, DETECTION_LABEL_COLUMN_NAME, "detect")
+    assert value_map is not None
+    assert {k: v.internal_name for k, v in value_map.items()} == {0: "cat", 1: "dog"}
+
+    # An explicitly provided legacy path also works and is left untouched
+    assert resolve_label_value_path(table, "bbs.bb_list.label") == "bbs.bb_list.label"
+    check_det_table(table, "image", "bbs.bb_list.label")
+
+
 def test_sampling_weights() -> None:
     # Test that sampling weights are correctly applied, with worker processes enabled
     settings = Settings(project_name="test_sampling_weights", sampling_weights=True)
