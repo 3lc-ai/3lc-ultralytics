@@ -14,6 +14,8 @@ from tlc_ultralytics.constants import TLC_COLORSTR, TLC_PREFIX
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
+    from tlc.schemas._schema import ValueMapLike
+
     from tlc_ultralytics.settings import Settings
 
 
@@ -498,11 +500,11 @@ def create_tables_from_yaml_file(
     splits: Iterable[str] | None = ("train", "val", "test", "minival"),
     kpt_shape: tuple[int, int] | None = None,
     points: list[float] | None = None,
-    point_attributes: tlc.ValueMapLike | None = None,
+    point_attributes: ValueMapLike | None = None,
     lines: list[int] | None = None,
-    line_attributes: tlc.ValueMapLike | None = None,
+    line_attributes: ValueMapLike | None = None,
     triangles: list[int] | None = None,
-    triangle_attributes: tlc.ValueMapLike | None = None,
+    triangle_attributes: ValueMapLike | None = None,
     flip_indices: list[int] | None = None,
     oks_sigmas: list[float] | None = None,
     **kwargs,

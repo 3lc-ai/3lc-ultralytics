@@ -414,9 +414,9 @@ class TLCValidatorMixin(BaseValidator):
         the run. In DDP mode, gathers metrics_infos and input table URLs from
         all ranks to RANK 0, which then updates the run.
         """
-        # Each rank finalizes its streaming writer. The raw table is written to
-        # disk but NOT yet registered with the run (MetricsTableWriter.finalize
-        # only writes; the integration calls run.update_metrics below).
+        # Each rank finalizes its streaming writer. As of tlc 3.x, finalize()
+        # also registers the written table on the run (the later
+        # run.update_metrics call below deduplicates).
         raw_table = self._metrics_writer.finalize()
         metrics_infos = self._metrics_writer.get_written_metrics_infos()
         input_table_url = self.dataloader.dataset.table.url.to_str()
@@ -429,9 +429,12 @@ class TLCValidatorMixin(BaseValidator):
         # embeddings to RANK 0 for a single fit, broadcasting the fitted
         # reducer back, and per-rank rewrite. Tracked separately.
         if self._settings.instance_embeddings_dim > 0:
+            raw_metrics_infos = metrics_infos
             _, reduced_metrics_infos = self._fit_and_rewrite(raw_table)
-            # The raw table was never registered on the run; just remove it
-            # from disk so we don't leave an orphaned directory under the run.
+            # finalize() registered the raw table on the run; remove that
+            # registration and the table itself on disk so the run doesn't
+            # reference a deleted table.
+            self._remove_metrics_infos_from_run(raw_metrics_infos)
             self._delete_table_on_disk(raw_table)
             metrics_infos = reduced_metrics_infos
 
@@ -573,7 +576,7 @@ class TLCValidatorMixin(BaseValidator):
         dst_writer = tlc.MetricsTableWriter(
             run_url=self._run.url,
             foreign_table_url=self.dataloader.dataset.table.url,
-            column_schemas=src_schema_values,
+            schema=src_schema_values,
         )
 
         raw_pred_key = "predicted_instance_embedding_raw"
@@ -615,6 +618,18 @@ class TLCValidatorMixin(BaseValidator):
         dst_table = dst_writer.finalize()
         return dst_table, dst_writer.get_written_metrics_infos()
 
+    def _remove_metrics_infos_from_run(self, metrics_infos) -> None:
+        """Remove metrics infos that ``MetricsTableWriter.finalize()`` auto-registered.
+
+        As of tlc 3.x, ``finalize()`` registers its written table on the run.
+        The intermediate raw metrics table is deleted after the reduced rewrite,
+        so its registration must be removed to avoid a dangling reference.
+        """
+        removed_urls = {info["url"] for info in metrics_infos}
+        remaining = [m for m in self._run.metrics if m["url"] not in removed_urls]
+        if len(remaining) != len(self._run.metrics):
+            self._run.update_attributes({"metrics": remaining})
+
     def _delete_table_on_disk(self, table: tlc.Table) -> None:
         """Best-effort removal of an unregistered intermediate metrics table.
 
@@ -623,7 +638,7 @@ class TLCValidatorMixin(BaseValidator):
         directory under the run that nothing references.
         """
         try:
-            tlc.ObjectRegistry._delete_object_from_caches(table.url)
+            ObjectRegistry._delete_object_from_caches(table.url)
         except Exception:
             pass
         try:
