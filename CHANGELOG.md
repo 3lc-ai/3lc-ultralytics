@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-04
+
 ### Fixed
 
 - Fix an error where legacy bounding box annotation tables were not supported with a default label column name ([#72](https://github.com/3lc-ai/3lc-ultralytics/pull/72)).
