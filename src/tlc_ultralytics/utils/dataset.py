@@ -279,6 +279,32 @@ def check_tlc_dataset(  # noqa: C901
     return ret  # type: ignore[invalid-return-type]
 
 
+def resolve_label_value_path(table: tlc.Table, label_column_name: str) -> str:
+    """Resolve the value path to the label leaf for a label column in a table.
+
+    Tries the provided path first. If it does not resolve to a value map (e.g. a legacy bounding
+    box table where labels live at ``bbs.bb_list.label`` but the configured default is
+    ``bbs.instances_additional_data.label``), falls back to the label path of the root column as
+    resolved by ``AnnotationHelper``. Returns the provided path unchanged if neither resolves.
+
+    :param table: The table to resolve the label path against.
+    :param label_column_name: The configured (possibly default) label value path.
+    :returns: A value path that resolves to a value map in the table, if one exists.
+    """
+    if table.get_value_map(label_column_name) is not None:
+        return label_column_name
+
+    column_name = label_column_name.split(".")[0]
+    try:
+        ann = AnnotationHelper.get(table, column_name)
+    except (KeyError, ValueError):
+        return label_column_name
+
+    if ann.label_path is not None and table.get_value_map(ann.label_path) is not None:
+        return ann.label_path
+    return label_column_name
+
+
 def get_value_map_from_table(
     table: tlc.Table,
     label_column_name: str,
@@ -292,7 +318,7 @@ def get_value_map_from_table(
             return table.get_value_map(ann.label_path)  # type: ignore[return-value]
         except (AssertionError, KeyError, ValueError) as e:
             raise ValueError("Failed to get value map from table") from e
-    return table.get_value_map(label_column_name)  # type: ignore[return-value]
+    return table.get_value_map(resolve_label_value_path(table, label_column_name))  # type: ignore[return-value]
 
 
 def parse_3lc_yaml_file(data_file: str) -> dict[str, tlc.Table]:

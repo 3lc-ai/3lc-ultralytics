@@ -5,6 +5,7 @@ from tlc.helpers import AnnotationHelper, AnnotationType
 
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
+from tlc_ultralytics.utils.dataset import resolve_label_value_path
 
 
 def build_tlc_yolo_dataset(
@@ -69,10 +70,12 @@ def check_det_table(
         assert image_column_name in row_schema, f"Image column '{image_column_name}' not found."
 
         if label_column_name is not None:
-            # User-provided label path — validate it exists
+            # User-provided label path — validate it exists, falling back to the label path
+            # resolved by AnnotationHelper (e.g. `bbs.bb_list.label` for legacy tables)
             bb_column = label_column_name.split(".")[0]
             assert bb_column in row_schema, f"Bounding box column '{bb_column}' not found."
-            assert table.get_value_map(label_column_name) is not None, (
+            label_path = resolve_label_value_path(table, label_column_name)
+            assert table.get_value_map(label_path) is not None, (
                 f"Unable to get value map for label value path {label_column_name}. Ensure that the table is "
                 "compatible with the detection task or provide a `label_column_name` that matches the value path."
             )
