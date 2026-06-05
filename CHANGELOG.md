@@ -6,6 +6,10 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix an error where legacy bounding box annotation tables were not supported with a default label column name ([#72](https://github.com/3lc-ai/3lc-ultralytics/pull/72)).
+
 ## [0.3.0] - 2026-06-03
 
 This release moves the integration onto `3lc` 3.0, which was released on 2026-06-02.
