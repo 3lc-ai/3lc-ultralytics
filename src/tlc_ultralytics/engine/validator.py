@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import weakref
+from typing import Any
 
 import numpy as np
 import tlc
@@ -222,7 +223,7 @@ class TLCValidatorMixin(BaseValidator):
         """Get the metrics schemas for the 3LC metrics data"""
         raise NotImplementedError("Subclasses must implement this method.")
 
-    def _compute_3lc_metrics(self, preds, batch) -> dict[str, tlc.MetricData]:
+    def _compute_3lc_metrics(self, preds, batch) -> dict[str, Any]:
         """Compute 3LC metrics for a batch of predictions and targets"""
         raise NotImplementedError("Subclasses must implement this method.")
 
@@ -732,7 +733,11 @@ class TLCValidatorMixin(BaseValidator):
 
         # DDP: gather per-rank raw embeddings to RANK 0
         world_size = dist.get_world_size()  # type: ignore[possibly-missing-attribute]
-        gathered = [None] * world_size if RANK == 0 else None
+        # gather_object fills this in place on RANK 0 with each rank's
+        # (raw_pred, raw_gt) payload; annotate so the post-gather element type is known.
+        gathered: list[tuple[list[np.ndarray], list[np.ndarray]]] | None = (
+            [None] * world_size if RANK == 0 else None
+        )
         dist.gather_object((self._raw_pred_emb, self._raw_gt_emb), gathered, dst=0)  # type: ignore[possibly-missing-attribute]
 
         per_rank_reduced = None
