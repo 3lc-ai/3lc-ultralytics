@@ -223,6 +223,27 @@ class TLCValidatorMixin(BaseValidator):
         """Compute 3LC metrics for a batch of predictions and targets"""
         raise NotImplementedError("Subclasses must implement this method.")
 
+    def _filter_top_predictions(self, pred):
+        """Filter a single image's predictions by confidence threshold, keeping the
+        top max_det by confidence.
+
+        Returns None if no predictions pass the threshold. All per-instance metrics
+        columns must be filtered through this method so they stay index-aligned.
+        """
+        mask = pred["conf"] >= self._settings.conf_thres
+        if not mask.any():
+            return None
+
+        filtered = {k: v[mask] for k, v in pred.items()}
+
+        # Keep only top max_det predictions by confidence
+        max_det = self._settings.max_det
+        if len(filtered["conf"]) > max_det:
+            topk = filtered["conf"].topk(max_det).indices
+            filtered = {k: v[topk] for k, v in filtered.items()}
+
+        return filtered
+
     def _process_predictions(self, preds, batch):
         """Filter, scale, and build 3LC annotations for a batch of predictions."""
         results = []
@@ -230,18 +251,10 @@ class TLCValidatorMixin(BaseValidator):
             pbatch = self._prepare_batch(i, batch)
             h, w = pbatch["ori_shape"]
 
-            mask = pred["conf"] >= self._settings.conf_thres
-            if not mask.any():
+            filtered = self._filter_top_predictions(pred)
+            if filtered is None:
                 results.append(self._empty_annotation(h, w))
                 continue
-
-            filtered = {k: v[mask] for k, v in pred.items()}
-
-            # Keep only top max_det predictions by confidence
-            max_det = self._settings.max_det
-            if len(filtered["conf"]) > max_det:
-                topk = filtered["conf"].topk(max_det).indices
-                filtered = {k: v[topk] for k, v in filtered.items()}
 
             scaled = self.scale_preds(filtered, pbatch)
             mapped_classes = [self.data["range_to_3lc_class"][int(c)] for c in scaled["cls"].tolist()]
