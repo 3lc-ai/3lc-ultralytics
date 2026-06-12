@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -27,6 +28,20 @@ IOU_THRESHOLDS = {
         "obb": 0.999,
     },
 }
+
+
+def stub_model_with_stride(stride: tuple[float, ...] = (8.0, 16.0, 32.0)) -> SimpleNamespace:
+    """Return a minimal stand-in for a YOLO model exposing only the ``.stride`` attribute.
+
+    Ultralytics' ``DetectionTrainer.build_dataset`` reads ``unwrap_model(self.model).stride.max()``
+    to choose the grid size when building a dataset. Tests that build datasets or dataloaders without
+    running a full training setup used to set ``trainer.model = None`` and rely on Ultralytics'
+    ``... if self.model else 0`` fallback (which yielded the default grid size of 32). That fallback
+    was removed in ultralytics 8.4.7, so we hand ``build_dataset`` a stub carrying the default
+    detection strides instead. ``unwrap_model`` returns any object without ``_orig_mod``/``module``
+    unchanged, so a plain namespace is sufficient and this works across the whole supported range.
+    """
+    return SimpleNamespace(stride=torch.tensor(stride))
 
 
 def compare_dataset_values(  # noqa: C901

@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 import torch
 from test_tlc_ultralytics import TASK2TRAINER, TASK2ULTRALYTICS_TRAINER
+from testing_helpers import stub_model_with_stride
 
 
 def _compare_dataset_rows(row_ultralytics: dict[str, Any], row_3lc: dict[str, Any]) -> None:
@@ -63,12 +64,12 @@ def create_dataset_samples(mode: str, task: str) -> tuple[list[dict[str, Any]], 
     overrides_3lc["settings"] = settings
 
     trainer_ultralytics = TASK2ULTRALYTICS_TRAINER[task](overrides=overrides)
-    trainer_ultralytics.model = None
+    trainer_ultralytics.model = stub_model_with_stride()
     dataset_ultralytics = trainer_ultralytics.build_dataset(trainer_ultralytics.data["train"], mode=mode, batch=4)
     rows_ultralytics = list(dataset_ultralytics)
 
     trainer_3lc = TASK2TRAINER[task](overrides=overrides_3lc)
-    trainer_3lc.model = None
+    trainer_3lc.model = stub_model_with_stride()
     dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=4)
     rows_3lc = list(dataset_3lc)
 
@@ -108,7 +109,7 @@ def create_dataset_samples_with_tracking(mode: str, task: str, output_file: str 
         overrides_3lc["settings"] = settings
 
         trainer_ultralytics = TASK2ULTRALYTICS_TRAINER[task](overrides=overrides)
-        trainer_ultralytics.model = None
+        trainer_ultralytics.model = stub_model_with_stride()
         dataset_ultralytics = trainer_ultralytics.build_dataset(trainer_ultralytics.data["train"], mode=mode, batch=4)
         rows_ultralytics = list(dataset_ultralytics)
 
@@ -117,7 +118,7 @@ def create_dataset_samples_with_tracking(mode: str, task: str, output_file: str 
         reset_tracking()
 
         trainer_3lc = TASK2TRAINER[task](overrides=overrides_3lc)
-        trainer_3lc.model = None
+        trainer_3lc.model = stub_model_with_stride()
         dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=4)
         rows_3lc = list(dataset_3lc)
 
