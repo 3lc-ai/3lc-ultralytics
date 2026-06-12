@@ -746,6 +746,74 @@ def test_seg_table_checker() -> None:
         check_seg_table(invalid_schema_seg_table, "image", "segmentations")
 
 
+def test_segmentation_missing_image_dimensions_fallback() -> None:
+    """A segmentation Table that stores non-positive image dimensions (image_height/width == 0)
+    must not crash. The dataset should fall back to reading the real image size, recover the masks,
+    and warn once. Regression test for tables authored without valid image dimensions.
+    """
+    from tlc.constants import IMAGE_HEIGHT, IMAGE_WIDTH
+    from tlc.data_types import SegmentationPolygons
+    from tlc.helpers import ImageHelper
+    from ultralytics.cfg import get_cfg
+    from ultralytics.utils import DEFAULT_CFG
+
+    from tlc_ultralytics.detect.utils import build_tlc_yolo_dataset
+
+    # Real image on disk; the mask RLE is encoded against its true size.
+    height, width = ImageHelper.get_exif_image_dimensions(str(DUMMY_IMAGE_FILE))
+    polygon = [5.0, 5.0, 40.0, 5.0, 40.0, 30.0, 5.0, 30.0]
+    valid_row = SegmentationPolygons(
+        image_width=width, image_height=height, polygons=[polygon], labels=[0]
+    ).to_row()
+
+    schema = {"segmentations": SegmentationPolygons.schema(classes={0: "object"})}
+
+    def make_table(table_name: str, seg_row: dict) -> tlc.Table:
+        return tlc.Table.from_dict(
+            {"image": [str(DUMMY_IMAGE_FILE)], "segmentations": [seg_row]},
+            schema=schema,
+            project_name="test_missing_image_dimensions",
+            dataset_name="seg",
+            table_name=table_name,
+            if_exists="overwrite",
+        )
+
+    def build(table: tlc.Table):
+        cfg = get_cfg(DEFAULT_CFG, overrides={"task": "segment", "imgsz": 64, "rect": False})
+        return build_tlc_yolo_dataset(
+            cfg,
+            table,
+            batch=1,
+            data={"channels": 3, "names": {0: "object"}, "nc": 1},
+            mode="val",
+            image_column_name="image",
+            label_column_name="segmentations.instance_properties.label",
+        )
+
+    # Reference dataset: correct dimensions stored.
+    reference = build(make_table("good", valid_row))
+
+    # Broken dataset: image dimensions zeroed out (valid RLE, but no usable size metadata).
+    zeroed_row = {**valid_row, IMAGE_HEIGHT: 0, IMAGE_WIDTH: 0}
+    with capture_logs(logging.WARNING) as log_messages:
+        recovered = build(make_table("zeroed", zeroed_row))
+
+    # The fallback warned about the missing dimensions...
+    assert any("non-positive image dimensions" in msg for msg in log_messages), (
+        f"Expected a warning about missing image dimensions, got: {log_messages}"
+    )
+
+    ref_label, got_label = reference.labels[0], recovered.labels[0]
+
+    # ...recovered the real image shape...
+    assert got_label["shape"] == (height, width) == ref_label["shape"]
+
+    # ...and reconstructed identical, normalized ([0, 1]) segments.
+    assert len(got_label["segments"]) == len(ref_label["segments"]) == 1
+    np.testing.assert_allclose(got_label["segments"][0], ref_label["segments"][0], atol=1e-6)
+    assert got_label["segments"][0].max() <= 1.0
+
+
 def test_legacy_bb_table_default_label_path() -> None:
     # A legacy-format (bb_list) detection table should work with the default label column
     # name, which points at the new-format path (bbs.instances_additional_data.label).
