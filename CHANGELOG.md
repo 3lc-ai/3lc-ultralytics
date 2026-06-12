@@ -6,6 +6,10 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Changed
+
+- Widen the supported `ultralytics` range from `>=8.4.0,<8.4.7` to `>=8.4.0,<8.4.67`.
+
 ## [0.3.1] - 2026-06-04
 
 ### Fixed

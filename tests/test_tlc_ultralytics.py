@@ -19,7 +19,12 @@ import pytest
 import tlc
 import yaml
 from PIL import Image
-from testing_helpers import check_pose_table_and_metrics_tables, compare_dataset_values, plot_ultralytics
+from testing_helpers import (
+    check_pose_table_and_metrics_tables,
+    compare_dataset_values,
+    plot_ultralytics,
+    stub_model_with_stride,
+)
 from tlc._core.objects.tables.from_table.edited_table import EditedTable
 from tlc._core.objects.tables.from_table.pacmap_table import PacmapTable
 from tlc._core.objects.tables.null_overlay import NullOverlay
@@ -795,8 +800,8 @@ def test_sampling_weights() -> None:
         },
     )
 
-    # Needs to be initialized to create dataloader (usually done in train)
-    trainer.model = None
+    # Model is normally set up in train(); build_dataset only needs its stride, so use a stub.
+    trainer.model = stub_model_with_stride()
 
     epochs = 1000
 
@@ -838,8 +843,8 @@ def test_exclude_zero_weight_training() -> None:
         },
     )
 
-    # Needs to be initialized to create dataloader (usually done in train)
-    trainer.model = None
+    # Model is normally set up in train(); build_dataset only needs its stride, so use a stub.
+    trainer.model = stub_model_with_stride()
 
     # Create edited table where one sample has weight increased to 2
     train_table = trainer.data["train"]
@@ -871,8 +876,9 @@ def test_exclude_zero_weight_collection(task) -> None:
         }
     )
 
-    # Trainer needs a model attribute to create dataloader
-    trainer.model = Mock() if task == "classify" else None
+    # Model is normally set up in train(); the dataloader build only needs the model's stride
+    # (classify uses a ClassificationDataset that doesn't read stride, so a Mock suffices there).
+    trainer.model = Mock() if task == "classify" else stub_model_with_stride()
 
     # Create edited table where several samples have weight 0
     train_table = trainer.data["train"]
@@ -1528,7 +1534,7 @@ def test_dataset_cache(task) -> None:
     trainer = TASK2TRAINER[task](
         overrides={"data": TASK2DATASET[task], "model": TASK2MODEL[task], "settings": settings},
     )
-    trainer.model = None
+    trainer.model = stub_model_with_stride()
 
     # Check that there is no cache
     cache_paths = list(Path(trainer.data["train"].url.to_str()).glob("yolo_*.json"))
@@ -1836,12 +1842,12 @@ def test_single_sample_equality(task: str, mode: str) -> None:
 
     # Set up Ultralytics dataset
     trainer_ultralytics = TASK2ULTRALYTICS_TRAINER[task](overrides=overrides)
-    trainer_ultralytics.model = None
+    trainer_ultralytics.model = stub_model_with_stride()
     dataset_ultralytics = trainer_ultralytics.build_dataset(trainer_ultralytics.data["train"], mode=mode, batch=1)
 
     # Set up 3LC dataset
     trainer_3lc = TASK2TRAINER[task](overrides=overrides_3lc)
-    trainer_3lc.model = None
+    trainer_3lc.model = stub_model_with_stride()
     dataset_3lc = trainer_3lc.build_dataset(trainer_3lc.data["train"], mode=mode, batch=1)
 
     plot = False  # Turn on to enable debug viz.
