@@ -1,4 +1,3 @@
-import numpy as np
 import tlc
 import torch
 from tlc.data_types import SegmentationMasks
@@ -60,58 +59,11 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
     def _empty_annotation(self, h, w):
         return tlc.data_types.SegmentationMasks.create_empty(image_height=h, image_width=w)
 
-    def _extract_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
-        """Extract per-instance embeddings using mask-weighted average pooling."""
-        from tlc_ultralytics.utils.embeddings import _extract_instance_embeddings_mask
+    # Instance embeddings pool the feature map with the predicted/GT segmentation masks.
+    _instance_geometry_kind = "mask"
 
-        feature_map = self._instance_feature_map
-
-        # pred["masks"] are in model-input (letterboxed) coords, same as the feature map.
-        masks_list = []
-        image_sizes = []
-        for i, pred in enumerate(preds):
-            pbatch = self._prepare_batch(i, batch)
-            imgsz = pbatch["imgsz"]
-            h_in, w_in = int(imgsz[0]), int(imgsz[1])
-            image_sizes.append((h_in, w_in))
-
-            mask = pred["conf"] >= self._settings.conf_thres
-            if not mask.any():
-                masks_list.append(torch.empty((0, h_in, w_in), device=feature_map.device))
-                continue
-
-            filtered_masks = pred["masks"][mask]
-            filtered_conf = pred["conf"][mask]
-
-            # Keep only top max_det
-            max_det = self._settings.max_det
-            if len(filtered_conf) > max_det:
-                topk = filtered_conf.topk(max_det).indices
-                filtered_masks = filtered_masks[topk]
-
-            masks_list.append(filtered_masks)
-
-        return _extract_instance_embeddings_mask(feature_map, masks_list, image_sizes)
-
-    def _extract_gt_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
-        """Extract per-instance embeddings for ground-truth masks."""
-        from tlc_ultralytics.utils.embeddings import _extract_instance_embeddings_mask
-
-        feature_map = self._instance_feature_map
-
-        # GT masks from _prepare_batch are in model-input (letterboxed) coords
-        masks_list = []
-        image_sizes = []
-        for i in range(len(preds)):
-            pbatch = self._prepare_batch(i, batch)
-            imgsz = pbatch["imgsz"]
-            h_in, w_in = int(imgsz[0]), int(imgsz[1])
-            image_sizes.append((h_in, w_in))
-
-            gt_masks = pbatch.get("masks")
-            if gt_masks is None or gt_masks.numel() == 0:
-                masks_list.append(torch.empty((0, h_in, w_in), device=feature_map.device))
-            else:
-                masks_list.append(gt_masks.to(feature_map.device))
-
-        return _extract_instance_embeddings_mask(feature_map, masks_list, image_sizes)
+    def _instance_regions(self, source, h: int, w: int, device) -> torch.Tensor:
+        masks = source.get("masks") if source is not None else None
+        if masks is None or masks.numel() == 0:
+            return torch.empty((0, h, w), device=device)
+        return masks.to(device)

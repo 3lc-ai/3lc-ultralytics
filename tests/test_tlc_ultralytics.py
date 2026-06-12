@@ -2239,7 +2239,7 @@ def test_instance_embeddings_collection(task: str) -> None:
         project_name=f"test_instance_emb_{task}",
         run_name=f"test_instance_emb_{task}",
         instance_embeddings_dim=dim,
-        image_embeddings_reducer="pca",
+        instance_embeddings_reducer="pca",
         label_column_name=TASK2LABEL_COLUMN_NAME[task],
     )
 
@@ -2274,7 +2274,7 @@ def test_gt_instance_embeddings_collection(task: str) -> None:
         run_name=f"test_gt_instance_emb_{task}",
         instance_embeddings_dim=dim,
         ground_truth_instance_embeddings=True,
-        image_embeddings_reducer="pca",
+        instance_embeddings_reducer="pca",
         label_column_name=TASK2LABEL_COLUMN_NAME[task],
     )
 
@@ -2321,7 +2321,7 @@ def test_all_embeddings_combined() -> None:
         run_name="test_all_embeddings_combined",
         instance_embeddings_dim=dim,
         ground_truth_instance_embeddings=True,
-        image_embeddings_reducer="pca",
+        instance_embeddings_reducer="pca",
         label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
     )
 
@@ -2402,3 +2402,17 @@ def test_gt_instance_embeddings_incompatible_with_collection_disable() -> None:
     )
     with pytest.raises(AssertionError, match="Cannot disable collection"):
         settings.verify(training=True)
+
+
+def test_reducer_validation_split() -> None:
+    """pca is only supported by the in-process instance reduction, not the native image reduction."""
+    settings = Settings(image_embeddings_dim=2, image_embeddings_reducer="pca", label_column_name="test")
+    with pytest.raises(ValueError, match="image_embeddings_reducer"):
+        settings.verify(training=False)
+
+    settings = Settings(instance_embeddings_dim=2, instance_embeddings_reducer="pca", label_column_name="test")
+    settings.verify(training=False)
+
+    settings = Settings(instance_embeddings_dim=2, instance_embeddings_reducer="illegal", label_column_name="test")
+    with pytest.raises(ValueError, match="instance_embeddings_reducer"):
+        settings.verify(training=False)

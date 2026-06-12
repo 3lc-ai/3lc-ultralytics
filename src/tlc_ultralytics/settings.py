@@ -69,6 +69,22 @@ class Settings:
     """Model layer index for instance embeddings feature extraction.
     None means auto-detect the highest-resolution neck output (P3). Default: None"""
 
+    instance_embeddings_reducer: str = field(default="pacmap")
+    """Reduction algorithm for instance embeddings. Options: 'pacmap', 'umap' and 'pca'.
+    Only used if instance_embeddings_dim > 0.
+
+    Experimental: instance embeddings are currently reduced in-process by the integration.
+    When 3LC supports reducing variable-length embedding columns natively, this option will
+    be deprecated in favor of the native interface. Default: 'pacmap'"""
+
+    instance_embeddings_reducer_args: dict = field(default_factory=dict)
+    """Keyword arguments for the instance embeddings reducer, passed directly to the reducer
+    constructor (`pacmap.PaCMAP`, `umap.UMAP` or `sklearn.decomposition.PCA`).
+
+    Note that unlike `image_embeddings_reducer_args`, which takes 3LC reduction table args,
+    these are raw constructor kwargs for the chosen reducer. Experimental, see
+    `instance_embeddings_reducer`. Default: {}"""
+
     ground_truth_instance_embeddings: bool = field(default=False)
     """Whether to collect instance embeddings for ground-truth annotations.
     Requires instance_embeddings_dim > 0. Default: False"""
@@ -233,7 +249,8 @@ class Settings:
             )
 
         if self.image_embeddings_dim > 0:
-            self._check_reducer_available()
+            # The native 3LC reduction used for image embeddings supports pacmap and umap only.
+            self._check_reducer_available(self.image_embeddings_reducer, ("pacmap", "umap"), "image_embeddings_reducer")
 
         assert self.instance_embeddings_dim >= 0, (
             f"Invalid instance embeddings dimension {self.instance_embeddings_dim}, must be non-negative."
@@ -250,7 +267,9 @@ class Settings:
             )
 
         if self.instance_embeddings_dim > 0:
-            self._check_reducer_available()
+            self._check_reducer_available(
+                self.instance_embeddings_reducer, ("pacmap", "umap", "pca"), "instance_embeddings_reducer"
+            )
 
         if self.ground_truth_instance_embeddings:
             assert self.instance_embeddings_dim > 0, (
@@ -330,25 +349,27 @@ class Settings:
         """
         pass
 
-    def _check_reducer_available(self) -> None:
-        """Check that the selected reducer is available.
+    def _check_reducer_available(self, reducer: str, valid_reducers: tuple[str, ...], setting_name: str) -> None:
+        """Check that the selected reducer is valid and its dependency is installed.
 
+        :param reducer: The reducer name to check.
+        :param valid_reducers: The reducer names supported by the consuming reduction path.
+        :param setting_name: The settings field being validated, for error messages.
         :raises: ValueError if the selected reducer is not available.
         """
         reducer_to_package = {"pacmap": "pacmap", "umap": "umap-learn", "pca": "scikit-learn"}
         reducer_to_module = {"pacmap": "pacmap", "umap": "umap", "pca": "sklearn"}
-        if self.image_embeddings_reducer not in reducer_to_package:
+        if reducer not in valid_reducers:
             raise ValueError(
-                f"Invalid image embeddings reducer {self.image_embeddings_reducer}. "
-                f"Valid options are {', '.join(repr(k) for k in reducer_to_package)}."
+                f"Invalid {setting_name} {reducer!r}. Valid options are {', '.join(repr(k) for k in valid_reducers)}."
             )
 
         try:
-            importlib.import_module(reducer_to_module[self.image_embeddings_reducer])
+            importlib.import_module(reducer_to_module[reducer])
         except Exception as e:
-            package = reducer_to_package[self.image_embeddings_reducer]
+            package = reducer_to_package[reducer]
             raise ValueError(
-                f"Embeddings collection enabled, but failed to import {self.image_embeddings_reducer} dependency. "
+                f"Embeddings collection enabled, but failed to import {reducer} dependency. "
                 f"Run `pip install {package}` to enable embeddings collection."
             ) from e
 

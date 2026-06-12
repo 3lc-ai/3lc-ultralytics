@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import weakref
+
 import numpy as np
 import tlc
+import torch
 import torch.distributed as dist
 import ultralytics
 from tlc._core.object_registry import ObjectRegistry
@@ -267,25 +270,176 @@ class TLCValidatorMixin(BaseValidator):
         raise NotImplementedError("Subclasses must implement this method.")
 
     def _add_instance_embeddings_hook(self, model) -> int:
-        """Add a hook to capture high-resolution feature maps for instance embeddings.
+        """Add a hook to capture class-discriminative feature maps for instance embeddings.
 
-        Subclasses can override for custom behavior. Default delegates to detect validator.
+        By default, hooks into the classification branch (cv3) of the detection head,
+        which produces features optimized for class discrimination rather than localization.
+        All detection-based task heads (detect, segment, pose, obb) subclass ultralytics'
+        Detect head, so this default applies to all of them. Uses a neck layer instead if
+        instance_embeddings_layer is explicitly set.
+
+        Returns the channel dimension size of the hooked layer(s).
         """
-        raise NotImplementedError("Subclasses must implement this method.")
+        if hasattr(model.model, "model"):
+            model = model.model
 
-    def _extract_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
+        # If user explicitly set a layer index, use the neck-layer approach
+        if self._settings.instance_embeddings_layer is not None:
+            layer_index = self._settings.instance_embeddings_layer
+            LOGGER.info(
+                f"{TLC_COLORSTR}Using layer {layer_index} ({model.model[layer_index].type}) "
+                "for instance embeddings extraction."
+            )
+            return self._add_feature_map_hook(model, layer_index)
+
+        # Default: hook the cls branch (cv3) of the detection head for class-discriminative features
+        return self._add_cls_head_hooks(model)
+
+    def _add_feature_map_hook(self, model, layer_index: int) -> int:
+        """Hook a single model layer, storing its output as the instance feature map."""
+        from tlc_ultralytics.utils.embeddings import _infer_layer_channels
+
+        weak_self = weakref.ref(self)  # Avoid circular reference (self <-> hook_fn)
+
+        def hook_fn(_module, _input, output):
+            weak_self()._instance_feature_map = output
+
+        self._hook_handles.append(model.model[layer_index].register_forward_hook(hook_fn))
+        return _infer_layer_channels(model.model[layer_index], layer_index)
+
+    @staticmethod
+    def _find_cls_head(model) -> torch.nn.ModuleList | None:
+        """Find the cls head ModuleList from the detection head."""
+        detect_head = model.model[-1]
+        cv3 = getattr(detect_head, "cv3", None)
+        if cv3 is not None:
+            return cv3
+        if hasattr(detect_head, "one2one"):
+            return detect_head.one2one.get("cls_head")
+        return None
+
+    def _add_cls_head_hooks(self, model) -> int:
+        """Hook the cls branch of the detection head at all FPN levels.
+
+        Captures the penultimate layer output (before the final 1x1 conv to class logits)
+        from each FPN level. These are resized to P3 resolution and concatenated into a
+        single feature map stored in _instance_feature_map.
+
+        Returns the total channel dimension across all levels.
+        """
+        import torch.nn.functional as F
+
+        detect_head = model.model[-1]
+        cv3 = self._find_cls_head(model)
+
+        if cv3 is None:
+            # Fallback to neck layer approach
+            from tlc_ultralytics.utils.embeddings import _auto_detect_p3_layer
+
+            layer_index = _auto_detect_p3_layer(model.model)
+            LOGGER.info(
+                f"{TLC_COLORSTR}No cls head found, falling back to neck layer {layer_index} "
+                "for instance embeddings extraction."
+            )
+            return self._add_feature_map_hook(model, layer_index)
+
+        # Hook penultimate sub-layer of each FPN level's cls branch
+        # cv3[level] = Sequential([DWConv+Conv, DWConv+Conv, Conv2d])
+        # We want [-2] (second DWConv+Conv block) — class-discriminative features
+        hook_sub_index = len(cv3[0]) - 2
+        level_features: list[torch.Tensor | None] = [None] * len(cv3)
+        weak_self = weakref.ref(self)
+
+        total_channels = 0
+        for level_idx in range(len(cv3)):
+            target = cv3[level_idx][hook_sub_index]
+            try:
+                total_channels += target[-1].conv.out_channels
+            except (AttributeError, IndexError, TypeError):
+                total_channels += detect_head.nc
+
+            def make_hook(idx):
+                def hook_fn(_module, _input, output):
+                    level_features[idx] = output
+
+                return hook_fn
+
+            self._hook_handles.append(target.register_forward_hook(make_hook(level_idx)))
+
+        def combine_hook(_module, _input, _output):
+            self_ref = weak_self()
+            if self_ref is None:
+                return
+            features = [f for f in level_features if f is not None]
+            if not features:
+                return
+            target_size = features[0].shape[2:]
+            resized = [
+                F.interpolate(f, size=target_size, mode="bilinear", align_corners=False)
+                if f.shape[2:] != target_size
+                else f
+                for f in features
+            ]
+            self_ref._instance_feature_map = torch.cat(resized, dim=1)
+
+        self._hook_handles.append(detect_head.register_forward_hook(combine_hook))
+
+        LOGGER.info(
+            f"{TLC_COLORSTR}Using detection head cls branch (cv3) for instance embeddings "
+            f"({len(cv3)} levels, {total_channels} total channels)."
+        )
+        return total_channels
+
+    # Geometry used to pool the feature map into per-instance embeddings:
+    # "bbox" pools with roi_align over xyxy boxes, "mask" with mask-weighted averaging.
+    _instance_geometry_kind = "bbox"
+
+    def _instance_regions(self, source, h: int, w: int, device) -> torch.Tensor:
+        """Return one image's instance geometry, aligned with the feature map.
+
+        ``source`` is either a filtered prediction dict or a prepared GT batch
+        (both keyed the same way), or None when there are no instances. Both are
+        in model-input (letterboxed) coords — the same spatial domain as the
+        feature map. Returns [N, 4] xyxy bboxes (or [N, H, W] masks for
+        subclasses with _instance_geometry_kind = "mask").
+        """
+        bboxes = source.get("bboxes") if source is not None else None
+        if bboxes is None or bboxes.numel() == 0:
+            return torch.empty((0, 4), device=device)
+        return bboxes.to(device)
+
+    def _extract_instance_embeddings(self, preds, batch, ground_truth: bool = False) -> list[np.ndarray]:
         """Extract per-instance raw embeddings from the captured feature map.
 
-        Subclasses must implement this for their specific prediction format.
+        For predictions, instances are filtered through _filter_top_predictions so
+        the embeddings stay index-aligned with all other per-instance metrics
+        columns. For ground truth (ground_truth=True), all annotations are used.
         """
-        raise NotImplementedError("Subclasses must implement this method.")
+        from tlc_ultralytics.utils.embeddings import (
+            _extract_instance_embeddings_bbox,
+            _extract_instance_embeddings_mask,
+        )
+
+        feature_map = self._instance_feature_map
+
+        regions_list = []
+        image_sizes = []
+        for i, pred in enumerate(preds):
+            pbatch = self._prepare_batch(i, batch)
+            imgsz = pbatch["imgsz"]
+            h, w = int(imgsz[0]), int(imgsz[1])
+            image_sizes.append((h, w))
+
+            source = pbatch if ground_truth else self._filter_top_predictions(pred)
+            regions_list.append(self._instance_regions(source, h, w, feature_map.device))
+
+        if self._instance_geometry_kind == "bbox":
+            return _extract_instance_embeddings_bbox(feature_map, regions_list, image_sizes)
+        return _extract_instance_embeddings_mask(feature_map, regions_list, image_sizes)
 
     def _extract_gt_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
-        """Extract per-instance raw embeddings for ground-truth annotations.
-
-        Subclasses must implement this for their specific GT annotation format.
-        """
-        raise NotImplementedError("Subclasses must implement this method.")
+        """Extract per-instance raw embeddings for ground-truth annotations."""
+        return self._extract_instance_embeddings(preds, batch, ground_truth=True)
 
     def _infer_batch_size(self, preds, batch=None) -> int:
         """Infer the batch size from the predictions"""
@@ -528,8 +682,8 @@ class TLCValidatorMixin(BaseValidator):
         )
 
         n = self._settings.instance_embeddings_dim
-        method = self._settings.image_embeddings_reducer
-        reducer_args = self._settings.image_embeddings_reducer_args or {}
+        method = self._settings.instance_embeddings_reducer
+        reducer_args = self._settings.instance_embeddings_reducer_args or {}
         progress_cb = getattr(self._settings, "_reduction_progress_callback", None)
         existing_reducer = getattr(self._settings, "_fitted_instance_reducer", None)
 

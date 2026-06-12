@@ -44,63 +44,15 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
     def _empty_annotation(self, h, w):
         return tlc.data_types.OrientedBoundingBoxes2D.create_empty(image_width=w, image_height=h)
 
-    def _extract_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
-        """Extract per-instance embeddings for OBB using oriented box masks."""
-        from tlc_ultralytics.utils.embeddings import _extract_instance_embeddings_mask
+    # Instance embeddings pool the feature map with rasterized oriented-box masks.
+    _instance_geometry_kind = "mask"
 
-        feature_map = self._instance_feature_map
-
-        # Use model-input (letterboxed) coords — bboxes and masks align with the feature map.
-        masks_list = []
-        image_sizes = []
-        for i, pred in enumerate(preds):
-            pbatch = self._prepare_batch(i, batch)
-            imgsz = pbatch["imgsz"]
-            h_in, w_in = int(imgsz[0]), int(imgsz[1])
-            image_sizes.append((h_in, w_in))
-
-            mask = pred["conf"] >= self._settings.conf_thres
-            if not mask.any():
-                masks_list.append(torch.empty((0, h_in, w_in), device=feature_map.device))
-                continue
-
-            filtered_bboxes = pred["bboxes"][mask]  # OBB format: cx, cy, w, h, rotation
-            filtered_conf = pred["conf"][mask]
-
-            # Keep only top max_det
-            max_det = self._settings.max_det
-            if len(filtered_conf) > max_det:
-                topk = filtered_conf.topk(max_det).indices
-                filtered_bboxes = filtered_bboxes[topk]
-
-            obb_masks = _obbs_to_masks(filtered_bboxes, h_in, w_in, device=feature_map.device)
-            masks_list.append(obb_masks)
-
-        return _extract_instance_embeddings_mask(feature_map, masks_list, image_sizes)
-
-    def _extract_gt_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
-        """Extract per-instance embeddings for ground-truth OBBs using oriented box masks."""
-        from tlc_ultralytics.utils.embeddings import _extract_instance_embeddings_mask
-
-        feature_map = self._instance_feature_map
-
-        # GT bboxes from _prepare_batch are already in model-input (letterboxed) coords
-        masks_list = []
-        image_sizes = []
-        for i in range(len(preds)):
-            pbatch = self._prepare_batch(i, batch)
-            imgsz = pbatch["imgsz"]
-            h_in, w_in = int(imgsz[0]), int(imgsz[1])
-            image_sizes.append((h_in, w_in))
-
-            gt_bboxes = pbatch["bboxes"]  # GT OBBs: cx, cy, w, h, rotation in model-input coords
-            if gt_bboxes.numel() == 0:
-                masks_list.append(torch.empty((0, h_in, w_in), device=feature_map.device))
-            else:
-                obb_masks = _obbs_to_masks(gt_bboxes, h_in, w_in, device=feature_map.device)
-                masks_list.append(obb_masks)
-
-        return _extract_instance_embeddings_mask(feature_map, masks_list, image_sizes)
+    def _instance_regions(self, source, h: int, w: int, device) -> torch.Tensor:
+        # OBBs (cx, cy, w, h, rotation) in model-input coords, both for preds and GT.
+        obbs = source.get("bboxes") if source is not None else None
+        if obbs is None or obbs.numel() == 0:
+            return torch.empty((0, h, w), device=device)
+        return _obbs_to_masks(obbs, h, w, device=device)
 
 
 def _obbs_to_masks(

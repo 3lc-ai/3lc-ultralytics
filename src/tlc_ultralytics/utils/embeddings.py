@@ -41,19 +41,21 @@ def _auto_detect_p3_layer(model_layers) -> int:
 
 
 def _infer_layer_channels(layer, layer_index: int) -> int:
-    """Infer the output channel count of a model layer."""
+    """Infer the output channel count of a model layer.
+
+    The returned channel count is written into the raw embedding column schema,
+    so guessing is not an option — raise if it cannot be determined.
+    """
     if hasattr(layer, "cv2") and hasattr(layer.cv2, "conv"):
         return layer.cv2.conv.out_channels
     elif hasattr(layer, "cv2") and hasattr(layer.cv2, "out_channels"):
         return layer.cv2.out_channels
     elif hasattr(layer, "c"):
         return layer.c
-    else:
-        LOGGER.warning(
-            f"{TLC_COLORSTR}Could not infer channel size for layer {layer_index}. "
-            "Instance embedding dimension will be determined at runtime."
-        )
-        return 256
+    raise ValueError(
+        f"Could not infer the output channel count of layer {layer_index} ({layer.type}). "
+        "Set instance_embeddings_layer to a layer whose channel count can be inferred."
+    )
 
 
 def reduce_embeddings(
