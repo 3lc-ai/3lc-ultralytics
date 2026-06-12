@@ -135,13 +135,6 @@ class YOLO(YOLOBase):
         if progress_callback is not None:
             settings._reduction_progress_callback = progress_callback
 
-        # TEMP(instance-embeddings): clear any reducer left over from a previous
-        # collect() call on the same Settings instance. Without this, a second
-        # collect() would silently reuse the first call's fitted space (the
-        # cross-split fit/transform mechanism uses this attribute *within* one
-        # collect() to share the train-fit reducer across val splits).
-        settings._fitted_instance_reducer = None
-
         # Build a uniform {split: val_kwargs} mapping so both the data+splits and
         # tables branches share a single iteration loop.
         if data and splits:
@@ -150,21 +143,31 @@ class YOLO(YOLOBase):
             assert tables is not None
             split_val_kwargs = {s: {"table": t} for s, t in tables.items()}
 
-        # TEMP(instance-embeddings): run the train split first so its fitted reducer
-        # (stored on settings._fitted_instance_reducer) is reused when transforming
-        # subsequent splits. Remove the ordering when upstream reduction lands —
-        # 3LC's native flow handles cross-split fit/transform itself.
+        # TEMP(instance-embeddings): run the train split first so its fitted
+        # reducer (shared via the per-run registry in _instance_reduce) is
+        # reused when transforming subsequent splits. Remove the ordering when
+        # upstream reduction lands — 3LC's native flow handles cross-split
+        # fit/transform itself.
         ordered_splits = sorted(split_val_kwargs, key=lambda s: 0 if s == "train" else 1)
 
         results_dict = {}
-        for split in ordered_splits:
-            LOGGER.info(TLC_COLORSTR + f"Collecting metrics for split: {split}")
-            if progress_callback:
-                progress_callback("split_start", 0, 0)
-            results_dict[split] = self.val(settings=settings, **split_val_kwargs[split], **kwargs)
+        try:
+            for split in ordered_splits:
+                LOGGER.info(TLC_COLORSTR + f"Collecting metrics for split: {split}")
+                if progress_callback:
+                    progress_callback("split_start", 0, 0)
+                results_dict[split] = self.val(settings=settings, **split_val_kwargs[split], **kwargs)
 
-        if settings.image_embeddings_dim > 0:
-            self._reduce_image_embeddings(settings, progress_callback)
+            if settings.image_embeddings_dim > 0:
+                self._reduce_image_embeddings(settings, progress_callback)
+        finally:
+            # TEMP(instance-embeddings): drop this run's fitted reducer (also on
+            # failure — a later collect() may reuse the same active run and must
+            # not inherit a stale embedding space).
+            if settings.instance_embeddings_dim > 0 and tlc.active_run() is not None:
+                from tlc_ultralytics.utils._instance_reduce import _clear_fitted_reducer
+
+                _clear_fitted_reducer(tlc.active_run().url.to_str())
 
         tlc.active_run().set_status_completed()
 

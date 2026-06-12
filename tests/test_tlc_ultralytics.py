@@ -2449,3 +2449,35 @@ def test_split_reduced_by_rank() -> None:
     # Without GT, gt side is None for every rank
     per_rank_no_gt = TLCValidatorMixin._split_reduced_by_rank(gathered, pred_reduced_all, None)
     assert all(gt is None for _, gt in per_rank_no_gt)
+
+
+def test_instance_embeddings_cross_split_shared_space() -> None:
+    """Multi-split collect: train fits the reducer, val is transformed into the same space."""
+    dim = 2
+    settings = Settings(
+        project_name="test_instance_emb_cross_split",
+        run_name="test_instance_emb_cross_split",
+        instance_embeddings_dim=dim,
+        instance_embeddings_reducer="pca",
+        label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
+    )
+
+    model = TLCYOLO(TASK2MODEL["detect"])
+    model.collect(data=TASK2DATASET["detect"], splits=("train", "val"), settings=settings, **INSTANCE_EMB_OVERRIDES)
+
+    run = _get_run_from_settings(settings)
+    metrics_tables = get_metrics_tables_from_run(run)
+    default_tables = metrics_tables["default_stream"]
+    assert len(default_tables) >= 2, "Expected one metrics table per split"
+
+    for table in default_tables:
+        df = table.to_pandas()
+        assert "predicted_instance_embedding" in df.columns
+        for row_embs in df["predicted_instance_embedding"]:
+            for emb in row_embs:
+                assert len(emb) == dim
+
+    # The run's reducer must not leak past collect()
+    from tlc_ultralytics.utils._instance_reduce import _get_fitted_reducer
+
+    assert _get_fitted_reducer(run.url.to_str()) is None

@@ -18,6 +18,28 @@ from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.constants import TLC_COLORSTR
 
+# Fitted reducers shared across one run's validation passes, keyed by run URL.
+# The first split to fit (train, by collect()'s split ordering) registers its
+# reducer here; later splits in the same run transform into that space. Cleared
+# by collect() once the run is done. Under DDP only RANK 0 fits, so only RANK 0
+# populates its registry. Dies with this module when native reduction lands.
+_fitted_reducers: dict[str, object] = {}
+
+
+def _get_fitted_reducer(run_url: str) -> object | None:
+    """Return the reducer fitted earlier in this run, if any."""
+    return _fitted_reducers.get(run_url)
+
+
+def _set_fitted_reducer(run_url: str, reducer: object) -> None:
+    """Register a fitted reducer for reuse by later splits in the same run."""
+    _fitted_reducers[run_url] = reducer
+
+
+def _clear_fitted_reducer(run_url: str) -> None:
+    """Drop the run's fitted reducer (no-op if none was fitted)."""
+    _fitted_reducers.pop(run_url, None)
+
 
 def _reduce_instance_embeddings(
     raw_embeddings_per_image: list[np.ndarray],

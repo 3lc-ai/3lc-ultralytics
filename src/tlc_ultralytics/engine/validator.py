@@ -661,15 +661,16 @@ class TLCValidatorMixin(BaseValidator):
         """TEMP(instance-embeddings): reduce raw per-image embedding lists in-process.
 
         Fits the configured reducer on the predicted embeddings (or reuses the
-        cross-split reducer from ``settings._fitted_instance_reducer`` if an
-        earlier split in the same ``collect()`` call fitted one) and projects
-        ground-truth embeddings into the same space.
+        run's cross-split reducer if an earlier split already fitted one) and
+        projects ground-truth embeddings into the same space.
 
         Returns (pred_reduced, gt_reduced), where gt_reduced is None when GT
         embeddings are not collected.
         """
         from tlc_ultralytics.utils._instance_reduce import (
+            _get_fitted_reducer,
             _reduce_instance_embeddings,
+            _set_fitted_reducer,
             _transform_instance_embeddings,
         )
 
@@ -677,7 +678,7 @@ class TLCValidatorMixin(BaseValidator):
         method = self._settings.instance_embeddings_reducer
         reducer_args = self._settings.instance_embeddings_reducer_args or {}
         progress_cb = getattr(self._settings, "_reduction_progress_callback", None)
-        existing_reducer = getattr(self._settings, "_fitted_instance_reducer", None)
+        existing_reducer = _get_fitted_reducer(self._run.url.to_str())
 
         if existing_reducer is not None:
             pred_reduced = _transform_instance_embeddings(
@@ -697,7 +698,7 @@ class TLCValidatorMixin(BaseValidator):
                 **reducer_args,
             )
             if reducer is not None:
-                self._settings._fitted_instance_reducer = reducer
+                _set_fitted_reducer(self._run.url.to_str(), reducer)
 
         if self._settings.ground_truth_instance_embeddings and raw_gt:
             if reducer is not None:
@@ -780,7 +781,7 @@ class TLCValidatorMixin(BaseValidator):
         to numpy and re-encode through ``add_batch``; this is bounded memory
         because only one image's worth of samples is materialized at a time
         before being flushed in a small batch). Cross-split fit/transform is
-        preserved via ``settings._fitted_instance_reducer``.
+        preserved via the per-run reducer registry in ``_instance_reduce``.
 
         Goes away when core 3LC reduces variable-length embedding list
         columns server-side. The raw column it leaves behind is already tagged
