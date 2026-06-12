@@ -2416,3 +2416,36 @@ def test_reducer_validation_split() -> None:
     settings = Settings(instance_embeddings_dim=2, instance_embeddings_reducer="illegal", label_column_name="test")
     with pytest.raises(ValueError, match="instance_embeddings_reducer"):
         settings.verify(training=False)
+
+
+def test_split_reduced_by_rank() -> None:
+    """Unit test for the DDP re-split of flattened reduced embeddings back to per-rank lists."""
+    from tlc_ultralytics.engine.validator import TLCValidatorMixin
+
+    rng = np.random.default_rng(0)
+
+    def make_payload(n_images, n_instances):
+        return [rng.normal(size=(n_instances, 16)).astype(np.float32) for _ in range(n_images)]
+
+    # Rank 0: 3 images, rank 1: 2 images (pred); GT counts differ from pred counts
+    gathered = [
+        (make_payload(3, 4), make_payload(3, 2)),
+        (make_payload(2, 4), make_payload(2, 2)),
+    ]
+    pred_reduced_all = [rng.normal(size=(4, 2)).astype(np.float32) for _ in range(5)]
+    gt_reduced_all = [rng.normal(size=(2, 2)).astype(np.float32) for _ in range(5)]
+
+    per_rank = TLCValidatorMixin._split_reduced_by_rank(gathered, pred_reduced_all, gt_reduced_all)
+
+    assert len(per_rank) == 2
+    pred_r0, gt_r0 = per_rank[0]
+    pred_r1, gt_r1 = per_rank[1]
+    assert len(pred_r0) == 3 and len(gt_r0) == 3
+    assert len(pred_r1) == 2 and len(gt_r1) == 2
+    # Order is preserved: rank 1's first image is the 4th flattened entry
+    np.testing.assert_array_equal(pred_r1[0], pred_reduced_all[3])
+    np.testing.assert_array_equal(gt_r1[1], gt_reduced_all[4])
+
+    # Without GT, gt side is None for every rank
+    per_rank_no_gt = TLCValidatorMixin._split_reduced_by_rank(gathered, pred_reduced_all, None)
+    assert all(gt is None for _, gt in per_rank_no_gt)

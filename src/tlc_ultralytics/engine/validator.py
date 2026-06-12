@@ -588,13 +588,12 @@ class TLCValidatorMixin(BaseValidator):
         metrics_infos = self._metrics_writer.get_written_metrics_infos()
         input_table_url = self.dataloader.dataset.table.url.to_str()
 
-        # TEMP(instance-embeddings): on each rank, fit reducer on local raw
-        # embeddings, rewrite the just-finalized raw table into a reduced one,
-        # and delete the raw table on disk. NOTE: under DDP this fits per-rank,
-        # producing reduced spaces that are not comparable across ranks. Same
-        # behavior as before this refactor — fixing it requires gathering raw
-        # embeddings to RANK 0 for a single fit, broadcasting the fitted
-        # reducer back, and per-rank rewrite. Tracked separately.
+        # TEMP(instance-embeddings): reduce the raw embeddings and rewrite the
+        # just-finalized raw table into a reduced one, then delete the raw
+        # table on disk. Under DDP the reducer is fitted once on RANK 0 from
+        # all ranks' gathered embeddings (see
+        # _compute_reduced_instance_embeddings), so the reduced spaces are
+        # shared across ranks; each rank rewrites its own table.
         if self._settings.instance_embeddings_dim > 0:
             raw_metrics_infos = metrics_infos
             _, reduced_metrics_infos = self._fit_and_rewrite(raw_table)
@@ -658,23 +657,16 @@ class TLCValidatorMixin(BaseValidator):
         self._raw_pred_emb = []
         self._raw_gt_emb = []
 
-    def _fit_and_rewrite(self, raw_table):  # noqa: C901
-        """TEMP(instance-embeddings): fit the reducer on accumulated raw
-        embeddings, then rewrite the just-finalized metrics table into a new
-        one with reduced ``predicted_instance_embedding`` /
-        ``ground_truth_instance_embedding`` columns in place of the
-        ``..._raw`` columns.
+    def _reduce_raw_instance_embeddings(self, raw_pred, raw_gt):
+        """TEMP(instance-embeddings): reduce raw per-image embedding lists in-process.
 
-        Iterates *raw_table* sample-by-sample (RLE-encoded heavy fields decode
-        to numpy and re-encode through ``add_batch``; this is bounded memory
-        because only one image's worth of samples is materialized at a time
-        before being flushed in a small batch). Cross-split fit/transform is
-        preserved: if ``settings._fitted_instance_reducer`` is set (from an
-        earlier split in the same ``collect()`` call), reused as-is.
+        Fits the configured reducer on the predicted embeddings (or reuses the
+        cross-split reducer from ``settings._fitted_instance_reducer`` if an
+        earlier split in the same ``collect()`` call fitted one) and projects
+        ground-truth embeddings into the same space.
 
-        Goes away when core 3LC reduces variable-length embedding list
-        columns server-side. The raw column it leaves behind is already tagged
-        ``NUMBER_ROLE_NN_EMBEDDING`` for that future flow.
+        Returns (pred_reduced, gt_reduced), where gt_reduced is None when GT
+        embeddings are not collected.
         """
         from tlc_ultralytics.utils._instance_reduce import (
             _reduce_instance_embeddings,
@@ -689,7 +681,7 @@ class TLCValidatorMixin(BaseValidator):
 
         if existing_reducer is not None:
             pred_reduced = _transform_instance_embeddings(
-                self._raw_pred_emb,
+                raw_pred,
                 existing_reducer,
                 n_components=n,
                 progress_callback=progress_cb,
@@ -698,7 +690,7 @@ class TLCValidatorMixin(BaseValidator):
             reducer = existing_reducer
         else:
             pred_reduced, reducer = _reduce_instance_embeddings(
-                self._raw_pred_emb,
+                raw_pred,
                 method=method,
                 n_components=n,
                 progress_callback=progress_cb,
@@ -707,19 +699,95 @@ class TLCValidatorMixin(BaseValidator):
             if reducer is not None:
                 self._settings._fitted_instance_reducer = reducer
 
-        if self._settings.ground_truth_instance_embeddings and self._raw_gt_emb:
+        if self._settings.ground_truth_instance_embeddings and raw_gt:
             if reducer is not None:
                 gt_reduced = _transform_instance_embeddings(
-                    self._raw_gt_emb,
+                    raw_gt,
                     reducer,
                     n_components=n,
                     progress_callback=progress_cb,
                     label="ground-truth",
                 )
             else:
-                gt_reduced = [np.empty((0, n), dtype=np.float32) for _ in self._raw_gt_emb]
+                gt_reduced = [np.empty((0, n), dtype=np.float32) for _ in raw_gt]
         else:
             gt_reduced = None
+
+        return pred_reduced, gt_reduced
+
+    def _compute_reduced_instance_embeddings(self):
+        """TEMP(instance-embeddings): reduce this rank's accumulated raw embeddings.
+
+        Single-process: fit/transform locally. Under DDP, raw embeddings from
+        all ranks are gathered to RANK 0, which fits a single reducer (or
+        reuses the cross-split one), transforms every rank's embeddings into
+        the one shared space, and scatters each rank its reduced share. The
+        fitted reducer stays on RANK 0 only (it is not broadcast — fitted
+        PaCMAP reducers are not picklable), which is sufficient since later
+        splits gather to RANK 0 again.
+        """
+        if RANK < 0:
+            return self._reduce_raw_instance_embeddings(self._raw_pred_emb, self._raw_gt_emb)
+
+        # DDP: gather per-rank raw embeddings to RANK 0
+        world_size = dist.get_world_size()  # type: ignore[possibly-missing-attribute]
+        gathered = [None] * world_size if RANK == 0 else None
+        dist.gather_object((self._raw_pred_emb, self._raw_gt_emb), gathered, dst=0)  # type: ignore[possibly-missing-attribute]
+
+        per_rank_reduced = None
+        if RANK == 0:
+            assert gathered is not None
+            all_pred = [arr for rank_pred, _ in gathered for arr in rank_pred]
+            all_gt = [arr for _, rank_gt in gathered for arr in rank_gt]
+            pred_reduced_all, gt_reduced_all = self._reduce_raw_instance_embeddings(all_pred, all_gt)
+            per_rank_reduced = self._split_reduced_by_rank(gathered, pred_reduced_all, gt_reduced_all)
+
+        output = [None]
+        dist.scatter_object_list(output, per_rank_reduced, src=0)  # type: ignore[possibly-missing-attribute]
+        return output[0]
+
+    @staticmethod
+    def _split_reduced_by_rank(gathered, pred_reduced_all, gt_reduced_all):
+        """Re-split flattened reduced per-image lists by each rank's image count.
+
+        ``gathered`` is the list of (raw_pred, raw_gt) per-rank payloads whose
+        lengths define the split points. Returns one (pred_reduced, gt_reduced)
+        tuple per rank, with gt_reduced None when GT embeddings are not collected.
+        """
+        per_rank_reduced = []
+        pred_offset = 0
+        gt_offset = 0
+        for rank_pred, rank_gt in gathered:
+            n_pred, n_gt = len(rank_pred), len(rank_gt)
+            per_rank_reduced.append(
+                (
+                    pred_reduced_all[pred_offset : pred_offset + n_pred],
+                    gt_reduced_all[gt_offset : gt_offset + n_gt] if gt_reduced_all is not None else None,
+                )
+            )
+            pred_offset += n_pred
+            gt_offset += n_gt
+        return per_rank_reduced
+
+    def _fit_and_rewrite(self, raw_table):
+        """TEMP(instance-embeddings): fit the reducer on accumulated raw
+        embeddings, then rewrite the just-finalized metrics table into a new
+        one with reduced ``predicted_instance_embedding`` /
+        ``ground_truth_instance_embedding`` columns in place of the
+        ``..._raw`` columns.
+
+        Iterates *raw_table* sample-by-sample (RLE-encoded heavy fields decode
+        to numpy and re-encode through ``add_batch``; this is bounded memory
+        because only one image's worth of samples is materialized at a time
+        before being flushed in a small batch). Cross-split fit/transform is
+        preserved via ``settings._fitted_instance_reducer``.
+
+        Goes away when core 3LC reduces variable-length embedding list
+        columns server-side. The raw column it leaves behind is already tagged
+        ``NUMBER_ROLE_NN_EMBEDDING`` for that future flow.
+        """
+        n = self._settings.instance_embeddings_dim
+        pred_reduced, gt_reduced = self._compute_reduced_instance_embeddings()
 
         # Drop raw buffers — fit is done and we re-read raw values from the
         # source table during rewrite (where they're tiny pyarrow lists, not
