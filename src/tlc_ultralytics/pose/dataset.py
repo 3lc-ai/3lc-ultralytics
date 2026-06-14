@@ -44,10 +44,15 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
         kpt_shape = self.data.get("kpt_shape")
         instances = tlc.data_types.Keypoints2D.from_row(label_column_value)
 
-        # Image dimensions and raw arrays
-        H = float(instances.y_max - (instances.y_min or 0))
-        W = float(instances.x_max - (instances.x_min or 0))
-        labels = instances.labels.astype(np.int32, copy=False)  # (N,)
+        # Image dimensions and raw arrays. The coordinate-space bounds carry the image
+        # dimensions; fall back to the real image size if they are missing or non-positive.
+        H = float(instances.y_max - (instances.y_min or 0)) if instances.y_max else 0.0
+        W = float(instances.x_max - (instances.x_min or 0)) if instances.x_max else 0.0
+        if H <= 0 or W <= 0:
+            H, W = self._resolve_image_dimensions(im_file)
+        # Unlabeled rows come back with `labels=None`
+        labels = instances.labels if instances.labels is not None else np.zeros(0, dtype=np.int32)
+        labels = labels.astype(np.int32, copy=False)  # (N,)
         bboxes_xyxy = instances.bounding_boxes.astype(np.float32, copy=False)  # (N,4) [x_min, y_min, x_max, y_max]
         kxy = instances.keypoints.astype(np.float32, copy=False)  # (N,K,2)
         vis = instances.keypoint_visibilities  # (N,K) ndarray; empty (0, 0) when no visibilities

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from tlc.constants import IMAGE_HEIGHT, IMAGE_WIDTH
 from tlc.data_types import BoundingBoxes2D, SegmentationPolygons
 from tlc.helpers import AnnotationHelper, AnnotationType
 from ultralytics.data.dataset import YOLODataset
@@ -204,8 +205,12 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
         else:
             bb2d = BoundingBoxes2D.from_row(raw)
 
-        height = bb2d.y_max - (bb2d.y_min or 0)
-        width = bb2d.x_max - (bb2d.x_min or 0)
+        # The coordinate-space bounds carry the image dimensions (boxes are stored as absolute
+        # xyxy pixels). Fall back to the real image size if they are missing or non-positive.
+        height = bb2d.y_max - (bb2d.y_min or 0) if bb2d.y_max else 0
+        width = bb2d.x_max - (bb2d.x_min or 0) if bb2d.x_max else 0
+        if height <= 0 or width <= 0:
+            height, width = self._resolve_image_dimensions(im_file)
 
         if bb2d.num_instances == 0 or bb2d.labels is None:
             return {
@@ -289,17 +294,26 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
         """
         column_name, _, _ = self._label_column_name.split(".")
 
-        # Use sample view to get polygons, row is row view
+        # The row view holds the raw, serialized segmentation dict.
         row = self.table.table_rows[example_id]
         raw_segmentations = row[column_name]
+
+        # Fall back to image file dimensions when unavailable
+        if raw_segmentations[IMAGE_HEIGHT] <= 0 or raw_segmentations[IMAGE_WIDTH] <= 0:
+            height, width = self._resolve_image_dimensions(im_file)
+            raw_segmentations = {**raw_segmentations, IMAGE_HEIGHT: height, IMAGE_WIDTH: width}
+
         segmentations = SegmentationPolygons.from_row(raw_segmentations).to_relative()
         height, width = segmentations.image_height, segmentations.image_width
         classes = []
         segments = []
 
+        # Unlabeled rows come back with `labels=None`
+        labels = segmentations.labels if segmentations.labels is not None else []
+
         for i, (category, polygon) in enumerate(
             zip(
-                segmentations.labels,
+                labels,
                 segmentations.polygons,
                 strict=False,
             )
