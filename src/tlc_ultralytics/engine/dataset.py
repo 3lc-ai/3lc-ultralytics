@@ -62,7 +62,7 @@ class TLCDatasetMixin:
 
         return url.to_absolute(table_url).to_str()
 
-    def _resolve_image_dimensions(self, im_file: str, height: float, width: float) -> tuple[int, int]:
+    def _resolve_image_dimensions(self, im_file: str, height: float, width: float) -> tuple[float, float]:
         """Resolve the image ``(height, width)`` for a row.
 
         Annotations record their own image dimensions. When those are missing or non-positive
