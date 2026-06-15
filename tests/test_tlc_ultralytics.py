@@ -746,6 +746,218 @@ def test_seg_table_checker() -> None:
         check_seg_table(invalid_schema_seg_table, "image", "segmentations")
 
 
+def _instance_task_config(task: str, width: int, height: int) -> dict:
+    """Per-task building blocks for constructing instance-task tables (detect/segment/obb/pose).
+
+    Returns the column name, schema, label path, dataset ``names``, extra ``data`` kwargs, the
+    annotation key to compare on, a labeled row, an unlabeled (empty) row, and copies of both with
+    their stored image dimensions zeroed out. The dimensions live in different fields per task:
+    segmentation stores ``image_height``/``image_width``, while the box/keypoint tasks carry them
+    as the coordinate-space bounds ``x_max``/``y_max`` (annotations are stored as absolute pixels).
+    """
+    from tlc.constants import IMAGE_HEIGHT, IMAGE_WIDTH, X_MAX, Y_MAX
+    from tlc.data_types import BoundingBoxes2D, Keypoints2D, OrientedBoundingBoxes2D, SegmentationPolygons
+
+    if task == "detect":
+        column = "bbs"
+        schema = BoundingBoxes2D.schema(classes={0: "object"})
+        labeled_row = BoundingBoxes2D(
+            bounding_boxes=[[width / 2, height / 2, width / 4, height / 4]],
+            bounding_box_format="cxywh",
+            image_width=width,
+            image_height=height,
+            labels=[0],
+        ).to_row()
+        empty_template = BoundingBoxes2D.create_empty(image_width=width, image_height=height).to_row()
+        label_container, label_path = "instances_additional_data", "bbs.instances_additional_data.label"
+        names, data_extra, compare_key = {0: "object"}, {}, "bboxes"
+        dim_zero = {X_MAX: 0.0, Y_MAX: 0.0}
+    elif task == "segment":
+        column = "segmentations"
+        schema = SegmentationPolygons.schema(classes={0: "object"})
+        labeled_row = SegmentationPolygons(
+            image_width=width,
+            image_height=height,
+            polygons=[[5.0, 5.0, 40.0, 5.0, 40.0, 30.0, 5.0, 30.0]],
+            labels=[0],
+        ).to_row()
+        empty_template = SegmentationPolygons.create_empty(image_width=width, image_height=height).to_row()
+        label_container, label_path = "instance_properties", "segmentations.instance_properties.label"
+        names, data_extra, compare_key = {0: "object"}, {}, "segments"
+        dim_zero = {IMAGE_HEIGHT: 0, IMAGE_WIDTH: 0}
+    elif task == "obb":
+        column = "obb"
+        schema = OrientedBoundingBoxes2D.schema(classes={0: "object"})
+        labeled_row = OrientedBoundingBoxes2D(
+            image_width=width,
+            image_height=height,
+            obbs=[[width / 2, height / 2, width / 4, height / 4, 0.0]],
+            labels=[0],
+        ).to_row()
+        empty_template = OrientedBoundingBoxes2D.create_empty(image_width=width, image_height=height).to_row()
+        label_container, label_path = "instances_additional_data", "obb.instances_additional_data.label"
+        names, data_extra, compare_key = {0: "object"}, {}, "segments"
+        dim_zero = {X_MAX: 0.0, Y_MAX: 0.0}
+    elif task == "pose":
+        column = "pose"
+        schema = Keypoints2D.schema(num_keypoints=2, classes={0: "person"})
+        labeled_row = Keypoints2D(
+            image_width=width,
+            image_height=height,
+            keypoints=[[[10, 10], [20, 20]]],
+            keypoint_visibilities=[[2, 2]],
+            bounding_boxes=[[5, 5, 25, 25]],
+            labels=[0],
+        ).to_row()
+        empty_template = Keypoints2D.create_empty(image_width=width, image_height=height).to_row()
+        label_container, label_path = "instances_additional_data", "pose.instances_additional_data.label"
+        names, data_extra, compare_key = {0: "person"}, {"kpt_shape": [2, 3]}, "keypoints"
+        dim_zero = {X_MAX: 0.0, Y_MAX: 0.0}
+    else:
+        raise ValueError(f"Unknown task: {task}")
+
+    # A real table writer fills the label sub-column with an empty list for unlabeled rows
+    # (rather than the bare ``{}`` that ``create_empty().to_row()`` produces), so mirror that here
+    # to keep the column schema consistent across rows.
+    empty_row = {**empty_template, label_container: {"label": []}}
+
+    return {
+        "column": column,
+        "schema": schema,
+        "label_path": label_path,
+        "names": names,
+        "data_extra": data_extra,
+        "compare_key": compare_key,
+        "labeled_row": labeled_row,
+        "empty_row": empty_row,
+        "zeroed_row": {**labeled_row, **dim_zero},
+        "empty_zeroed_row": {**empty_row, **dim_zero},
+    }
+
+
+def _build_task_dataset(task: str, config: dict, rows: list[dict], table_name: str):
+    """Build a 3LC YOLO dataset for ``task`` from a single-column table of ``rows``."""
+    from ultralytics.cfg import get_cfg
+    from ultralytics.utils import DEFAULT_CFG
+
+    from tlc_ultralytics.detect.utils import build_tlc_yolo_dataset
+
+    # Labeled row is passed first by callers so the column schema is inferred from a fully
+    # populated row.
+    table = tlc.Table.from_dict(
+        {"image": [str(DUMMY_IMAGE_FILE)] * len(rows), config["column"]: rows},
+        schema={config["column"]: config["schema"]},
+        project_name="test_instance_tasks",
+        dataset_name=task,
+        table_name=table_name,
+        if_exists="overwrite",
+    )
+    cfg = get_cfg(DEFAULT_CFG, overrides={"task": task, "imgsz": 64, "rect": False})
+    return build_tlc_yolo_dataset(
+        cfg,
+        table,
+        batch=1,
+        data={"channels": 3, "names": config["names"], "nc": 1, **config["data_extra"]},
+        mode="val",
+        image_column_name="image",
+        label_column_name=config["label_path"],
+    )
+
+
+@pytest.mark.parametrize("task", ["detect", "segment", "obb", "pose"])
+def test_missing_image_dimensions_fallback(task: str) -> None:
+    """A Table that stores non-positive image dimensions must not crash. The dataset should fall
+    back to reading the real image size from disk, recover the annotations against that size, and
+    warn once. Regression test for tables authored without valid image dimensions.
+    """
+    from tlc.helpers import ImageHelper
+
+    # Real image on disk; annotations are encoded against its true size.
+    height, width = ImageHelper.get_exif_image_dimensions(str(DUMMY_IMAGE_FILE))
+    config = _instance_task_config(task, width, height)
+
+    # Reference dataset: correct dimensions stored.
+    reference = _build_task_dataset(task, config, [config["labeled_row"]], "dims_good")
+
+    # Broken dataset: image dimensions zeroed out (valid annotations, but no usable size metadata).
+    with capture_logs(logging.WARNING) as log_messages:
+        recovered = _build_task_dataset(task, config, [config["zeroed_row"]], "dims_zeroed")
+
+    # The fallback warned about the missing dimensions...
+    assert any("non-positive image dimensions" in msg for msg in log_messages), (
+        f"Expected a warning about missing image dimensions, got: {log_messages}"
+    )
+
+    ref_label, got_label = reference.labels[0], recovered.labels[0]
+
+    # ...recovered the real image shape...
+    assert got_label["shape"] == (height, width) == ref_label["shape"]
+
+    # ...and reconstructed identical, normalized ([0, 1]) annotations against that size.
+    ref_val, got_val = ref_label[config["compare_key"]], got_label[config["compare_key"]]
+    pairs = zip(ref_val, got_val, strict=True) if isinstance(ref_val, list) else [(ref_val, got_val)]
+    if isinstance(ref_val, list):
+        assert len(got_val) == len(ref_val) >= 1
+    for ref_arr, got_arr in pairs:
+        np.testing.assert_allclose(got_arr, ref_arr, atol=1e-6)
+        assert np.max(got_arr) <= 1.0 + 1e-6
+    # The normalized boxes are also recovered identically for every task.
+    np.testing.assert_allclose(got_label["bboxes"], ref_label["bboxes"], atol=1e-6)
+
+
+@pytest.mark.parametrize("task", ["detect", "segment", "obb", "pose"])
+def test_unlabeled_row(task: str) -> None:
+    """An unlabeled row (no instances) must not crash. The instance dataclasses come back with
+    ``labels=None`` for an empty row, which previously raised ``TypeError: 'NoneType' object is
+    not iterable`` (segment) or ``AttributeError: 'NoneType' object has no attribute 'astype'``
+    (obb/pose). The dataset should instead produce a label with zero instances. Regression test
+    for training on revision tables that still have some unlabeled samples.
+    """
+    from tlc.helpers import ImageHelper
+
+    height, width = ImageHelper.get_exif_image_dimensions(str(DUMMY_IMAGE_FILE))
+    config = _instance_task_config(task, width, height)
+
+    dataset = _build_task_dataset(task, config, [config["labeled_row"], config["empty_row"]], "unlabeled")
+
+    # The unlabeled row yields zero instances; the labeled row is unaffected.
+    labeled_label, empty_label = dataset.labels[0], dataset.labels[1]
+    assert empty_label["cls"].shape == (0, 1)
+    assert empty_label["bboxes"].shape == (0, 4)
+    assert empty_label["shape"] == (height, width)
+    assert labeled_label["cls"].shape == (1, 1)
+    if task == "segment":
+        assert empty_label["segments"] == []
+    elif task == "pose":
+        assert empty_label["keypoints"].shape == (0, 2, 3)
+
+
+@pytest.mark.parametrize("task", ["detect", "segment", "obb", "pose"])
+def test_unlabeled_row_with_missing_dimensions(task: str) -> None:
+    """The realistic revision-table case: a row that is both unlabeled *and* has non-positive
+    image dimensions - exactly what ``create_empty()`` produces by default. The dimension fallback
+    and the empty-label handling must compose, so the row decodes to zero instances at the real
+    image size and warns once.
+    """
+    from tlc.helpers import ImageHelper
+
+    height, width = ImageHelper.get_exif_image_dimensions(str(DUMMY_IMAGE_FILE))
+    config = _instance_task_config(task, width, height)
+
+    with capture_logs(logging.WARNING) as log_messages:
+        dataset = _build_task_dataset(
+            task, config, [config["labeled_row"], config["empty_zeroed_row"]], "unlabeled_zeroed"
+        )
+
+    assert any("non-positive image dimensions" in msg for msg in log_messages), (
+        f"Expected a warning about missing image dimensions, got: {log_messages}"
+    )
+    empty_label = dataset.labels[1]
+    assert empty_label["cls"].shape == (0, 1)
+    assert empty_label["bboxes"].shape == (0, 4)
+    assert empty_label["shape"] == (height, width)
+
+
 def test_legacy_bb_table_default_label_path() -> None:
     # A legacy-format (bb_list) detection table should work with the default label column
     # name, which points at the new-format path (bbs.instances_additional_data.label).

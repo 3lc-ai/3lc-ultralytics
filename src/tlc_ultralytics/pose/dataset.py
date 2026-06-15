@@ -44,24 +44,28 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
         kpt_shape = self.data.get("kpt_shape")
         instances = tlc.data_types.Keypoints2D.from_row(label_column_value)
 
-        # Image dimensions and raw arrays
-        H = float(instances.y_max - (instances.y_min or 0))
-        W = float(instances.x_max - (instances.x_min or 0))
-        labels = instances.labels.astype(np.int32, copy=False)  # (N,)
+        # Image dimensions and raw arrays. The coordinate-space bounds carry the image
+        # dimensions; fall back to the real image size if they are missing or non-positive.
+        image_height = float(instances.y_max - (instances.y_min or 0)) if instances.y_max else 0.0
+        image_width = float(instances.x_max - (instances.x_min or 0)) if instances.x_max else 0.0
+        image_height, image_width = self._resolve_image_dimensions(im_file, image_height, image_width)
+        # Unlabeled rows come back with `labels=None`
+        labels = instances.labels if instances.labels is not None else np.zeros(0, dtype=np.int32)
+        labels = labels.astype(np.int32, copy=False)  # (N,)
         bboxes_xyxy = instances.bounding_boxes.astype(np.float32, copy=False)  # (N,4) [x_min, y_min, x_max, y_max]
         kxy = instances.keypoints.astype(np.float32, copy=False)  # (N,K,2)
         vis = instances.keypoint_visibilities  # (N,K) ndarray; empty (0, 0) when no visibilities
 
         # Normalize keypoints to [0,1]
-        kxy[..., 0] /= W
-        kxy[..., 1] /= H
+        kxy[..., 0] /= image_width
+        kxy[..., 1] /= image_height
 
         # Vectorized: xyxy (abs) -> center-xywh (normalized)
         xy_min = bboxes_xyxy[:, 0:2]
         xy_max = bboxes_xyxy[:, 2:4]
         wh_abs = xy_max - xy_min
         ctr_abs = xy_min + 0.5 * wh_abs
-        scale = np.array([W, H], dtype=np.float32)
+        scale = np.array([image_width, image_height], dtype=np.float32)
         bboxes_arr = np.concatenate([(ctr_abs / scale), (wh_abs / scale)], axis=1).astype(np.float32)
 
         # Handle empty vs non-empty
@@ -83,7 +87,7 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
 
         return {
             "im_file": im_file,
-            "shape": (round(H), round(W)),
+            "shape": (round(image_height), round(image_width)),
             "cls": cls_arr,
             "bboxes": bboxes_arr,
             "segments": [],
