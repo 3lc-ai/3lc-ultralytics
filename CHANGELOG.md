@@ -9,6 +9,11 @@ Since this package integrates with two actively developed dependencies (`ultraly
 ### Changed
 
 - Widen the supported `ultralytics` range from `>=8.4.0,<8.4.7` to `>=8.4.0,<8.4.67`.
+- Training and metrics collection fall back to reading dimensions from image files as a fallback when annotations store non-positive image dimensions (e.g. `image_height`/`image_width` of `0`) and emits a warning in this case.
+
+### Fixed
+
+- Fix error when training on segmentation, OBB or pose tables containing unlabeled rows. Such rows are now correctly treated as having zero instances.
 
 ## [0.3.1] - 2026-06-04
 
