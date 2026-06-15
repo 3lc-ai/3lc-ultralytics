@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-06-15
+
 ### Changed
 
 - Widen the supported `ultralytics` range from `>=8.4.0,<8.4.7` to `>=8.4.0,<8.4.67` ([#74](https://github.com/3lc-ai/3lc-ultralytics/pull/74)).
