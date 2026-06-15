@@ -62,26 +62,36 @@ class TLCDatasetMixin:
 
         return url.to_absolute(table_url).to_str()
 
-    def _resolve_image_dimensions(self, im_file: str) -> tuple[int, int]:
-        """Read the ``(height, width)`` of an image from disk.
+    def _resolve_image_dimensions(self, im_file: str, height: float, width: float) -> tuple[int, int]:
+        """Resolve the image ``(height, width)`` for a row.
 
-        Used as a fallback when a Table stores non-positive annotation dimensions (e.g. an
-        ``image_height``/``image_width`` of ``0``), which would otherwise make the labels
-        impossible to decode or normalize. The first time this happens for a dataset, a warning
-        is emitted pointing at the offending Table.
+        Annotations record their own image dimensions. When those are missing or non-positive
+        - which makes the labels impossible to decode or normalize - fall back to reading the
+        dimensions from the image file instead.
 
         :param im_file: The absolute path to the image file.
-        :return: The image dimensions as ``(height, width)``.
+        :param height: The image height recorded in the annotation (``<= 0`` if absent).
+        :param width: The image width recorded in the annotation (``<= 0`` if absent).
+        :return: The resolved image dimensions as ``(height, width)``.
         """
-        if not self._warned_missing_image_dimensions:
-            self._warned_missing_image_dimensions = True
-            LOGGER.warning(
-                f"{colorstr(self.prefix + ':')} Table {self.table.url.to_str()} contains annotations with "
-                "non-positive image dimensions. Falling back to reading the dimensions from the image files, "
-                "which is slower. This usually means the Table was created without valid image dimensions - "
-                "consider re-creating it so the dimensions are stored."
-            )
+        if height > 0 and width > 0:
+            return height, width
+
+        self._warn_missing_image_dimensions()
         return ImageHelper.get_exif_image_dimensions(im_file)
+
+    def _warn_missing_image_dimensions(self) -> None:
+        """Warn, once per dataset, that the Table stores annotations without valid image dimensions."""
+        if self._warned_missing_image_dimensions:
+            return
+
+        self._warned_missing_image_dimensions = True
+        LOGGER.warning(
+            f"{colorstr(self.prefix + ':')} Table {self.table.url.to_str()} contains annotations with "
+            "non-positive image dimensions. Falling back to reading the dimensions from the image files, "
+            "which is slower. This usually means the Table was created without valid image dimensions - "
+            "consider re-creating it so the dimensions are stored."
+        )
 
     def _get_label_from_row(self, im_file: str, row: Any, example_id: int) -> Any:
         raise NotImplementedError("Subclasses must implement this method")

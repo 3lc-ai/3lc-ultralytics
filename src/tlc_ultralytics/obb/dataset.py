@@ -97,8 +97,7 @@ class TLCOBBDataset(BaseTLCYOLODataset):
         # size if they are missing or non-positive.
         image_width = float(instances.x_max - (instances.x_min or 0)) if instances.x_max else 0.0
         image_height = float(instances.y_max - (instances.y_min or 0)) if instances.y_max else 0.0
-        if image_width <= 0 or image_height <= 0:
-            image_height, image_width = self._resolve_image_dimensions(im_file)
+        image_height, image_width = self._resolve_image_dimensions(im_file, image_height, image_width)
 
         # Unlabeled rows come back with `labels=None`
         labels = instances.labels if instances.labels is not None else np.zeros(0, dtype=np.float32)
