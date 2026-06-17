@@ -258,6 +258,16 @@ The way in which embeddings are collected is different for the different tasks:
 
 You can change which `3lc`-supported reducer to use by setting `image_embeddings_reducer`. `pacmap` is the default.
 
+### Instance Embeddings
+
+Instance embeddings can be collected by setting `instance_embeddings_dim` to 2 or 3. Unlike image embeddings, which produce one embedding per image, these produce one embedding per detected instance (bounding box, segmentation mask, oriented box or pose), so similar instances tend to be close in this space. Supported for the `detect`, `segment`, `pose` and `obb` tasks.
+
+By default embeddings are extracted from the classification branch of the detection head. Set `instance_embeddings_layer` to a model layer index to extract from a specific layer instead. Set `ground_truth_instance_embeddings=True` to also collect embeddings for the ground-truth annotations, projected into the same space as the predictions.
+
+Choose the reduction algorithm with `instance_embeddings_reducer` (`pacmap`, `umap` or `pca`) and pass arguments to its constructor via `instance_embeddings_reducer_kwargs`.
+
+> **Experimental:** instance embeddings are currently reduced in-process by the integration. This will move to a native 3LC interface in the future, at which point some of these settings may change.
+
 ### Run Properties
 
 Use `project_name`, `run_name` and `run_description` to customize the `tlc.Run` that is created. Any tables created by the integration will be under the `project_name` provided here. If these settings are not set, appropriate defaults are used instead.
@@ -302,7 +312,7 @@ Embeddings collection has an extra dependency for the library used for reduction
 
 ## How do I collect embeddings for each bounding box?
 
-In order to collect embeddings (or other additional metrics) for each bounding box, refer to the [advanced 3LC examples](https://github.com/3lc-ai/3lc-examples/tree/main/tutorials/5-advanced-examples).
+Set `instance_embeddings_dim` to 2 or 3 to collect per-instance embeddings for detections (and, with `ground_truth_instance_embeddings=True`, for the ground-truth annotations). See [Instance Embeddings](#instance-embeddings) above. To collect other custom per-instance metrics, refer to the [advanced 3LC examples](https://github.com/3lc-ai/3lc-examples/tree/main/tutorials/5-advanced-examples).
 
 ## Can I use the Ultralytics YOLO CLI commands in the integration to train and collect metrics?
 

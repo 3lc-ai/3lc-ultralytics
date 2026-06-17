@@ -6,6 +6,10 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Added
+
+- Support for collecting per-instance embeddings via `instance_embeddings_dim` and the related `instance_embeddings_*` settings, for the `detect`, `segment`, `pose` and `obb` tasks ([#76](https://github.com/3lc-ai/3lc-ultralytics/pull/76)).
+
 ## [0.3.2] - 2026-06-15
 
 ### Changed
