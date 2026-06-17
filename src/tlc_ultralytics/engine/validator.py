@@ -466,6 +466,16 @@ class TLCValidatorMixin(BaseValidator):
                 "instance_embeddings_layer explicitly."
             )
 
+        # The raw column schema was declared with this channel count; if the configured layer's
+        # actual output width differs, its channel count was misread. Fail with an actionable
+        # message instead of the opaque length error raised later when writing the batch.
+        if feature_map.shape[1] != self._instance_embeddings_channel_size:
+            raise RuntimeError(
+                f"Instance embedding feature map has {feature_map.shape[1]} channels but the column schema "
+                f"was declared with {self._instance_embeddings_channel_size}; the configured layer's channel "
+                "count could not be determined correctly. Set instance_embeddings_layer to a different layer."
+            )
+
         regions_list = []
         image_sizes = []
         for i, pred in enumerate(preds):
@@ -584,6 +594,9 @@ class TLCValidatorMixin(BaseValidator):
             # reduced column in their place. Goes away once core 3LC reduces
             # variable-length embedding list columns server-side.
             c_raw = self._add_instance_embeddings_hook(model)
+            # Declared channel count for the raw column; checked against the real feature map
+            # width in _extract_instance_embeddings to catch a layer whose channels were misread.
+            self._instance_embeddings_channel_size = c_raw
             column_schemas[PREDICTED_INSTANCE_EMBEDDING_RAW] = _raw_instance_embeddings_schema(
                 c_raw, display_name="Predicted Instance Embedding (raw)"
             )

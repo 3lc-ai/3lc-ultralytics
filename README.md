@@ -264,6 +264,8 @@ Instance embeddings can be collected by setting `instance_embeddings_dim` to 2 o
 
 By default embeddings are extracted from the classification branch of the detection head. Set `instance_embeddings_layer` to a model layer index to extract from a specific layer instead. Set `ground_truth_instance_embeddings=True` to also collect embeddings for the ground-truth annotations, projected into the same space as the predictions.
 
+Instance embeddings have been tested with the YOLOv8, YOLO11 and YOLO26 detection heads. YOLO11 and YOLO26 use the classification branch directly; for YOLOv8 the integration automatically falls back to a neck layer. Other architectures are not guaranteed to be supported and may require setting `instance_embeddings_layer` explicitly.
+
 Choose the reduction algorithm with `instance_embeddings_reducer` (`pacmap`, `umap` or `pca`) and pass arguments to its constructor via `instance_embeddings_reducer_kwargs`.
 
 > **Experimental:** instance embeddings are currently reduced in-process by the integration. This will move to a native 3LC interface in the future, at which point some of these settings may change.
