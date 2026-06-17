@@ -2571,10 +2571,13 @@ def test_instance_reducer_fit_then_transform(reducer: str) -> None:
     raw_per_image = [rng.normal(size=(20, 32)).astype(np.float32) for _ in range(10)]
 
     try:
+        # random_state is a raw constructor kwarg for all three reducers; passing it through
+        # exercises that instance_embeddings_reducer_kwargs are forwarded to the constructor.
         reduced, fitted = _reduce_instance_embeddings(
             raw_per_image,
             method=reducer,
             n_components=2,
+            random_state=42,
         )
     except ValueError as exc:
         # pacmap on macOS ARM currently fails during fit_transform with a
@@ -2585,6 +2588,8 @@ def test_instance_reducer_fit_then_transform(reducer: str) -> None:
 
     assert fitted is not None
     assert all(r.shape == (20, 2) for r in reduced)
+    # The forwarded kwarg reached the underlying reducer constructor.
+    assert fitted.random_state == 42
 
     # Transform a disjoint batch with the fitted reducer — this crashes on
     # pacmap when save_tree=False, which is the bug the in-process reducer guards.
@@ -2693,3 +2698,58 @@ def test_instance_embeddings_cross_split_shared_space() -> None:
     from tlc_ultralytics.utils._instance_reduce import _get_fitted_reducer
 
     assert _get_fitted_reducer(run.url.to_str()) is None
+
+
+def test_instance_embeddings_explicit_layer() -> None:
+    """Collect instance embeddings from an explicit neck layer instead of the cls-head default.
+
+    Exercises the instance_embeddings_layer path (_add_feature_map_hook / _infer_layer_channels),
+    which the default cls-head tests do not cover.
+    """
+    from tlc_ultralytics.utils.embeddings import _auto_detect_p3_layer
+
+    dim = 2
+    model = TLCYOLO(TASK2MODEL["detect"])
+    # Pick a valid neck layer the same way the auto-detect default does, so the index isn't
+    # hardcoded against a specific model architecture.
+    layer_index = _auto_detect_p3_layer(model.model.model)
+
+    settings = Settings(
+        project_name="test_instance_emb_explicit_layer",
+        run_name="test_instance_emb_explicit_layer",
+        instance_embeddings_dim=dim,
+        instance_embeddings_layer=layer_index,
+        instance_embeddings_reducer="pca",
+        label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
+    )
+
+    model.collect(data=TASK2DATASET["detect"], splits=("train",), settings=settings, **INSTANCE_EMB_OVERRIDES)
+
+    run = _get_run_from_settings(settings)
+    metrics_df = pd.concat(
+        [m.to_pandas() for m in get_metrics_tables_from_run(run)["default_stream"]], ignore_index=True
+    )
+    assert "predicted_instance_embedding" in metrics_df.columns
+    for row_embs in metrics_df["predicted_instance_embedding"]:
+        for emb in row_embs:
+            assert len(emb) == dim
+
+
+def test_instance_embeddings_warns_without_predictions() -> None:
+    """With no predictions passing the confidence threshold, a clear warning is logged and the
+    embedding columns are empty rather than raising."""
+    settings = Settings(
+        project_name="test_instance_emb_no_preds",
+        run_name="test_instance_emb_no_preds",
+        instance_embeddings_dim=2,
+        instance_embeddings_reducer="pca",
+        conf_thres=1.0,  # confidences are strictly < 1.0, so nothing passes the filter
+        label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
+    )
+    model = TLCYOLO(TASK2MODEL["detect"])
+
+    with patch("tlc_ultralytics.engine.validator.LOGGER") as mock_logger:
+        model.collect(data=TASK2DATASET["detect"], splits=("train",), settings=settings, **INSTANCE_EMB_OVERRIDES)
+
+    warnings = [str(call.args[0]) for call in mock_logger.warning.call_args_list if call.args]
+    assert any("No predicted instances were available" in w for w in warnings), warnings
