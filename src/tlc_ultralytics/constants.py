@@ -7,6 +7,13 @@ CONFIDENCE = "confidence"
 PREDICTED_BOUNDING_BOXES = "bbs_predicted"
 PREDICTED_SEGMENTATIONS = "segmentations_predicted"
 PREDICTED_KEYPOINTS_2D = "keypoints_2d_predicted"
+
+# Instance embeddings
+PREDICTED_INSTANCE_EMBEDDING = "predicted_instance_embedding"
+PREDICTED_INSTANCE_EMBEDDING_RAW = "predicted_instance_embedding_raw"
+GROUND_TRUTH_INSTANCE_EMBEDDING = "ground_truth_instance_embedding"
+GROUND_TRUTH_INSTANCE_EMBEDDING_RAW = "ground_truth_instance_embedding_raw"
+
 LABEL = "label"
 EPOCH = "epoch"
 TRAINING_PHASE = "Training Phase"

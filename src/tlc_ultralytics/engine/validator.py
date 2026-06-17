@@ -17,6 +17,8 @@ from tlc_ultralytics.constants import (
     EPOCH,
     EXAMPLE_ID,
     FOREIGN_TABLE_ID,
+    GROUND_TRUTH_INSTANCE_EMBEDDING,
+    GROUND_TRUTH_INSTANCE_EMBEDDING_RAW,
     LABEL,
     MAP,
     MAP50_95,
@@ -27,6 +29,8 @@ from tlc_ultralytics.constants import (
     PER_CLASS_METRICS_STREAM_NAME,
     PRECISION,
     PRECISION_SEG,
+    PREDICTED_INSTANCE_EMBEDDING,
+    PREDICTED_INSTANCE_EMBEDDING_RAW,
     RECALL,
     RECALL_SEG,
     TLC_COLORSTR,
@@ -496,14 +500,14 @@ class TLCValidatorMixin(BaseValidator):
         # 3LC reduces variable-length embedding list columns server-side.
         if self._settings.instance_embeddings_dim > 0:
             raw_instance_embs = self._extract_instance_embeddings(preds, batch)
-            batch_metrics["predicted_instance_embedding_raw"] = [
+            batch_metrics[PREDICTED_INSTANCE_EMBEDDING_RAW] = [
                 (a.tolist() if a.size else []) for a in raw_instance_embs
             ]
             self._raw_pred_emb.extend(raw_instance_embs)
 
             if self._settings.ground_truth_instance_embeddings:
                 raw_gt_embs = self._extract_gt_instance_embeddings(preds, batch)
-                batch_metrics["ground_truth_instance_embedding_raw"] = [
+                batch_metrics[GROUND_TRUTH_INSTANCE_EMBEDDING_RAW] = [
                     (a.tolist() if a.size else []) for a in raw_gt_embs
                 ]
                 self._raw_gt_emb.extend(raw_gt_embs)
@@ -538,11 +542,11 @@ class TLCValidatorMixin(BaseValidator):
             # variable-length embedding list columns server-side.
             c_raw = self._add_instance_embeddings_hook(model)
             self._instance_embeddings_channel_size = c_raw
-            column_schemas["predicted_instance_embedding_raw"] = _raw_instance_embeddings_schema(
+            column_schemas[PREDICTED_INSTANCE_EMBEDDING_RAW] = _raw_instance_embeddings_schema(
                 c_raw, display_name="Predicted Instance Embedding (raw)"
             )
             if self._settings.ground_truth_instance_embeddings:
-                column_schemas["ground_truth_instance_embedding_raw"] = _raw_instance_embeddings_schema(
+                column_schemas[GROUND_TRUTH_INSTANCE_EMBEDDING_RAW] = _raw_instance_embeddings_schema(
                     c_raw, display_name="Ground Truth Instance Embedding (raw)"
                 )
             self._raw_pred_emb = []
@@ -804,13 +808,13 @@ class TLCValidatorMixin(BaseValidator):
         # Build destination schema: source columns minus the raw embedding
         # columns, plus the reduced ones.
         src_schema_values = dict(raw_table.rows_schema.values)
-        src_schema_values.pop("predicted_instance_embedding_raw", None)
-        src_schema_values.pop("ground_truth_instance_embedding_raw", None)
-        src_schema_values["predicted_instance_embedding"] = _instance_embeddings_list_schema(
+        src_schema_values.pop(PREDICTED_INSTANCE_EMBEDDING_RAW, None)
+        src_schema_values.pop(GROUND_TRUTH_INSTANCE_EMBEDDING_RAW, None)
+        src_schema_values[PREDICTED_INSTANCE_EMBEDDING] = _instance_embeddings_list_schema(
             n, display_name=f"Predicted Instance Embedding ({n}D)"
         )
         if gt_reduced is not None:
-            src_schema_values["ground_truth_instance_embedding"] = _instance_embeddings_list_schema(
+            src_schema_values[GROUND_TRUTH_INSTANCE_EMBEDDING] = _instance_embeddings_list_schema(
                 n, display_name=f"Ground Truth Instance Embedding ({n}D)"
             )
 
@@ -820,8 +824,6 @@ class TLCValidatorMixin(BaseValidator):
             schema=src_schema_values,
         )
 
-        raw_pred_key = "predicted_instance_embedding_raw"
-        raw_gt_key = "ground_truth_instance_embedding_raw"
         BATCH_SIZE = 32
 
         chunk: dict[str, list] = {}
@@ -833,12 +835,12 @@ class TLCValidatorMixin(BaseValidator):
             nonlocal chunk, chunk_size, pred_offset, gt_offset
             if chunk_size == 0:
                 return
-            chunk["predicted_instance_embedding"] = [
+            chunk[PREDICTED_INSTANCE_EMBEDDING] = [
                 arr.astype(np.float32).tolist() for arr in pred_reduced[pred_offset : pred_offset + chunk_size]
             ]
             pred_offset += chunk_size
             if gt_reduced is not None:
-                chunk["ground_truth_instance_embedding"] = [
+                chunk[GROUND_TRUTH_INSTANCE_EMBEDDING] = [
                     arr.astype(np.float32).tolist() for arr in gt_reduced[gt_offset : gt_offset + chunk_size]
                 ]
                 gt_offset += chunk_size
@@ -848,7 +850,7 @@ class TLCValidatorMixin(BaseValidator):
 
         for sample in raw_table:
             for col, val in sample.items():
-                if col == raw_pred_key or col == raw_gt_key:
+                if col in (PREDICTED_INSTANCE_EMBEDDING_RAW, GROUND_TRUTH_INSTANCE_EMBEDDING_RAW):
                     continue
                 chunk.setdefault(col, []).append(val)
             chunk_size += 1
