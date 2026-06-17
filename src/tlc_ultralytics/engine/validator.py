@@ -681,7 +681,7 @@ class TLCValidatorMixin(BaseValidator):
 
         n = self._settings.instance_embeddings_dim
         method = self._settings.instance_embeddings_reducer
-        reducer_args = self._settings.instance_embeddings_reducer_args or {}
+        reducer_kwargs = self._settings.instance_embeddings_reducer_kwargs or {}
         progress_cb = getattr(self._settings, "_reduction_progress_callback", None)
         existing_reducer = _get_fitted_reducer(self._run.url.to_str())
 
@@ -700,7 +700,7 @@ class TLCValidatorMixin(BaseValidator):
                 method=method,
                 n_components=n,
                 progress_callback=progress_cb,
-                **reducer_args,
+                **reducer_kwargs,
             )
             if reducer is not None:
                 _set_fitted_reducer(self._run.url.to_str(), reducer)

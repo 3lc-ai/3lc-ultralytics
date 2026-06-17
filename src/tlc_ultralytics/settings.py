@@ -71,19 +71,13 @@ class Settings:
 
     instance_embeddings_reducer: str = field(default="pacmap")
     """Reduction algorithm for instance embeddings. Options: 'pacmap', 'umap' and 'pca'.
-    Only used if instance_embeddings_dim > 0.
+    Only used if instance_embeddings_dim > 0. Experimental: reduced in-process for now,
+    and 'pca' is in-process only. Default: 'pacmap'"""
 
-    Experimental: instance embeddings are currently reduced in-process by the integration.
-    When 3LC supports reducing variable-length embedding columns natively, this option will
-    be deprecated in favor of the native interface. Default: 'pacmap'"""
-
-    instance_embeddings_reducer_args: dict = field(default_factory=dict)
-    """Keyword arguments for the instance embeddings reducer, passed directly to the reducer
-    constructor (`pacmap.PaCMAP`, `umap.UMAP` or `sklearn.decomposition.PCA`).
-
-    Note that unlike `image_embeddings_reducer_args`, which takes 3LC reduction table args,
-    these are raw constructor kwargs for the chosen reducer. Experimental, see
-    `instance_embeddings_reducer`. Default: {}"""
+    instance_embeddings_reducer_kwargs: dict = field(default_factory=dict)
+    """Raw constructor kwargs for the chosen reducer (`pacmap.PaCMAP`, `umap.UMAP` or
+    `sklearn.decomposition.PCA`) — unlike `image_embeddings_reducer_args`, which takes 3LC
+    reduction-table args. Default: {}"""
 
     ground_truth_instance_embeddings: bool = field(default=False)
     """Whether to collect instance embeddings for ground-truth annotations.
