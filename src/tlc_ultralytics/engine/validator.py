@@ -825,6 +825,17 @@ class TLCValidatorMixin(BaseValidator):
         n = self._settings.instance_embeddings_dim
         pred_reduced, gt_reduced = self._compute_reduced_instance_embeddings()
 
+        # Reduced embeddings are written back onto rows positionally, so guard the alignment:
+        # one per-image entry per row, else a reorder would silently misalign embeddings.
+        num_rows = len(raw_table)
+        assert len(pred_reduced) == num_rows, (
+            f"Instance embedding row count mismatch: {len(pred_reduced)} reduced entries for {num_rows} rows."
+        )
+        if gt_reduced is not None:
+            assert len(gt_reduced) == num_rows, (
+                f"Ground-truth instance embedding row count mismatch: {len(gt_reduced)} entries for {num_rows} rows."
+            )
+
         # Drop raw buffers — fit is done and we re-read raw values from the
         # source table during rewrite (where they're tiny pyarrow lists, not
         # numpy arrays).
