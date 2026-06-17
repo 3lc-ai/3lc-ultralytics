@@ -440,7 +440,7 @@ class TLCValidatorMixin(BaseValidator):
 
         if self._instance_geometry_kind == "bbox":
             return _extract_instance_embeddings_bbox(feature_map, regions_list, image_sizes)
-        return _extract_instance_embeddings_mask(feature_map, regions_list, image_sizes)
+        return _extract_instance_embeddings_mask(feature_map, regions_list)
 
     def _extract_gt_instance_embeddings(self, preds, batch) -> list[np.ndarray]:
         """Extract per-instance raw embeddings for ground-truth annotations."""

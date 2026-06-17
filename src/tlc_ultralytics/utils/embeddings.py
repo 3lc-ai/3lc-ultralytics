@@ -157,14 +157,15 @@ def _extract_instance_embeddings_bbox(
 def _extract_instance_embeddings_mask(
     feature_map: torch.Tensor,
     masks: list[torch.Tensor],
-    image_sizes: list[tuple[int, int]],
 ) -> list[np.ndarray]:
     """Extract embeddings using mask-weighted average pooling.
+
+    Masks are resized to the feature-map resolution, so no image-size argument is
+    needed (unlike the bbox variant, which scales box coordinates).
 
     Args:
         feature_map: [B, C, H_feat, W_feat] tensor
         masks: list of [N_i, H, W] tensors (binary masks) per image
-        image_sizes: list of (h, w) tuples
 
     Returns:
         list of [N_i, C] numpy arrays, one per image
