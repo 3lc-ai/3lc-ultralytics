@@ -352,16 +352,28 @@ class TLCValidatorMixin(BaseValidator):
         # cv3[level] = Sequential([DWConv+Conv, DWConv+Conv, Conv2d])
         # We want [-2] (second DWConv+Conv block) — class-discriminative features
         hook_sub_index = len(cv3[0]) - 2
+
+        # Read every level's output channel count up front. If we can't read it reliably for
+        # all levels, fall back to the neck-layer path rather than guessing — a wrong count
+        # would mislabel the raw embedding column and mismatch the captured feature map.
+        try:
+            level_channels = [cv3[level_idx][hook_sub_index][-1].conv.out_channels for level_idx in range(len(cv3))]
+        except (AttributeError, IndexError, TypeError):
+            from tlc_ultralytics.utils.embeddings import _auto_detect_p3_layer
+
+            layer_index = _auto_detect_p3_layer(model.model)
+            LOGGER.info(
+                f"{TLC_COLORSTR}Could not read cls-head channel counts, falling back to neck layer "
+                f"{layer_index} for instance embeddings extraction."
+            )
+            return self._add_feature_map_hook(model, layer_index)
+
+        total_channels = sum(level_channels)
         level_features: list[torch.Tensor | None] = [None] * len(cv3)
         weak_self = weakref.ref(self)
 
-        total_channels = 0
         for level_idx in range(len(cv3)):
             target = cv3[level_idx][hook_sub_index]
-            try:
-                total_channels += target[-1].conv.out_channels
-            except (AttributeError, IndexError, TypeError):
-                total_channels += detect_head.nc
 
             def make_hook(idx):
                 def hook_fn(_module, _input, output):
@@ -547,7 +559,6 @@ class TLCValidatorMixin(BaseValidator):
             # reduced column in their place. Goes away once core 3LC reduces
             # variable-length embedding list columns server-side.
             c_raw = self._add_instance_embeddings_hook(model)
-            self._instance_embeddings_channel_size = c_raw
             column_schemas[PREDICTED_INSTANCE_EMBEDDING_RAW] = _raw_instance_embeddings_schema(
                 c_raw, display_name="Predicted Instance Embedding (raw)"
             )
