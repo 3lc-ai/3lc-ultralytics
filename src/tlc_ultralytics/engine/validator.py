@@ -704,6 +704,15 @@ class TLCValidatorMixin(BaseValidator):
             )
             if reducer is not None:
                 _set_fitted_reducer(self._run.url.to_str(), reducer)
+            else:
+                msg = (
+                    "No predicted instances were available to fit the instance-embeddings reducer "
+                    f"for this split (conf_thres={self._settings.conf_thres}); instance embeddings "
+                    "will be empty."
+                )
+                if self._settings.ground_truth_instance_embeddings and raw_gt:
+                    msg += " Ground-truth instance embeddings will be empty too."
+                LOGGER.warning(f"{TLC_COLORSTR}{msg}")
 
         if self._settings.ground_truth_instance_embeddings and raw_gt:
             if reducer is not None:
