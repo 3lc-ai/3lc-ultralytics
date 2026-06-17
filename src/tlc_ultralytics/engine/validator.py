@@ -426,6 +426,12 @@ class TLCValidatorMixin(BaseValidator):
         )
 
         feature_map = self._instance_feature_map
+        if feature_map is None:
+            raise RuntimeError(
+                "Instance embeddings are enabled but no feature map was captured during the forward "
+                "pass. The embeddings hook may not have fired for this model; consider setting "
+                "instance_embeddings_layer explicitly."
+            )
 
         regions_list = []
         image_sizes = []
