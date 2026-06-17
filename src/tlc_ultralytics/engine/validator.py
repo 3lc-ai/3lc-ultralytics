@@ -106,6 +106,11 @@ class TLCValidatorMixin(BaseValidator):
         self._raw_pred_emb: list[np.ndarray] = []
         self._raw_gt_emb: list[np.ndarray] = []
 
+        # Per-batch caches so _prepare_batch and _filter_top_predictions run once per image, shared by annotation
+        # building and instance-embedding extraction.
+        self._cur_pbatches: dict[int, Any] = {}
+        self._cur_filtered_preds: dict[int, Any] = {}
+
         super().__init__(*args, **kwargs)
 
         if not self._training:
@@ -252,14 +257,30 @@ class TLCValidatorMixin(BaseValidator):
 
         return filtered
 
+    def _prepared_batch(self, i, batch):
+        """Return _prepare_batch(i, batch), cached for the current batch."""
+        if i not in self._cur_pbatches:
+            self._cur_pbatches[i] = self._prepare_batch(i, batch)
+        return self._cur_pbatches[i]
+
+    def _filtered_pred(self, i, pred):
+        """Return _filter_top_predictions(pred), cached for the current batch.
+
+        Caching ensures annotation building and instance-embedding extraction filter the
+        same predictions once, keeping their per-instance columns index-aligned.
+        """
+        if i not in self._cur_filtered_preds:
+            self._cur_filtered_preds[i] = self._filter_top_predictions(pred)
+        return self._cur_filtered_preds[i]
+
     def _process_predictions(self, preds, batch):
         """Filter, scale, and build 3LC annotations for a batch of predictions."""
         results = []
         for i, pred in enumerate(preds):
-            pbatch = self._prepare_batch(i, batch)
+            pbatch = self._prepared_batch(i, batch)
             h, w = pbatch["ori_shape"]
 
-            filtered = self._filter_top_predictions(pred)
+            filtered = self._filtered_pred(i, pred)
             if filtered is None:
                 results.append(self._empty_annotation(h, w))
                 continue
@@ -448,12 +469,12 @@ class TLCValidatorMixin(BaseValidator):
         regions_list = []
         image_sizes = []
         for i, pred in enumerate(preds):
-            pbatch = self._prepare_batch(i, batch)
+            pbatch = self._prepared_batch(i, batch)
             imgsz = pbatch["imgsz"]
             h, w = int(imgsz[0]), int(imgsz[1])
             image_sizes.append((h, w))
 
-            source = pbatch if ground_truth else self._filter_top_predictions(pred)
+            source = pbatch if ground_truth else self._filtered_pred(i, pred)
             regions_list.append(self._instance_regions(source, h, w, feature_map.device))
 
         if self._instance_geometry_kind == "bbox":
@@ -492,6 +513,10 @@ class TLCValidatorMixin(BaseValidator):
         ``MetricsTableWriter.add_batch``, so peak memory stays bounded.
         """
         batch_size = self._infer_batch_size(preds, batch)
+
+        # Reset the per-batch caches; consumers below fill them lazily and share the result.
+        self._cur_pbatches = {}
+        self._cur_filtered_preds = {}
 
         batch_metrics = {
             EXAMPLE_ID: [int(example_id) for example_id in batch["example_id"]],
