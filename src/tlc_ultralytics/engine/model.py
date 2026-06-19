@@ -23,7 +23,7 @@ from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import check_requirements, reduce_embeddings
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable
 
 
 class YOLO(YOLOBase):
@@ -93,7 +93,7 @@ class YOLO(YOLOBase):
             },
         }
 
-    def collect(
+    def collect( # noqa: C901
         self,
         data: str | None = None,
         splits: Iterable[str] | None = None,
@@ -123,7 +123,7 @@ class YOLO(YOLOBase):
 
         if tables is not None and not isinstance(tables, Mapping):
             raise TypeError(
-                f"tables must be a mapping of {{split_name: table}}, got {type(tables).__name__} ({tables!r}). "
+                f"Tables must be a mapping of {{split_name: table}}, got {type(tables).__name__} ({tables!r}). "
                 "Did you mean to pass data=... and splits=...?"
             )
 
