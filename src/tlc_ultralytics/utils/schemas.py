@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tlc
-from tlc.schemas import Float32Schema
+from tlc.schemas import EmbeddingSchema, Float32Schema
 
 from tlc_ultralytics.constants import TRAINING_PHASE
 
@@ -22,6 +22,46 @@ def training_phase_schema() -> tlc.Schema:
     )
 
 
+def _instance_embeddings_list_schema(n_components: int, display_name: str | None = None) -> tlc.Schema:
+    """TEMP(instance-embeddings): schema for a list of reduced per-instance embeddings.
+
+    Two-dimensional schema: the innermost dimension is the fixed reduced-embedding
+    dimension, the outer dimension is the variable-length instance count per image.
+
+    When upstream 3LC supports native reduction of variable-length embedding list
+    columns, this schema should become an ``EmbeddingSchema`` and the in-process
+    reducer in ``_instance_reduce.py`` can be removed.
+
+    :param n_components: The number of reduced dimensions (2 or 3).
+    :param display_name: Optional display name override.
+    :returns: A Schema with two size dimensions.
+    """
+    return Float32Schema(
+        display_name=display_name or f"Instance Embedding ({n_components}D)",
+        shape=(-1, n_components),  # variable instance count x fixed embedding dim
+    )
+
+
+def _raw_instance_embeddings_schema(c_raw: int, display_name: str | None = None) -> tlc.Schema:
+    """TEMP(instance-embeddings): schema for raw per-instance embeddings written
+    inline during the validation streaming pass.
+
+    Variable-length list of fixed-size raw feature vectors. The innermost
+    dimension is the fixed channel count (e.g. 256 from the cls head), the outer
+    dimension is the variable per-image instance count. Tagged with the
+    ``nn_embedding`` number role (via ``EmbeddingSchema``) so a future native
+    3LC reducer can pick it up server-side.
+
+    Default invisible — these are intermediate values that get rewritten into a
+    reduced ``predicted_instance_embedding`` column at the end of validation.
+    """
+    return EmbeddingSchema(
+        display_name=display_name or f"Instance Embedding (raw, {c_raw}D)",
+        shape=(-1, c_raw),  # variable instance count x fixed channel count
+        default_visible=False,
+    )
+
+
 def image_embeddings_schema(activation_size=512) -> tlc.Schema:
     """Create a 3LC schema for YOLO image embeddings.
 
@@ -29,7 +69,7 @@ def image_embeddings_schema(activation_size=512) -> tlc.Schema:
     :returns: The YOLO image embeddings schema.
     """
     return Float32Schema(
-        display_name="Embedding",
+        display_name="Image Embedding",
         description="Large NN embedding",
         number_role="nn_embedding",
         writable=False,

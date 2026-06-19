@@ -64,6 +64,8 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
         return super().postprocess(preds)
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
+        # Instance-embedding columns are added by the mixin (raw during streaming,
+        # reduced during the end-of-pass rewrite).
         predicted_pose_schema = Keypoints2D.schema(
             classes=self.data["names_3lc"],
             num_keypoints=self.kpt_shape[0],

@@ -2436,3 +2436,320 @@ class TestCreateTablesFromYamlFileReuse:
 
         # Verify the table name is "initial"
         assert combined_table.name == "initial"
+
+
+# === Instance embeddings tests ===
+
+INSTANCE_EMB_OVERRIDES = {"batch": 4, "device": "cpu", "workers": 0}
+
+
+@pytest.mark.parametrize("task", ["detect", "segment", "pose", "obb"])
+def test_instance_embeddings_collection(task: str) -> None:
+    """Test that predicted instance embeddings are collected as a top-level column."""
+    dim = 2
+    settings = Settings(
+        project_name=f"test_instance_emb_{task}",
+        run_name=f"test_instance_emb_{task}",
+        instance_embeddings_dim=dim,
+        instance_embeddings_reducer="pca",
+        label_column_name=TASK2LABEL_COLUMN_NAME[task],
+    )
+
+    model = TLCYOLO(TASK2MODEL[task])
+    model.collect(data=TASK2DATASET[task], splits=("train",), settings=settings, **INSTANCE_EMB_OVERRIDES)
+
+    run = _get_run_from_settings(settings)
+    metrics_tables = get_metrics_tables_from_run(run)
+    default_tables = metrics_tables["default_stream"]
+    assert len(default_tables) >= 1, "Expected at least one default_stream metrics table"
+
+    metrics_df = pd.concat([m.to_pandas() for m in default_tables], ignore_index=True)
+
+    # Predicted instance embeddings should be a top-level column
+    assert "predicted_instance_embedding" in metrics_df.columns, (
+        f"Expected 'predicted_instance_embedding' column in metrics for task {task}"
+    )
+
+    # Each row should contain a list of embeddings (one per instance)
+    for row_embs in metrics_df["predicted_instance_embedding"]:
+        assert isinstance(row_embs, (list, np.ndarray)), "Expected list or array of embeddings per image"
+        for emb in row_embs:
+            assert len(emb) == dim, f"Expected embedding dimension {dim}, got {len(emb)}"
+
+
+@pytest.mark.parametrize("task", ["detect", "segment", "pose", "obb"])
+def test_gt_instance_embeddings_collection(task: str) -> None:
+    """Test that both predicted and ground-truth instance embeddings are collected."""
+    dim = 2
+    settings = Settings(
+        project_name=f"test_gt_instance_emb_{task}",
+        run_name=f"test_gt_instance_emb_{task}",
+        instance_embeddings_dim=dim,
+        ground_truth_instance_embeddings=True,
+        instance_embeddings_reducer="pca",
+        label_column_name=TASK2LABEL_COLUMN_NAME[task],
+    )
+
+    model = TLCYOLO(TASK2MODEL[task])
+    model.collect(data=TASK2DATASET[task], splits=("train",), settings=settings, **INSTANCE_EMB_OVERRIDES)
+
+    run = _get_run_from_settings(settings)
+    metrics_tables = get_metrics_tables_from_run(run)
+    default_tables = metrics_tables["default_stream"]
+    assert len(default_tables) >= 1, "Expected at least one default_stream metrics table"
+
+    metrics_df = pd.concat([m.to_pandas() for m in default_tables], ignore_index=True)
+
+    # Both predicted and GT instance embeddings should be top-level columns
+    assert "predicted_instance_embedding" in metrics_df.columns, (
+        f"Expected 'predicted_instance_embedding' column for task {task}"
+    )
+    assert "ground_truth_instance_embedding" in metrics_df.columns, (
+        f"Expected 'ground_truth_instance_embedding' column for task {task}"
+    )
+
+    # Validate predicted embeddings
+    for row_embs in metrics_df["predicted_instance_embedding"]:
+        assert isinstance(row_embs, (list, np.ndarray)), "Expected list of embeddings"
+        for emb in row_embs:
+            assert len(emb) == dim, f"Expected predicted embedding dim {dim}, got {len(emb)}"
+
+    # Validate GT embeddings
+    for row_embs in metrics_df["ground_truth_instance_embedding"]:
+        assert isinstance(row_embs, (list, np.ndarray)), "Expected list of embeddings"
+        for emb in row_embs:
+            assert len(emb) == dim, f"Expected GT embedding dim {dim}, got {len(emb)}"
+
+    # At least some images should have GT annotations
+    gt_counts = [len(row_embs) for row_embs in metrics_df["ground_truth_instance_embedding"]]
+    assert sum(gt_counts) > 0, "Expected at least some GT instance embeddings"
+
+
+def test_all_embeddings_combined() -> None:
+    """Test that predicted instance and GT instance embeddings can be collected together."""
+    dim = 2
+    settings = Settings(
+        project_name="test_all_embeddings_combined",
+        run_name="test_all_embeddings_combined",
+        instance_embeddings_dim=dim,
+        ground_truth_instance_embeddings=True,
+        instance_embeddings_reducer="pca",
+        label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
+    )
+
+    model = TLCYOLO(TASK2MODEL["detect"])
+    model.collect(data=TASK2DATASET["detect"], splits=("train",), settings=settings, **INSTANCE_EMB_OVERRIDES)
+
+    run = _get_run_from_settings(settings)
+    metrics_tables = get_metrics_tables_from_run(run)
+    default_tables = metrics_tables["default_stream"]
+    metrics_df = pd.concat([m.to_pandas() for m in default_tables], ignore_index=True)
+
+    # Both embedding types should be present
+    assert "predicted_instance_embedding" in metrics_df.columns, "Expected predicted instance embeddings column"
+    assert "ground_truth_instance_embedding" in metrics_df.columns, "Expected GT instance embeddings column"
+
+
+@pytest.mark.parametrize("reducer", ["pca", "umap", "pacmap"])
+def test_instance_reducer_fit_then_transform(reducer: str) -> None:
+    """Unit test: each reducer must survive a fit followed by a fresh .transform().
+
+    Exercises ``_reduce_instance_embeddings`` and ``_transform_instance_embeddings``
+    directly on synthetic data so the test doesn't depend on a full model run or
+    the size of the YOLO test dataset. This is the scenario that catches pacmap's
+    ``save_tree=True`` requirement — without it the fitted reducer can't project
+    GT embeddings into the predicted space.
+    """
+    pytest.importorskip(reducer if reducer != "pca" else "sklearn")
+
+    from tlc_ultralytics.utils._instance_reduce import (
+        _reduce_instance_embeddings,
+        _transform_instance_embeddings,
+    )
+
+    rng = np.random.default_rng(0)
+    raw_per_image = [rng.normal(size=(20, 32)).astype(np.float32) for _ in range(10)]
+
+    try:
+        # random_state is a raw constructor kwarg for all three reducers; passing it through
+        # exercises that instance_embeddings_reducer_kwargs are forwarded to the constructor.
+        reduced, fitted = _reduce_instance_embeddings(
+            raw_per_image,
+            method=reducer,
+            n_components=2,
+            random_state=42,
+        )
+    except ValueError as exc:
+        # pacmap on macOS ARM currently fails during fit_transform with a
+        # broadcast/shape error from its internal KNN. Skip rather than fail —
+        # the post-fit .transform() path (the save_tree=True regression guard)
+        # can only be checked when fit itself works.
+        pytest.skip(f"{reducer} fit failed in this environment: {exc}")
+
+    assert fitted is not None
+    assert all(r.shape == (20, 2) for r in reduced)
+    # The forwarded kwarg reached the underlying reducer constructor.
+    assert fitted.random_state == 42
+
+    # Transform a disjoint batch with the fitted reducer — this crashes on
+    # pacmap when save_tree=False, which is the bug the in-process reducer guards.
+    new_raw = [rng.normal(size=(5, 32)).astype(np.float32) for _ in range(3)]
+    projected = _transform_instance_embeddings(new_raw, fitted, n_components=2)
+    assert all(r.shape == (5, 2) for r in projected)
+
+
+def test_gt_instance_embeddings_requires_instance_dim() -> None:
+    """Test that ground_truth_instance_embeddings requires instance_embeddings_dim > 0."""
+    settings = Settings(
+        ground_truth_instance_embeddings=True,
+        instance_embeddings_dim=0,
+        label_column_name="test",
+    )
+    with pytest.raises(AssertionError, match="ground_truth_instance_embeddings requires instance_embeddings_dim"):
+        settings.verify(training=False)
+
+
+def test_gt_instance_embeddings_incompatible_with_collection_disable() -> None:
+    """Test that ground_truth_instance_embeddings can't be used with collection_disable."""
+    settings = Settings(
+        ground_truth_instance_embeddings=True,
+        instance_embeddings_dim=2,
+        collection_disable=True,
+        label_column_name="test",
+    )
+    with pytest.raises(AssertionError, match="Cannot disable collection"):
+        settings.verify(training=True)
+
+
+def test_reducer_validation_split() -> None:
+    """pca is only supported by the in-process instance reduction, not the native image reduction."""
+    settings = Settings(image_embeddings_dim=2, image_embeddings_reducer="pca", label_column_name="test")
+    with pytest.raises(ValueError, match="image_embeddings_reducer"):
+        settings.verify(training=False)
+
+    settings = Settings(instance_embeddings_dim=2, instance_embeddings_reducer="pca", label_column_name="test")
+    settings.verify(training=False)
+
+    settings = Settings(instance_embeddings_dim=2, instance_embeddings_reducer="illegal", label_column_name="test")
+    with pytest.raises(ValueError, match="instance_embeddings_reducer"):
+        settings.verify(training=False)
+
+
+def test_split_reduced_by_rank() -> None:
+    """Unit test for the DDP re-split of flattened reduced embeddings back to per-rank lists."""
+    from tlc_ultralytics.engine.validator import TLCValidatorMixin
+
+    rng = np.random.default_rng(0)
+
+    def make_payload(n_images, n_instances):
+        return [rng.normal(size=(n_instances, 16)).astype(np.float32) for _ in range(n_images)]
+
+    # Rank 0: 3 images, rank 1: 2 images (pred); GT counts differ from pred counts
+    gathered = [
+        (make_payload(3, 4), make_payload(3, 2)),
+        (make_payload(2, 4), make_payload(2, 2)),
+    ]
+    pred_reduced_all = [rng.normal(size=(4, 2)).astype(np.float32) for _ in range(5)]
+    gt_reduced_all = [rng.normal(size=(2, 2)).astype(np.float32) for _ in range(5)]
+
+    per_rank = TLCValidatorMixin._split_reduced_by_rank(gathered, pred_reduced_all, gt_reduced_all)
+
+    assert len(per_rank) == 2
+    pred_r0, gt_r0 = per_rank[0]
+    pred_r1, gt_r1 = per_rank[1]
+    assert len(pred_r0) == 3 and len(gt_r0) == 3
+    assert len(pred_r1) == 2 and len(gt_r1) == 2
+    # Order is preserved: rank 1's first image is the 4th flattened entry
+    np.testing.assert_array_equal(pred_r1[0], pred_reduced_all[3])
+    np.testing.assert_array_equal(gt_r1[1], gt_reduced_all[4])
+
+    # Without GT, gt side is None for every rank
+    per_rank_no_gt = TLCValidatorMixin._split_reduced_by_rank(gathered, pred_reduced_all, None)
+    assert all(gt is None for _, gt in per_rank_no_gt)
+
+
+def test_instance_embeddings_cross_split_shared_space() -> None:
+    """Multi-split collect: train fits the reducer, val is transformed into the same space."""
+    dim = 2
+    settings = Settings(
+        project_name="test_instance_emb_cross_split",
+        run_name="test_instance_emb_cross_split",
+        instance_embeddings_dim=dim,
+        instance_embeddings_reducer="pca",
+        label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
+    )
+
+    model = TLCYOLO(TASK2MODEL["detect"])
+    model.collect(data=TASK2DATASET["detect"], splits=("train", "val"), settings=settings, **INSTANCE_EMB_OVERRIDES)
+
+    run = _get_run_from_settings(settings)
+    metrics_tables = get_metrics_tables_from_run(run)
+    default_tables = metrics_tables["default_stream"]
+    assert len(default_tables) >= 2, "Expected one metrics table per split"
+
+    for table in default_tables:
+        df = table.to_pandas()
+        assert "predicted_instance_embedding" in df.columns
+        for row_embs in df["predicted_instance_embedding"]:
+            for emb in row_embs:
+                assert len(emb) == dim
+
+    # The run's reducer must not leak past collect()
+    from tlc_ultralytics.utils._instance_reduce import _get_fitted_reducer
+
+    assert _get_fitted_reducer(run.url.to_str()) is None
+
+
+def test_instance_embeddings_explicit_layer() -> None:
+    """Collect instance embeddings from an explicit neck layer instead of the cls-head default.
+
+    Exercises the instance_embeddings_layer path (_add_feature_map_hook / _infer_layer_channels),
+    which the default cls-head tests do not cover.
+    """
+    from tlc_ultralytics.utils.embeddings import _auto_detect_p3_layer
+
+    dim = 2
+    model = TLCYOLO(TASK2MODEL["detect"])
+    # Pick a valid neck layer the same way the auto-detect default does, so the index isn't
+    # hardcoded against a specific model architecture.
+    layer_index = _auto_detect_p3_layer(model.model.model)
+
+    settings = Settings(
+        project_name="test_instance_emb_explicit_layer",
+        run_name="test_instance_emb_explicit_layer",
+        instance_embeddings_dim=dim,
+        instance_embeddings_layer=layer_index,
+        instance_embeddings_reducer="pca",
+        label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
+    )
+
+    model.collect(data=TASK2DATASET["detect"], splits=("train",), settings=settings, **INSTANCE_EMB_OVERRIDES)
+
+    run = _get_run_from_settings(settings)
+    metrics_df = pd.concat(
+        [m.to_pandas() for m in get_metrics_tables_from_run(run)["default_stream"]], ignore_index=True
+    )
+    assert "predicted_instance_embedding" in metrics_df.columns
+    for row_embs in metrics_df["predicted_instance_embedding"]:
+        for emb in row_embs:
+            assert len(emb) == dim
+
+
+def test_instance_embeddings_warns_without_predictions() -> None:
+    """With no predictions passing the confidence threshold, a clear warning is logged and the
+    embedding columns are empty rather than raising."""
+    settings = Settings(
+        project_name="test_instance_emb_no_preds",
+        run_name="test_instance_emb_no_preds",
+        instance_embeddings_dim=2,
+        instance_embeddings_reducer="pca",
+        conf_thres=1.0,  # confidences are strictly < 1.0, so nothing passes the filter
+        label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
+    )
+    model = TLCYOLO(TASK2MODEL["detect"])
+
+    with patch("tlc_ultralytics.engine.validator.LOGGER") as mock_logger:
+        model.collect(data=TASK2DATASET["detect"], splits=("train",), settings=settings, **INSTANCE_EMB_OVERRIDES)
+
+    warnings = [str(call.args[0]) for call in mock_logger.warning.call_args_list if call.args]
+    assert any("No predicted instances were available" in w for w in warnings), warnings

@@ -99,18 +99,26 @@ class YOLO(YOLOBase):
         splits: Iterable[str] | None = None,
         tables: dict[str, str | tlc.Url | tlc.Table] | None = None,
         settings: Settings | None = None,
+        progress_callback: object | None = None,
         **kwargs,
     ) -> dict[str, dict[str, float]]:
         """Perform calls to model.val() to collect metrics on a set of splits, all under one tlc.Run.
-        If enabled, embeddings are reduced at the end of validation.
+
+        If enabled, embeddings are reduced at the end of validation. When instance
+        embeddings are enabled and multiple splits are collected, the first split
+        (train) defines the reduction space and subsequent splits are projected
+        into it.
 
         :param data: Path to a YOLO or 3LC YAML file. If provided, splits must also be provided.
         :param splits: List of splits to collect metrics for. If provided, data must also be provided.
         :param tables: Dictionary of splits to tables to collect metrics for. Mutually exclusive with data and splits.
         :param settings: 3LC settings to use for collecting metrics. If None, default settings are used.
+        :param progress_callback: Optional callable(phase, current, total) for reporting reduction progress.
         :param kwargs: Additional keyword arguments are forwarded as model.val(**kwargs).
         :return: Dictionary of split names to results returned by model.val().
         """
+        from tlc_ultralytics.constants import TLC_COLORSTR
+
         # Verify only data+splits or tables are provided
         if not ((data and splits) or tables):
             raise ValueError("Either data and splits or tables must be provided to collect.")
@@ -121,29 +129,65 @@ class YOLO(YOLOBase):
         if not settings.run_description:
             settings.run_description = DEFAULT_COLLECT_RUN_DESCRIPTION
 
-        results_dict = {}
-        # Call val for each split or table
+        # TEMP(instance-embeddings): stash the progress callback on settings so the
+        # in-process reducer can report fit/transform phases. Remove when native
+        # 3LC reduction of variable-length embedding list columns ships upstream.
+        if progress_callback is not None:
+            settings._reduction_progress_callback = progress_callback
+
+        # Build a uniform {split: val_kwargs} mapping so both the data+splits and
+        # tables branches share a single iteration loop.
         if data and splits:
-            for split in splits:
-                results_dict[split] = self.val(data=data, split=split, settings=settings, **kwargs)
-        elif tables:
-            for split in tables:
-                results_dict[split] = self.val(table=tables[split], settings=settings, **kwargs)
+            split_val_kwargs = {s: {"data": data, "split": s} for s in splits}
+        else:
+            assert tables is not None
+            split_val_kwargs = {s: {"table": t} for s, t in tables.items()}
 
-        # Reduce embeddings
-        if settings and settings.image_embeddings_dim > 0:
-            # TODO: Allow user to pass in preferred foreign_table_url
+        # TEMP(instance-embeddings): run the train split first so its fitted
+        # reducer (shared via the per-run registry in _instance_reduce) is
+        # reused when transforming subsequent splits. Remove the ordering when
+        # upstream reduction lands — 3LC's native flow handles cross-split
+        # fit/transform itself.
+        ordered_splits = sorted(split_val_kwargs, key=lambda s: 0 if s == "train" else 1)
 
-            reduce_embeddings(
-                tlc.active_run(),
-                method=settings.image_embeddings_reducer,
-                n_components=settings.image_embeddings_dim,
-                reducer_args=settings.image_embeddings_reducer_args,
-            )
+        results_dict = {}
+        try:
+            for split in ordered_splits:
+                LOGGER.info(TLC_COLORSTR + f"Collecting metrics for split: {split}")
+                if progress_callback:
+                    progress_callback("split_start", 0, 0)
+                results_dict[split] = self.val(settings=settings, **split_val_kwargs[split], **kwargs)
+
+            if settings.image_embeddings_dim > 0:
+                self._reduce_image_embeddings(settings, progress_callback)
+        finally:
+            # TEMP(instance-embeddings): drop this run's fitted reducer (also on
+            # failure — a later collect() may reuse the same active run and must
+            # not inherit a stale embedding space).
+            if settings.instance_embeddings_dim > 0 and tlc.active_run() is not None:
+                from tlc_ultralytics.utils._instance_reduce import _clear_fitted_reducer
+
+                _clear_fitted_reducer(tlc.active_run().url.to_str())
 
         tlc.active_run().set_status_completed()
 
         return results_dict
+
+    @staticmethod
+    def _reduce_image_embeddings(settings: Settings, progress_callback: object | None) -> None:
+        """Reduce image embeddings server-side across all collected splits."""
+        if progress_callback:
+            progress_callback("image_embeddings", 0, 0)
+
+        reduce_embeddings(
+            tlc.active_run(),
+            method=settings.image_embeddings_reducer,
+            n_components=settings.image_embeddings_dim,
+            reducer_args=settings.image_embeddings_reducer_args,
+        )
+
+        if progress_callback:
+            progress_callback("image_embeddings_done", 0, 0)
 
 
 class TLCYOLO(YOLO):

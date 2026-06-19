@@ -1,4 +1,5 @@
 import tlc
+import torch
 from tlc.data_types import SegmentationMasks
 from tlc.schemas import ConfidenceSchema
 from ultralytics.models.yolo.segment.val import SegmentationValidator
@@ -38,6 +39,8 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
             writable=False,
         )
 
+        # Instance-embedding columns are added by the mixin (raw during streaming,
+        # reduced during the end-of-pass rewrite).
         return {PREDICTED_SEGMENTATIONS: segment_schema}
 
     def _compute_3lc_metrics(self, preds, batch):
@@ -55,3 +58,12 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
 
     def _empty_annotation(self, h, w):
         return tlc.data_types.SegmentationMasks.create_empty(image_height=h, image_width=w)
+
+    # Instance embeddings pool the feature map with the predicted/GT segmentation masks.
+    _instance_geometry_kind = "mask"
+
+    def _instance_regions(self, source, h: int, w: int, device) -> torch.Tensor:
+        masks = source.get("masks") if source is not None else None
+        if masks is None or masks.numel() == 0:
+            return torch.empty((0, h, w), device=device)
+        return masks.to(device)

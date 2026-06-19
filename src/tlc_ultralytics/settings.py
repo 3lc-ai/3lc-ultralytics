@@ -62,6 +62,27 @@ class Settings:
      for more details.
     """
 
+    instance_embeddings_dim: int = field(default=0)
+    """Per-instance embeddings dimension. 0 means disabled, 2 means 2D, 3 means 3D. Default: 0"""
+
+    instance_embeddings_layer: int | None = field(default=None)
+    """Model layer index for instance embeddings feature extraction.
+    None means auto-detect the highest-resolution neck output (P3). Default: None"""
+
+    instance_embeddings_reducer: str = field(default="pacmap")
+    """Reduction algorithm for instance embeddings. Options: 'pacmap', 'umap' and 'pca'.
+    Only used if instance_embeddings_dim > 0. Experimental: reduced in-process for now,
+    and 'pca' is in-process only. Default: 'pacmap'"""
+
+    instance_embeddings_reducer_kwargs: dict = field(default_factory=dict)
+    """Raw constructor kwargs for the chosen reducer (`pacmap.PaCMAP`, `umap.UMAP` or
+    `sklearn.decomposition.PCA`) — unlike `image_embeddings_reducer_args`, which takes 3LC
+    reduction-table args. Default: {}"""
+
+    ground_truth_instance_embeddings: bool = field(default=False)
+    """Whether to collect instance embeddings for ground-truth annotations.
+    Requires instance_embeddings_dim > 0. Default: False"""
+
     sampling_weights: bool = field(default=False)
     """Whether to use 3LC Sampling Weights. Default: False"""
 
@@ -222,7 +243,38 @@ class Settings:
             )
 
         if self.image_embeddings_dim > 0:
-            self._check_reducer_available()
+            # The native 3LC reduction used for image embeddings supports pacmap and umap only.
+            self._check_reducer_available(self.image_embeddings_reducer, ("pacmap", "umap"), "image_embeddings_reducer")
+
+        assert self.instance_embeddings_dim >= 0, (
+            f"Invalid instance embeddings dimension {self.instance_embeddings_dim}, must be non-negative."
+        )
+        if self.instance_embeddings_dim > 3:
+            LOGGER.warning(
+                f"{TLC_COLORSTR}Instance embeddings dimension {self.instance_embeddings_dim} is greater than 3. While "
+                "this is supported, it will not be as useful for visualization in the 3LC Dashboard as 2 or 3."
+            )
+        elif self.instance_embeddings_dim == 1:
+            LOGGER.warning(
+                f"{TLC_COLORSTR}Instance embeddings dimension is one and points will be reduced to a single line. "
+                "Consider using 2 or 3 for better visualization in the 3LC Dashboard."
+            )
+
+        if self.instance_embeddings_dim > 0:
+            self._check_reducer_available(
+                self.instance_embeddings_reducer, ("pacmap", "umap", "pca"), "instance_embeddings_reducer"
+            )
+            LOGGER.warning(
+                f"{TLC_COLORSTR}On large datasets or datasets with with many detections per image, instance embeddings "
+                "collection can use a lot of memory (tens of GB at full-COCO scale). To reduce it, collect on a "
+                "smaller split, lower max_det, or raise conf_thres. A memory-bounded path is planned, but not yet "
+                "available."
+            )
+
+        if self.ground_truth_instance_embeddings:
+            assert self.instance_embeddings_dim > 0, (
+                "ground_truth_instance_embeddings requires instance_embeddings_dim > 0."
+            )
 
         # Validate metrics collection function if provided
         if self.metrics_collection_function is not None:
@@ -274,6 +326,8 @@ class Settings:
             (self.collection_val_only, "collect only on val set"),
             # (self.collect_loss, 'collect loss values'), TODO: Restore when loss is supported.
             (self.image_embeddings_dim > 0, "collect image embeddings"),
+            (self.instance_embeddings_dim > 0, "collect instance embeddings"),
+            (self.ground_truth_instance_embeddings, "collect ground-truth instance embeddings"),
             (self.collection_epoch_start, "collect metrics during training"),
         ]
 
@@ -295,24 +349,27 @@ class Settings:
         """
         pass
 
-    def _check_reducer_available(self) -> None:
-        """Check that the selected reducer is available.
+    def _check_reducer_available(self, reducer: str, valid_reducers: tuple[str, ...], setting_name: str) -> None:
+        """Check that the selected reducer is valid and its dependency is installed.
 
+        :param reducer: The reducer name to check.
+        :param valid_reducers: The reducer names supported by the consuming reduction path.
+        :param setting_name: The settings field being validated, for error messages.
         :raises: ValueError if the selected reducer is not available.
         """
-        reducer_to_package = {"pacmap": "pacmap", "umap": "umap-learn"}
-        if self.image_embeddings_reducer not in reducer_to_package:
+        reducer_to_package = {"pacmap": "pacmap", "umap": "umap-learn", "pca": "scikit-learn"}
+        reducer_to_module = {"pacmap": "pacmap", "umap": "umap", "pca": "sklearn"}
+        if reducer not in valid_reducers:
             raise ValueError(
-                f"Invalid image embeddings reducer {self.image_embeddings_reducer}. "
-                "Valid options are 'pacmap' and 'umap'."
+                f"Invalid {setting_name} {reducer!r}. Valid options are {', '.join(repr(k) for k in valid_reducers)}."
             )
 
         try:
-            importlib.import_module(self.image_embeddings_reducer)
+            importlib.import_module(reducer_to_module[reducer])
         except Exception as e:
-            package = reducer_to_package[self.image_embeddings_reducer]
+            package = reducer_to_package[reducer]
             raise ValueError(
-                f"Embeddings collection enabled, but failed to import {self.image_embeddings_reducer} dependency. "
+                f"Embeddings collection enabled, but failed to import {reducer} dependency. "
                 f"Run `pip install {package}` to enable embeddings collection."
             ) from e
 
