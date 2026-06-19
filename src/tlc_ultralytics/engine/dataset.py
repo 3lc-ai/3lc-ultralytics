@@ -143,12 +143,17 @@ class TLCDatasetMixin:
             corrupt_example_ids = cache_data["corrupt_example_ids"]
             return corrupt_example_ids
 
-        except (json.JSONDecodeError, KeyError, ValueError) as e:
+        except (json.JSONDecodeError, KeyError, ValueError, OSError) as e:
             LOGGER.warning(f"Failed to load cache: {e}, regenerating cache.")
             return None
 
     def _save_cached_example_ids(self, cache_url: tlc.Url, corrupt_example_ids: list[int]):
         """Save the corrupt example ids to the cache file.
+
+        Caching is a pure optimization: the corrupt example ids are already computed in-memory and
+        used regardless. If the cache cannot be written (e.g. a parent path component is a file,
+        a read-only or full filesystem, or insufficient permissions), warn once and continue
+        without a persisted cache rather than aborting dataset construction.
 
         :param cache_url: The URL to the cache file
         :param corrupt_example_ids: A list of corrupt example ids
@@ -158,7 +163,14 @@ class TLCDatasetMixin:
             "corrupt_example_ids": corrupt_example_ids,
         }
 
-        cache_url.write_text(json.dumps(content, indent=2))
+        try:
+            cache_url.write_text(json.dumps(content, indent=2))
+        except OSError as e:
+            LOGGER.warning(
+                f"{colorstr(self.prefix + ':')} Could not write the images cache to {cache_url.to_str()} "
+                f"({e}). Skipping caching and continuing without a persisted cache. This is usually caused by "
+                "a stale file where the cache directory should be, or a read-only or full filesystem."
+            )
 
     def _get_rows_from_table(self) -> tuple[list[str], list[Any]]:
         """Get the rows from the table and return a list of example ids, excluding zero weight and corrupt images.
