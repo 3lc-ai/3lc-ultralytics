@@ -183,6 +183,17 @@ def check_tlc_dataset(  # noqa: C901
 
     first_split = next(iter(tables.keys()))
 
+    # For detection, infer the actual bounding-box column when the configured/default root column
+    # (e.g. `bbs`) is absent. The resolved path must propagate to value-map extraction below and to
+    # dataset construction downstream, so write it back into both the local variable and `settings`
+    # (which the trainer/validator read when building datasets).
+    if task == "detect":
+        from tlc_ultralytics.detect.utils import infer_detection_label_column_name
+
+        label_column_name = infer_detection_label_column_name(tables[first_split], label_column_name)
+        if settings is not None:
+            settings.label_column_name = label_column_name
+
     value_map = get_value_map_from_table(tables[first_split], label_column_name, task)
     names = tlc.helpers.SchemaHelper.to_simple_value_map(value_map)
     if task == "pose":

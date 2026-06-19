@@ -1000,6 +1000,124 @@ def test_legacy_bb_table_default_label_path() -> None:
     check_det_table(table, "image", "bbs.bb_list.label")
 
 
+def _make_detection_table_with_column(column_name: str, table_name: str) -> tlc.Table:
+    """Build a single-row 3LC detection table whose bounding-box column is ``column_name``."""
+    from tlc.data_types import BoundingBoxes2D
+
+    row = BoundingBoxes2D(
+        bounding_boxes=[[50.0, 50.0, 25.0, 25.0]],
+        bounding_box_format="cxywh",
+        image_width=100,
+        image_height=100,
+        labels=[0],
+    ).to_row()
+    return tlc.Table.from_dict(
+        {"image": [str(DUMMY_IMAGE_FILE)], column_name: [row]},
+        schema={column_name: BoundingBoxes2D.schema(classes={0: tlc.schemas.MapElement("object")})},
+        project_name="test_detection_non_default_bbox_column",
+        dataset_name="d",
+        table_name=table_name,
+        if_exists="overwrite",
+    )
+
+
+def test_detection_non_default_bbox_column_end_to_end() -> None:
+    # A detection table whose bounding-box column is NOT named "bbs" should work end-to-end:
+    # check_tlc_dataset must infer the column, propagate the resolved label path into Settings,
+    # build a value map, and the dataset must resolve labels against the actual column.
+    from tlc_ultralytics.constants import DETECTION_LABEL_COLUMN_NAME
+    from tlc_ultralytics.detect.utils import build_tlc_yolo_dataset, check_det_table, infer_detection_label_column_name
+    from tlc_ultralytics.utils.dataset import check_tlc_dataset
+
+    table = _make_detection_table_with_column("boxes", "boxes_table")
+
+    # The inferral resolves the default `bbs...` path to the actual `boxes...` path.
+    assert (
+        infer_detection_label_column_name(table, DETECTION_LABEL_COLUMN_NAME)
+        == "boxes.instances_additional_data.label"
+    )
+
+    # The checker accepts the table even though the configured/default column is "bbs".
+    check_det_table(table, "image", DETECTION_LABEL_COLUMN_NAME)
+
+    # check_tlc_dataset propagates the inferred label path into the provided Settings object so
+    # downstream dataset construction uses the right column.
+    settings = Settings(project_name="test_detection_non_default_bbox_column")
+    settings.label_column_name = DETECTION_LABEL_COLUMN_NAME
+    data = check_tlc_dataset(
+        data="ignored",
+        tables={"val": table},
+        image_column_name="image",
+        label_column_name=settings.label_column_name,
+        splits=("val",),
+        task="detect",
+        settings=settings,
+    )
+    assert settings.label_column_name == "boxes.instances_additional_data.label"
+    assert data["names"] == {0: "object"}
+
+    # Building the dataset with the propagated label path resolves labels against the "boxes" column.
+    from ultralytics.cfg import get_cfg
+    from ultralytics.utils import DEFAULT_CFG
+
+    cfg = get_cfg(DEFAULT_CFG, overrides={"task": "detect", "imgsz": 64, "rect": False})
+    dataset = build_tlc_yolo_dataset(
+        cfg,
+        table,
+        batch=1,
+        data=data,
+        mode="val",
+        class_map=data["3lc_class_to_range"],
+        image_column_name="image",
+        label_column_name=settings.label_column_name,
+    )
+    label = dataset.labels[0]
+    assert label["cls"].shape == (1, 1)
+    assert label["bboxes"].shape == (1, 4)
+
+
+def test_detection_table_without_bounding_boxes_precise_message() -> None:
+    # A table with segmentation (but no bounding-box) annotations should raise a precise message
+    # naming the annotation type present and the task to use instead, plus the columns present.
+    from tlc.data_types import SegmentationPolygons
+
+    from tlc_ultralytics.constants import DETECTION_LABEL_COLUMN_NAME
+    from tlc_ultralytics.detect.utils import check_det_table, infer_detection_label_column_name
+
+    seg_row = SegmentationPolygons(
+        image_width=100,
+        image_height=100,
+        polygons=[[5.0, 5.0, 40.0, 5.0, 40.0, 30.0, 5.0, 30.0]],
+        labels=[0],
+    ).to_row()
+    table = tlc.Table.from_dict(
+        {"image": [str(DUMMY_IMAGE_FILE)], "segmentations": [seg_row]},
+        schema={"segmentations": SegmentationPolygons.schema(classes={0: tlc.schemas.MapElement("object")})},
+        project_name="test_detection_no_bboxes",
+        dataset_name="d",
+        table_name="seg_table",
+        if_exists="overwrite",
+    )
+
+    with pytest.raises(ValueError, match="SEGMENTATION annotations in column 'segmentations'"):
+        infer_detection_label_column_name(table, DETECTION_LABEL_COLUMN_NAME)
+
+    # The same precise message surfaces through the checker, listing the columns present.
+    with pytest.raises(ValueError, match=r"Columns present:.*'segmentations'"):
+        check_det_table(table, "image", DETECTION_LABEL_COLUMN_NAME)
+
+    # A table with no annotation columns at all gets the "no annotation columns" message.
+    no_ann = tlc.Table.from_dict(
+        {"a": [1], "b": [2]},
+        project_name="test_detection_no_bboxes",
+        dataset_name="d",
+        table_name="no_ann_table",
+        if_exists="overwrite",
+    )
+    with pytest.raises(ValueError, match="no annotation columns were found"):
+        infer_detection_label_column_name(no_ann, DETECTION_LABEL_COLUMN_NAME)
+
+
 def test_sampling_weights() -> None:
     # Test that sampling weights are correctly applied, with worker processes enabled
     settings = Settings(project_name="test_sampling_weights", sampling_weights=True)
