@@ -603,9 +603,7 @@ def test_metrics_collection_only(task) -> None:
 
 
 def test_collect_with_save_json_disabled() -> None:
-    """save_json=True on a 3LC table must not raise KeyError: 'path' (the COCO/LVIS JSON
-    eval path reads on-disk annotation files that 3LC Tables don't have). It should be
-    disabled with a one-time warning and collection should run to completion."""
+    """Check that save_json=True gets disabled with a warning and collection runs to completion."""
     task = "detect"
     overrides = {"device": "cpu", "save_json": True, "imgsz": 320}
     settings = Settings(

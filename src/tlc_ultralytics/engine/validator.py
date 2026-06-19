@@ -164,9 +164,9 @@ class TLCValidatorMixin(BaseValidator):
         self.metrics.run_url = self._run.url
 
     def __call__(self, trainer=None, model=None):
-        # COCO/LVIS JSON evaluation reads on-disk annotation files that 3LC Tables don't
-        # provide, so eval_json would raise KeyError: 'path' on our data dict. Disable it
-        # before any metrics build (pred_to_json) or predictions.json dump runs below.
+        # COCO/LVIS JSON evaluation assumes on-disk annotation JSON files, which is incompatible with
+        # current 3LC Tables. Disable with warning.
+        # TODO: Consider override where evaluation is called from 3LC Table annotations
         if self.args.save_json:
             if RANK in {-1, 0}:
                 LOGGER.warning(
