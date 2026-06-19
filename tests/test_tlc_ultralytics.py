@@ -602,6 +602,29 @@ def test_metrics_collection_only(task) -> None:
     assert EPOCH not in per_class_metrics_df.columns, "Expected no epoch column"
 
 
+def test_collect_with_save_json_disabled() -> None:
+    """save_json=True on a 3LC table must not raise KeyError: 'path' (the COCO/LVIS JSON
+    eval path reads on-disk annotation files that 3LC Tables don't have). It should be
+    disabled with a one-time warning and collection should run to completion."""
+    task = "detect"
+    overrides = {"device": "cpu", "save_json": True, "imgsz": 320}
+    settings = Settings(
+        project_name="test_detect_save_json",
+        run_name="test_detect_save_json",
+    )
+
+    model = TLCYOLO(TASK2MODEL[task])
+    with capture_logs(logging.WARNING) as log_messages:
+        results_dict = model.collect(data=TASK2DATASET[task], splits=("train",), settings=settings, **overrides)
+
+    # (a) No KeyError: 'path' — collection completed for the split.
+    assert results_dict["train"], "Metrics collection failed with save_json=True"
+
+    # (b) A clear warning about save_json being unsupported was emitted.
+    save_json_warning_found = any("save_json is not supported with 3LC datasets" in msg for msg in log_messages)
+    assert save_json_warning_found, "Expected warning about save_json not being supported with 3LC datasets"
+
+
 @skip_pacmap_on_macos
 def test_embeddings_collection() -> None:
     settings = Settings(
