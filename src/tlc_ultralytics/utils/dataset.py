@@ -323,6 +323,61 @@ def get_value_map_from_table(
     return table.get_value_map(resolve_label_value_path(table, label_column_name))  # type: ignore[return-value]
 
 
+class IdentityDict(dict):
+    """A class map that returns any missing key unchanged, i.e. a no-op mapping."""
+
+    def __missing__(self, key):
+        return key
+
+
+def map_label(
+    class_map: dict[int, int],
+    label: int,
+    table: tlc.Table,
+    label_column_name: str,
+    task: Literal["detect", "segment", "pose", "classify", "obb"],
+) -> int:
+    """Map a raw 3LC class id to its contiguous training index via ``class_map``.
+
+    ``class_map`` is the ``3lc_class_to_range`` mapping built from the table's value map. When a
+    label in the row data references a class id absent from that value map, a bare lookup raises an
+    opaque ``KeyError``. Raise an actionable ``ValueError`` instead, naming the offending id, the
+    column and table it came from, and the column's value map. ``IdentityDict`` (used when no class
+    map is supplied) never misses.
+
+    :param class_map: Mapping from raw 3LC class id to contiguous training index.
+    :param label: The raw 3LC class id to map.
+    :param table: The table the label came from, used to build the error message.
+    :param label_column_name: The label column the value map belongs to.
+    :param task: The task, used to resolve the human-readable value map from the table.
+    :returns: The mapped training index.
+    :raises ValueError: If ``label`` is not present in ``class_map``.
+    """
+    label = int(label)
+    if isinstance(class_map, IdentityDict) or label in class_map:
+        return class_map[label]
+
+    # Cold path: the id is unknown. Resolve the human-readable value map for the error message,
+    # falling back to the bare known ids if the table cannot produce one - the diagnostic must
+    # never mask the underlying error.
+    column = label_column_name.split(".")[0]
+    try:
+        value_map = tlc.helpers.SchemaHelper.to_simple_value_map(
+            get_value_map_from_table(table, label_column_name, task)
+        )
+        detail = f"The value map for this column is {value_map}."
+    except Exception:
+        detail = f"The known class ids for this column are {sorted(class_map)}."
+
+    raise ValueError(
+        f"Got an instance with class id {label} in column '{column}' of table '{table.url}', which is not "
+        f"present in the column's value map. {detail} This usually means the table's annotations contain a "
+        f"class id that was deleted from (or never added to) the label column's value map. Reconcile the data "
+        f"by adding the missing class id to the table's value map, or by editing the offending annotations to "
+        f"use an existing class id."
+    )
+
+
 def parse_3lc_yaml_file(data_file: str) -> dict[str, tlc.Table]:
     """Parse a 3LC YAML file and return the corresponding tables.
 

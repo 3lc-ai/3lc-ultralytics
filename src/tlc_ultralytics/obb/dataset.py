@@ -7,7 +7,8 @@ import numpy as np
 from tlc.data_types import OrientedBoundingBoxes2D
 
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, OBB_LABEL_COLUMN_NAME
-from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset, map_label
+from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
+from tlc_ultralytics.utils.dataset import map_label
 
 
 def xcyxwhr_to_corner_points(xc, yc, w, h, r):
@@ -101,7 +102,7 @@ class TLCOBBDataset(BaseTLCYOLODataset):
 
         # Unlabeled rows come back with `labels=None`
         labels = instances.labels if instances.labels is not None else np.zeros(0, dtype=np.float32)
-        mapped = [map_label(self._class_map, v, self.table.url) for v in labels.tolist()]
+        mapped = [map_label(self._class_map, v, self.table, self._label_column_name, "obb") for v in labels.tolist()]
         cls_arr = np.asarray(mapped, dtype=np.float32).reshape(-1, 1)
 
         boxes = []
