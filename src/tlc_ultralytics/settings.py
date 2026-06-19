@@ -264,6 +264,12 @@ class Settings:
             self._check_reducer_available(
                 self.instance_embeddings_reducer, ("pacmap", "umap", "pca"), "instance_embeddings_reducer"
             )
+            LOGGER.warning(
+                f"{TLC_COLORSTR}On large datasets or datasets with with many detections per image, instance embeddings "
+                "collection can use a lot of memory (tens of GB at full-COCO scale). To reduce it, collect on a "
+                "smaller split, lower max_det, or raise conf_thres. A memory-bounded path is planned, but not yet "
+                "available."
+            )
 
         if self.ground_truth_instance_embeddings:
             assert self.instance_embeddings_dim > 0, (

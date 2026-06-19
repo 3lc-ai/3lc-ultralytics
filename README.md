@@ -270,6 +270,8 @@ Choose the reduction algorithm with `instance_embeddings_reducer` (`pacmap`, `um
 
 > **Experimental:** instance embeddings are currently reduced in-process by the integration. This will move to a native 3LC interface in the future, at which point some of these settings may change.
 
+> **Memory:** Instance embeddings holds the full feature vector for each instance — so on large datasets or with many detections it can use a lot of memory (tens of GB at full-COCO scale). To reduce it, collect on a smaller split, lower `max_det`, or raise `conf_thres`. A memory-bounded reduction path is planned.
+
 ### Run Properties
 
 Use `project_name`, `run_name` and `run_description` to customize the `tlc.Run` that is created. Any tables created by the integration will be under the `project_name` provided here. If these settings are not set, appropriate defaults are used instead.

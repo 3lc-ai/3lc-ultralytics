@@ -100,8 +100,8 @@ class TLCValidatorMixin(BaseValidator):
         # TEMP(instance-embeddings): the cls-head hook stashes its captured feature
         # map here every forward pass; raw embeddings are extracted from it during
         # _update_metrics and discarded once written. The two `_raw_*_emb` lists
-        # hold the per-image raw vectors (small — ~hundreds of MB at COCO-train
-        # scale) that the reducer fits on at the end of validation.
+        # accumulate every instance's raw vector for the whole validation pass so
+        # the reducer can fit on them at the end.
         self._instance_feature_map = None
         self._raw_pred_emb: list[np.ndarray] = []
         self._raw_gt_emb: list[np.ndarray] = []
@@ -518,9 +518,12 @@ class TLCValidatorMixin(BaseValidator):
 
         When instance_embeddings_dim > 0, raw per-instance embeddings are
         written inline as ``predicted_instance_embedding_raw`` / ``..._raw_gt``
-        and held in a small in-RAM list for fitting the reducer at end-of-pass.
-        Heavy fields like segmentation masks RLE-encode at handoff via
-        ``MetricsTableWriter.add_batch``, so peak memory stays bounded.
+        and also accumulated in an in-RAM list for fitting the reducer at
+        end-of-pass. That list is unbounded: it grows with the total number of
+        predicted instances and can reach tens of GB at full-COCO scale (a
+        memory-bounded path is planned). The streaming write of heavy fields
+        like RLE masks via ``MetricsTableWriter.add_batch`` is bounded; the raw
+        embedding accumulation is not.
         """
         batch_size = self._infer_batch_size(preds, batch)
 
