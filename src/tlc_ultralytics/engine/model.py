@@ -121,9 +121,6 @@ class YOLO(YOLOBase):
 
         from tlc_ultralytics.constants import TLC_COLORSTR
 
-        # Validate that tables, when provided, is a mapping of {split_name: table}.
-        # A bare string (e.g. a path) is a common mistake and otherwise fails later
-        # with an opaque "string indices must be integers" TypeError.
         if tables is not None and not isinstance(tables, Mapping):
             raise TypeError(
                 f"tables must be a mapping of {{split_name: table}}, got {type(tables).__name__} ({tables!r}). "
