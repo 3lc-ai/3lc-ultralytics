@@ -18,6 +18,32 @@ class IdentityDict(dict):
         return key
 
 
+def map_label(class_map: dict, label: int, table_url: Any) -> int:
+    """Map a raw 3LC class id to its contiguous training index via ``class_map``.
+
+    ``class_map`` is the ``3lc_class_to_range`` mapping built from the table's value map. When a
+    label in the row data references a class id that is absent from that value map, a bare lookup
+    raises an opaque ``KeyError``. Raise an actionable ``ValueError`` instead that names the
+    offending id and the table. ``IdentityDict`` (used when no class map is supplied) never misses.
+
+    :param class_map: Mapping from raw 3LC class id to contiguous training index.
+    :param label: The raw 3LC class id to map.
+    :param table_url: The table the label came from, for the error message.
+    :returns: The mapped training index.
+    :raises ValueError: If ``label`` is not present in ``class_map``.
+    """
+    label = int(label)
+    if isinstance(class_map, IdentityDict) or label in class_map:
+        return class_map[label]
+    raise ValueError(
+        f"Label references class id {label}, which is not present in the value map of table "
+        f"'{table_url}'. Known class ids are {sorted(class_map)}. This usually means the table's "
+        f"annotations contain a class id that was deleted from (or never added to) the label "
+        f"column's value map. Reconcile the data by adding the missing class id to the table's "
+        f"value map, or by editing the offending annotations to use an existing class id."
+    )
+
+
 class TLCYOLODataset:
     """Factory class for creating task-specific 3LC YOLO datasets."""
 
@@ -234,7 +260,9 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
 
         valid_boxes = cxywh[valid]
         valid_labels = bb2d.labels[valid]
-        classes = np.array([self._class_map[int(lbl)] for lbl in valid_labels], dtype=np.float32).reshape(-1, 1)
+        classes = np.array(
+            [map_label(self._class_map, lbl, self.table.url) for lbl in valid_labels], dtype=np.float32
+        ).reshape(-1, 1)
 
         return {
             "im_file": im_file,
@@ -324,7 +352,7 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
                 LOGGER.warning(f"Polygon {i} in row {example_id} has fewer than 3 points and will be ignored.")
                 continue
 
-            classes.append(self._class_map[category])
+            classes.append(map_label(self._class_map, category, self.table.url))
             row_segments = np.array(polygon, dtype=np.float32).reshape(-1, 2)
             segments.append(row_segments)
 

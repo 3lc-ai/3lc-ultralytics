@@ -6,7 +6,7 @@ import numpy as np
 import tlc
 
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME
-from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset
+from tlc_ultralytics.detect.dataset import BaseTLCYOLODataset, map_label
 
 
 class TLCYOLOPoseDataset(BaseTLCYOLODataset):
@@ -75,7 +75,7 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
             bboxes_arr = np.zeros((0, 4), dtype=np.float32)
             kp_stack = np.zeros((0, K_cfg, 3), dtype=np.float32)
         else:
-            mapped_list = [self._class_map.get(int(v), int(v)) for v in labels.tolist()]
+            mapped_list = [map_label(self._class_map, v, self.table.url) for v in labels.tolist()]
             cls_arr = np.asarray(mapped_list, dtype=np.float32).reshape(-1, 1)
 
             # Build (N,K,3) with visibilities (empty default → assume all visible).
