@@ -962,9 +962,8 @@ def test_unlabeled_row_with_missing_dimensions(task: str) -> None:
 @pytest.mark.parametrize("task", ["detect", "segment", "obb", "pose"])
 def test_label_not_in_value_map_raises(task: str) -> None:
     """A row whose annotation references a class id absent from the label column's value map must
-    fail with an actionable ``ValueError`` instead of a bare ``KeyError``. The value map declares
-    only class id 0, but the row carries label 1. Regression test for cluster A
-    (ADO 17060/17559/17241/17245).
+    fail with an actionable `ValueError` instead of a bare `KeyError`. The value map declares
+    only class id 0, but the row carries label 1.
     """
     from tlc.constants import IMAGE_HEIGHT, IMAGE_WIDTH, X_MAX, Y_MAX  # noqa: F401
     from tlc.data_types import BoundingBoxes2D, Keypoints2D, OrientedBoundingBoxes2D, SegmentationPolygons
@@ -1023,7 +1022,7 @@ def test_label_not_in_value_map_raises(task: str) -> None:
 def test_class_map_is_applied(task: str) -> None:
     """The dataset must translate raw 3LC class ids to their contiguous training indices via the
     class map, for every instance task. A non-contiguous id (5) is mapped to training index 1, so
-    the emitted ``cls`` must be 1 (mapped), never 5 (raw). Regression test for cluster A — in
+    the emitted `cls` must be 1 (mapped), never 5 (raw). Regression test for cluster A — in
     particular OBB previously ignored the class map entirely (emitting the raw id), and pose
     silently passed unknown ids through.
     """
