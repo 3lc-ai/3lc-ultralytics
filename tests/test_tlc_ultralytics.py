@@ -1140,7 +1140,7 @@ def test_train_no_weight_column_in_table(task) -> None:
 def test_collect_with_string_tables_raises() -> None:
     # Passing a string for `tables` (instead of a {split: table} mapping) should fail fast
     model = TLCYOLO(TASK2MODEL["detect"])
-    with pytest.raises(TypeError, match=r"tables must be a mapping of \{split_name: table\}"):
+    with pytest.raises(TypeError, match=r"Tables must be a mapping of \{split_name: table\}"):
         model.collect(tables="some/path")
 
 
