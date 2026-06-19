@@ -23,7 +23,7 @@ from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import check_requirements, reduce_embeddings
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
 
 
 class YOLO(YOLOBase):
@@ -117,7 +117,18 @@ class YOLO(YOLOBase):
         :param kwargs: Additional keyword arguments are forwarded as model.val(**kwargs).
         :return: Dictionary of split names to results returned by model.val().
         """
+        from collections.abc import Mapping
+
         from tlc_ultralytics.constants import TLC_COLORSTR
+
+        # Validate that tables, when provided, is a mapping of {split_name: table}.
+        # A bare string (e.g. a path) is a common mistake and otherwise fails later
+        # with an opaque "string indices must be integers" TypeError.
+        if tables is not None and not isinstance(tables, Mapping):
+            raise TypeError(
+                f"tables must be a mapping of {{split_name: table}}, got {type(tables).__name__} ({tables!r}). "
+                "Did you mean to pass data=... and splits=...?"
+            )
 
         # Verify only data+splits or tables are provided
         if not ((data and splits) or tables):
