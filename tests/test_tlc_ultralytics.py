@@ -571,13 +571,23 @@ def test_classify_training() -> None:
 
 @pytest.mark.parametrize("task", ["detect", "segment"])
 def test_metrics_collection_only(task) -> None:
-    overrides = {"device": "cpu"}
+    # save_json=True would normally route detect/segment validation through COCO/LVIS JSON
+    # evaluation, which reads on-disk annotation files that 3LC Tables don't have (previously
+    # crashed with KeyError: 'path'). It must instead be disabled with a warning, and collection
+    # must run to completion.
+    overrides = {"device": "cpu", "save_json": True}
     settings = Settings(project_name=f"test_{task}_collect", run_name=f"test_{task}_collect", collect_loss=True)
     splits = ("train", "val")
 
     model = TLCYOLO(TASK2MODEL[task])
-    results_dict = model.collect(data=TASK2DATASET[task], splits=splits, settings=settings, **overrides)
+    with capture_logs(logging.WARNING) as log_messages:
+        results_dict = model.collect(data=TASK2DATASET[task], splits=splits, settings=settings, **overrides)
     assert all(results_dict[split] for split in splits), "Metrics collection failed"
+
+    # save_json was unsupported, so a clear warning was emitted and it was disabled for the run.
+    assert any("save_json is not supported with 3LC datasets" in msg for msg in log_messages), (
+        "Expected warning about save_json not being supported with 3LC datasets"
+    )
 
     run_urls = [results_dict[split].run_url for split in splits]
     assert run_urls[0] == run_urls[1], "Expected same run URL for both splits"
@@ -600,27 +610,6 @@ def test_metrics_collection_only(task) -> None:
     )
     assert TRAINING_PHASE not in per_class_metrics_df.columns, "Expected no training phase column"
     assert EPOCH not in per_class_metrics_df.columns, "Expected no epoch column"
-
-
-def test_collect_with_save_json_disabled() -> None:
-    """Check that save_json=True gets disabled with a warning and collection runs to completion."""
-    task = "detect"
-    overrides = {"device": "cpu", "save_json": True, "imgsz": 320}
-    settings = Settings(
-        project_name="test_detect_save_json",
-        run_name="test_detect_save_json",
-    )
-
-    model = TLCYOLO(TASK2MODEL[task])
-    with capture_logs(logging.WARNING) as log_messages:
-        results_dict = model.collect(data=TASK2DATASET[task], splits=("train",), settings=settings, **overrides)
-
-    # (a) No KeyError: 'path' — collection completed for the split.
-    assert results_dict["train"], "Metrics collection failed with save_json=True"
-
-    # (b) A clear warning about save_json being unsupported was emitted.
-    save_json_warning_found = any("save_json is not supported with 3LC datasets" in msg for msg in log_messages)
-    assert save_json_warning_found, "Expected warning about save_json not being supported with 3LC datasets"
 
 
 @skip_pacmap_on_macos

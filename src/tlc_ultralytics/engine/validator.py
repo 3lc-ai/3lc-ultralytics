@@ -170,8 +170,8 @@ class TLCValidatorMixin(BaseValidator):
         if self.args.save_json:
             if RANK in {-1, 0}:
                 LOGGER.warning(
-                    f"{TLC_COLORSTR}save_json is not supported with 3LC datasets — COCO/LVIS JSON evaluation reads "
-                    "on-disk annotation files that 3LC Tables don't have. Disabling it for this run; metrics are "
+                    f"{TLC_COLORSTR}save_json is not supported with 3LC datasets. COCO/LVIS JSON evaluation reads "
+                    "on-disk annotation files that 3LC Tables don't have. Disabling it for this run, metrics are "
                     "collected into your 3LC Run instead."
                 )
             self.args.save_json = False
