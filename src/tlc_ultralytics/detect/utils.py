@@ -52,18 +52,18 @@ def build_tlc_yolo_dataset(
 def infer_detection_label_column_name(table: tlc.Table, label_column_name: str) -> str:
     """Resolve the bounding-box label column path for a detection table.
 
-    If the root column of ``label_column_name`` (e.g. ``"bbs"``) exists in the table, the path is
-    returned unchanged. Otherwise the bounding-box column is inferred via ``AnnotationHelper.find``,
+    If the root column of `label_column_name` (e.g. `"bbs"`) exists in the table, the path is
+    returned unchanged. Otherwise the bounding-box column is inferred via `AnnotationHelper.find`,
     and the inferred column's label path is returned instead. This lets detection tables whose
-    bounding-box column is not named ``"bbs"`` work without the user specifying ``label_column_name``.
+    bounding-box column is not named `"bbs"` work without the user specifying `label_column_name`.
 
     :param table: The table to resolve the label path against.
     :param label_column_name: The configured (possibly default) full label value path.
     :returns: A label value path whose root column exists in the table.
     :raises ValueError: If the root column is absent and no bounding-box column can be inferred (the
         message names the annotation type the table does have, and the columns present), or if
-        ``AnnotationHelper.find`` matches more than one bounding-box column (it raises its own
-        ``ValueError`` listing the candidates).
+        `AnnotationHelper.find` matches more than one bounding-box column (it raises its own
+        `ValueError` listing the candidates).
     """
     row_schema = table.rows_schema.values
 
@@ -100,8 +100,8 @@ def check_det_table(
     """Check that a table is compatible with the detection task in the 3LC YOLO integration.
 
     Supports both legacy (BoundingBoxListSchema) and new (BoundingBoxes2D) formats. When the root
-    column of ``label_column_name`` is absent, the bounding-box column is inferred via
-    ``infer_detection_label_column_name`` so differently-named bounding-box tables are accepted.
+    column of `label_column_name` is absent, the bounding-box column is inferred via
+    `infer_detection_label_column_name` so differently-named bounding-box tables are accepted.
 
     :param table: The table to check.
     :param image_column_name: The name of the column containing image paths.
