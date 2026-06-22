@@ -1588,23 +1588,25 @@ def test_cache_write_failure_degrades_gracefully() -> None:
     # A failing cache write (e.g. a stale file where the cache directory should be, a read-only or
     # full filesystem) must not abort dataset construction - caching is a pure optimization, so the
     # run should continue with a warning and the in-memory corrupt example ids unaffected.
-    from tlc.schemas._annotations._bounding_box_list_schema import _BoundingBoxListSchema
+    from tlc.data_types import BoundingBoxes2D
 
-    classes = {0: tlc.schemas.MapElement("cat"), 1: tlc.schemas.MapElement("dog")}
+    classes = {0: "cat", 1: "dog"}
     writer = tlc.TableWriter(
         table_name="initial",
         dataset_name="test",
         project_name="test_cache_write_failure",
-        schema={"image": tlc.schemas.ImageSchema(), "bbs": _BoundingBoxListSchema(classes=classes)},
+        schema={"image": tlc.schemas.ImageSchema(), "bbs": BoundingBoxes2D.schema(classes=classes)},
     )
     writer.add_row(
         {
             "image": str(DUMMY_IMAGE_FILE),
-            "bbs": {
-                "image_width": 100,
-                "image_height": 100,
-                "bb_list": [{"x0": 10.0, "y0": 10.0, "x1": 50.0, "y1": 50.0, "label": 1, "segmentation": []}],
-            },
+            "bbs": BoundingBoxes2D(
+                bounding_boxes=[[10.0, 10.0, 50.0, 50.0]],
+                bounding_box_format="xyxy",
+                image_width=100,
+                image_height=100,
+                labels=[1],
+            ).to_row(),
         }
     )
     table = writer.finalize()
