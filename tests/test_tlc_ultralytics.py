@@ -1585,9 +1585,7 @@ def test_absolutize_image_url() -> None:
 
 
 def test_cache_write_failure_degrades_gracefully() -> None:
-    # A failing cache write (e.g. a stale file where the cache directory should be, a read-only or
-    # full filesystem) must not abort dataset construction - caching is a pure optimization, so the
-    # run should continue with a warning and the in-memory corrupt example ids unaffected.
+    # A failing cache write should not stop the dataset from being constructed
     from tlc.data_types import BoundingBoxes2D
 
     classes = {0: "cat", 1: "dog"}
