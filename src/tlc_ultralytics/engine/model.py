@@ -123,8 +123,7 @@ class YOLO(YOLOBase):
 
         if tables is not None and not isinstance(tables, Mapping):
             raise TypeError(
-                f"Tables must be a mapping of {{split_name: table}}, got {type(tables).__name__} ({tables!r}). "
-                "Did you mean to pass data=... and splits=...?"
+                f"Tables must be a mapping of {{split_name: table}}, got {type(tables).__name__} ({tables!r})."
             )
 
         # Verify only data+splits or tables are provided
