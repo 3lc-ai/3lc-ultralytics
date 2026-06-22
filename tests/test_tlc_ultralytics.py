@@ -571,13 +571,23 @@ def test_classify_training() -> None:
 
 @pytest.mark.parametrize("task", ["detect", "segment"])
 def test_metrics_collection_only(task) -> None:
-    overrides = {"device": "cpu"}
+    # save_json=True would normally route detect/segment validation through COCO/LVIS JSON
+    # evaluation, which reads on-disk annotation files that 3LC Tables don't have (previously
+    # crashed with KeyError: 'path'). It must instead be disabled with a warning, and collection
+    # must run to completion.
+    overrides = {"device": "cpu", "save_json": True}
     settings = Settings(project_name=f"test_{task}_collect", run_name=f"test_{task}_collect", collect_loss=True)
     splits = ("train", "val")
 
     model = TLCYOLO(TASK2MODEL[task])
-    results_dict = model.collect(data=TASK2DATASET[task], splits=splits, settings=settings, **overrides)
+    with capture_logs(logging.WARNING) as log_messages:
+        results_dict = model.collect(data=TASK2DATASET[task], splits=splits, settings=settings, **overrides)
     assert all(results_dict[split] for split in splits), "Metrics collection failed"
+
+    # save_json was unsupported, so a clear warning was emitted and it was disabled for the run.
+    assert any("save_json is not supported with 3LC datasets" in msg for msg in log_messages), (
+        "Expected warning about save_json not being supported with 3LC datasets"
+    )
 
     run_urls = [results_dict[split].run_url for split in splits]
     assert run_urls[0] == run_urls[1], "Expected same run URL for both splits"

@@ -164,6 +164,18 @@ class TLCValidatorMixin(BaseValidator):
         self.metrics.run_url = self._run.url
 
     def __call__(self, trainer=None, model=None):
+        # COCO/LVIS JSON evaluation assumes on-disk annotation JSON files, which is incompatible with
+        # current 3LC Tables. Disable with warning.
+        # TODO: Consider override where evaluation is called from 3LC Table annotations
+        if self.args.save_json:
+            if RANK in {-1, 0}:
+                LOGGER.warning(
+                    f"{TLC_COLORSTR}save_json is not supported with 3LC datasets. COCO/LVIS JSON evaluation reads "
+                    "on-disk annotation files that 3LC Tables don't have. Disabling it for this run, metrics are "
+                    "collected into your 3LC Run instead."
+                )
+            self.args.save_json = False
+
         self._epoch = trainer.epoch if trainer is not None else self._epoch
 
         if trainer:
