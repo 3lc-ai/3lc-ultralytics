@@ -1584,6 +1584,55 @@ def test_absolutize_image_url() -> None:
     assert tlc.Url(result).scheme == tlc.url.Scheme.FILE
 
 
+def test_cache_write_failure_degrades_gracefully() -> None:
+    # A failing cache write should not stop the dataset from being constructed
+    from tlc.data_types import BoundingBoxes2D
+
+    classes = {0: "cat", 1: "dog"}
+    writer = tlc.TableWriter(
+        table_name="initial",
+        dataset_name="test",
+        project_name="test_cache_write_failure",
+        schema={"image": tlc.schemas.ImageSchema(), "bbs": BoundingBoxes2D.schema(classes=classes)},
+    )
+    writer.add_row(
+        {
+            "image": str(DUMMY_IMAGE_FILE),
+            "bbs": BoundingBoxes2D(
+                bounding_boxes=[[10.0, 10.0, 50.0, 50.0]],
+                bounding_box_format="xyxy",
+                image_width=100,
+                image_height=100,
+                labels=[1],
+            ).to_row(),
+        }
+    )
+    table = writer.finalize()
+
+    # Simulate the FileExistsError raised when a parent path component is a file.
+    def raise_file_exists(self, *args, **kwargs):
+        raise FileExistsError(17, "File exists")
+
+    # The ultralytics LOGGER does not propagate to the root logger, so capture its warnings directly.
+    warnings: list[str] = []
+
+    from tlc_ultralytics.engine import dataset as dataset_module
+
+    with patch.object(tlc.Url, "write_text", raise_file_exists):
+        with patch.object(dataset_module.LOGGER, "warning", side_effect=lambda msg, *a, **k: warnings.append(msg)):
+            dataset = TLCYOLODataset(
+                table,
+                task="detect",
+                data={"channels": 3},
+                image_column_name="image",
+                label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
+            )
+
+    # Construction succeeds despite the cache-write failure, and the in-memory flow is unaffected.
+    assert len(dataset.labels) == 1
+    assert any("Could not write the images cache" in msg for msg in warnings)
+
+
 def test_extra_metrics() -> None:
     """Test providing extra metrics callback and schemas work as expected"""
 
