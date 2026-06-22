@@ -77,7 +77,8 @@ class TLCYOLOPoseDataset(BaseTLCYOLODataset):
             kp_stack = np.zeros((0, K_cfg, 3), dtype=np.float32)
         else:
             mapped_list = [
-                map_label(self._class_map, v, self.table, self._label_column_name, "pose") for v in labels.tolist()
+                map_label(self._class_map, v, self.table, self._label_column_name, "pose", example_id)
+                for v in labels.tolist()
             ]
             cls_arr = np.asarray(mapped_list, dtype=np.float32).reshape(-1, 1)
 

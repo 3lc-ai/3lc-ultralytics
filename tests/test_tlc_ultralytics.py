@@ -1011,10 +1011,11 @@ def test_label_not_in_value_map_raises(task: str) -> None:
     with pytest.raises(ValueError, match=r"class id 1.*not present in the column's value map") as excinfo:
         _build_task_dataset(task, config, [bad_row], "label_not_in_value_map", class_map=class_map)
 
-    # The error names the offending id, the column it came from, and the human-readable value map
-    # (id -> name), not the raw class map.
+    # The error names the offending id, the row and column it came from, and the human-readable
+    # value map (id -> name), not the raw class map.
     message = str(excinfo.value)
     assert f"column '{config['column']}'" in message
+    assert "Row 0" in message  # the example id of the offending row
     assert next(iter(config["names"].values())) in message  # the class name, e.g. "object" / "person"
 
 

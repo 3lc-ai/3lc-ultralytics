@@ -104,7 +104,7 @@ class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
         label = row[self._label_column_name]
 
         if self._class_map:
-            label = map_label(self._class_map, label, self.table, self._label_column_name, "classify")
+            label = map_label(self._class_map, label, self.table, self._label_column_name, "classify", example_id)
 
         self._example_ids.append(example_id)
 

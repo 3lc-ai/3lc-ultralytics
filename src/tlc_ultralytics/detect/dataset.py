@@ -231,7 +231,10 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
         valid_boxes = cxywh[valid]
         valid_labels = bb2d.labels[valid]
         classes = np.array(
-            [map_label(self._class_map, lbl, self.table, self._label_column_name, "detect") for lbl in valid_labels],
+            [
+                map_label(self._class_map, lbl, self.table, self._label_column_name, "detect", example_id)
+                for lbl in valid_labels
+            ],
             dtype=np.float32,
         ).reshape(-1, 1)
 
@@ -323,7 +326,9 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
                 LOGGER.warning(f"Polygon {i} in row {example_id} has fewer than 3 points and will be ignored.")
                 continue
 
-            classes.append(map_label(self._class_map, category, self.table, self._label_column_name, "segment"))
+            classes.append(
+                map_label(self._class_map, category, self.table, self._label_column_name, "segment", example_id)
+            )
             row_segments = np.array(polygon, dtype=np.float32).reshape(-1, 2)
             segments.append(row_segments)
 

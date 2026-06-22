@@ -102,7 +102,10 @@ class TLCOBBDataset(BaseTLCYOLODataset):
 
         # Unlabeled rows come back with `labels=None`
         labels = instances.labels if instances.labels is not None else np.zeros(0, dtype=np.float32)
-        mapped = [map_label(self._class_map, v, self.table, self._label_column_name, "obb") for v in labels.tolist()]
+        mapped = [
+            map_label(self._class_map, v, self.table, self._label_column_name, "obb", example_id)
+            for v in labels.tolist()
+        ]
         cls_arr = np.asarray(mapped, dtype=np.float32).reshape(-1, 1)
 
         boxes = []

@@ -806,9 +806,7 @@ class TLCValidatorMixin(BaseValidator):
         world_size = dist.get_world_size()  # type: ignore[possibly-missing-attribute]
         # gather_object fills this in place on RANK 0 with each rank's
         # (raw_pred, raw_gt) payload; annotate so the post-gather element type is known.
-        gathered: list[tuple[list[np.ndarray], list[np.ndarray]]] | None = (
-            [None] * world_size if RANK == 0 else None
-        )
+        gathered: list[tuple[list[np.ndarray], list[np.ndarray]]] | None = [None] * world_size if RANK == 0 else None
         dist.gather_object((self._raw_pred_emb, self._raw_gt_emb), gathered, dst=0)  # type: ignore[possibly-missing-attribute]
 
         per_rank_reduced = None

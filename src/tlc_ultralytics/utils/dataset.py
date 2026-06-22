@@ -330,26 +330,58 @@ class IdentityDict(dict):
         return key
 
 
+# Cap how many classes we list in an error message so it stays readable for large datasets
+# (COCO has 80 classes; some tables have thousands).
+_MAX_LISTED_CLASSES = 10
+
+
+def _describe_known_classes(value_map: dict[int, str] | None, class_map: dict[int, int]) -> str:
+    """Describe the classes a column knows about for an error message, truncating large listings.
+
+    Prefers the human-readable value map (``id -> name``); falls back to the bare known class ids
+    when no value map can be resolved. The listing is capped at ``_MAX_LISTED_CLASSES`` so the
+    message stays readable for large datasets.
+
+    :param value_map: The column's value map (id -> name), or ``None`` if it could not be resolved.
+    :param class_map: The class map, used as a fallback source of known ids.
+    :returns: A short, possibly truncated description of the known classes.
+    """
+    if value_map:
+        items = sorted(value_map.items())
+        listing = ", ".join(f"{i}: {name!r}" for i, name in items[:_MAX_LISTED_CLASSES])
+        if len(items) > _MAX_LISTED_CLASSES:
+            listing += f", ... (+{len(items) - _MAX_LISTED_CLASSES} more)"
+        return f"Valid classes for this column (id: name): {{{listing}}}."
+
+    ids = sorted(class_map)
+    listing = ", ".join(str(i) for i in ids[:_MAX_LISTED_CLASSES])
+    if len(ids) > _MAX_LISTED_CLASSES:
+        listing += f", ... (+{len(ids) - _MAX_LISTED_CLASSES} more)"
+    return f"Valid class ids for this column: [{listing}]."
+
+
 def map_label(
     class_map: dict[int, int],
     label: int,
     table: tlc.Table,
     label_column_name: str,
     task: Literal["detect", "segment", "pose", "classify", "obb"],
+    example_id: int,
 ) -> int:
     """Map a raw 3LC class id to its contiguous training index via ``class_map``.
 
     ``class_map`` is the ``3lc_class_to_range`` mapping built from the table's value map. When a
     label in the row data references a class id absent from that value map, a bare lookup raises an
     opaque ``KeyError``. Raise an actionable ``ValueError`` instead, naming the offending id, the
-    column and table it came from, and the column's value map. ``IdentityDict`` (used when no class
-    map is supplied) never misses.
+    row, column and table it came from, and the column's known classes. ``IdentityDict`` (used when
+    no class map is supplied) never misses.
 
     :param class_map: Mapping from raw 3LC class id to contiguous training index.
     :param label: The raw 3LC class id to map.
     :param table: The table the label came from, used to build the error message.
     :param label_column_name: The label column the value map belongs to.
     :param task: The task, used to resolve the human-readable value map from the table.
+    :param example_id: The example id of the row the label came from, used to locate it in the error.
     :returns: The mapped training index.
     :raises ValueError: If ``label`` is not present in ``class_map``.
     """
@@ -365,16 +397,16 @@ def map_label(
         value_map = tlc.helpers.SchemaHelper.to_simple_value_map(
             get_value_map_from_table(table, label_column_name, task)
         )
-        detail = f"The value map for this column is {value_map}."
     except Exception:
-        detail = f"The known class ids for this column are {sorted(class_map)}."
+        value_map = None
 
     raise ValueError(
-        f"Got an instance with class id {label} in column '{column}' of table '{table.url}', which is not "
-        f"present in the column's value map. {detail} This usually means the table's annotations contain a "
-        f"class id that was deleted from (or never added to) the label column's value map. Reconcile the data "
-        f"by adding the missing class id to the table's value map, or by editing the offending annotations to "
-        f"use an existing class id."
+        f"Row {example_id} in column '{column}' of table '{table.url}' has an instance with class id "
+        f"{label}, which is not present in the column's value map. "
+        f"{_describe_known_classes(value_map, class_map)} "
+        f"This usually means the table's annotations contain a class id that was deleted from (or never "
+        f"added to) the label column's value map. Reconcile the data by adding the missing class id to the "
+        f"table's value map, or by editing the offending annotation(s) to use an existing class id."
     )
 
 
