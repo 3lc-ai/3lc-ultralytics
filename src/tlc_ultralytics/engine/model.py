@@ -93,7 +93,7 @@ class YOLO(YOLOBase):
             },
         }
 
-    def collect(
+    def collect( # noqa: C901
         self,
         data: str | None = None,
         splits: Iterable[str] | None = None,
@@ -117,7 +117,14 @@ class YOLO(YOLOBase):
         :param kwargs: Additional keyword arguments are forwarded as model.val(**kwargs).
         :return: Dictionary of split names to results returned by model.val().
         """
+        from collections.abc import Mapping
+
         from tlc_ultralytics.constants import TLC_COLORSTR
+
+        if tables is not None and not isinstance(tables, Mapping):
+            raise TypeError(
+                f"Tables must be a mapping of {{split_name: table}}, got {type(tables).__name__} ({tables!r})."
+            )
 
         # Verify only data+splits or tables are provided
         if not ((data and splits) or tables):
