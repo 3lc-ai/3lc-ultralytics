@@ -845,7 +845,7 @@ def _instance_task_config(task: str, width: int, height: int) -> dict:
     }
 
 
-def _build_task_dataset(task: str, config: dict, rows: list[dict], table_name: str):
+def _build_task_dataset(task: str, config: dict, rows: list[dict], table_name: str, class_map: dict | None = None):
     """Build a 3LC YOLO dataset for ``task`` from a single-column table of ``rows``."""
     from ultralytics.cfg import get_cfg
     from ultralytics.utils import DEFAULT_CFG
@@ -869,6 +869,7 @@ def _build_task_dataset(task: str, config: dict, rows: list[dict], table_name: s
         batch=1,
         data={"channels": 3, "names": config["names"], "nc": 1, **config["data_extra"]},
         mode="val",
+        class_map=class_map,
         image_column_name="image",
         label_column_name=config["label_path"],
     )
@@ -966,6 +967,122 @@ def test_unlabeled_row_with_missing_dimensions(task: str) -> None:
     assert empty_label["cls"].shape == (0, 1)
     assert empty_label["bboxes"].shape == (0, 4)
     assert empty_label["shape"] == (height, width)
+
+
+@pytest.mark.parametrize("task", ["detect", "segment", "obb", "pose"])
+def test_label_not_in_value_map_raises(task: str) -> None:
+    """A row whose annotation references a class id absent from the label column's value map must
+    fail with an actionable `ValueError` instead of a bare `KeyError`. The value map declares
+    only class id 0, but the row carries label 1.
+    """
+    from tlc.constants import IMAGE_HEIGHT, IMAGE_WIDTH, X_MAX, Y_MAX  # noqa: F401
+    from tlc.data_types import BoundingBoxes2D, Keypoints2D, OrientedBoundingBoxes2D, SegmentationPolygons
+    from tlc.helpers import ImageHelper
+
+    height, width = ImageHelper.get_exif_image_dimensions(str(DUMMY_IMAGE_FILE))
+    config = _instance_task_config(task, width, height)
+
+    # An otherwise-valid row, but with a class id (1) that is not in the value map ({0: ...}).
+    if task == "detect":
+        bad_row = BoundingBoxes2D(
+            bounding_boxes=[[width / 2, height / 2, width / 4, height / 4]],
+            bounding_box_format="cxywh",
+            image_width=width,
+            image_height=height,
+            labels=[1],
+        ).to_row()
+    elif task == "segment":
+        bad_row = SegmentationPolygons(
+            image_width=width,
+            image_height=height,
+            polygons=[[5.0, 5.0, 40.0, 5.0, 40.0, 30.0, 5.0, 30.0]],
+            labels=[1],
+        ).to_row()
+    elif task == "obb":
+        bad_row = OrientedBoundingBoxes2D(
+            image_width=width,
+            image_height=height,
+            obbs=[[width / 2, height / 2, width / 4, height / 4, 0.0]],
+            labels=[1],
+        ).to_row()
+    else:  # pose
+        bad_row = Keypoints2D(
+            image_width=width,
+            image_height=height,
+            keypoints=[[[10, 10], [20, 20]]],
+            keypoint_visibilities=[[2, 2]],
+            bounding_boxes=[[5, 5, 25, 25]],
+            labels=[1],
+        ).to_row()
+
+    # The value map declares only class id 0, so the class map maps 0 -> 0.
+    class_map = {0: 0}
+
+    with pytest.raises(ValueError, match=r"class id 1.*not present in the column's value map") as excinfo:
+        _build_task_dataset(task, config, [bad_row], "label_not_in_value_map", class_map=class_map)
+
+    # The error names the offending id, the row and column it came from, and the human-readable
+    # value map (id -> name), not the raw class map.
+    message = str(excinfo.value)
+    assert f"column '{config['column']}'" in message
+    assert "Row 0" in message  # the example id of the offending row
+    assert next(iter(config["names"].values())) in message  # the class name, e.g. "object" / "person"
+
+
+@pytest.mark.parametrize("task", ["detect", "segment", "obb", "pose"])
+def test_class_map_is_applied(task: str) -> None:
+    """The dataset must translate raw 3LC class ids to their contiguous training indices via the
+    class map, for every instance task. A non-contiguous id (5) is mapped to training index 1, so
+    the emitted `cls` must be 1 (mapped), never 5 (raw). Regression test for cluster A — in
+    particular OBB previously ignored the class map entirely (emitting the raw id), and pose
+    silently passed unknown ids through.
+    """
+    from tlc.data_types import BoundingBoxes2D, Keypoints2D, OrientedBoundingBoxes2D, SegmentationPolygons
+    from tlc.helpers import ImageHelper
+
+    height, width = ImageHelper.get_exif_image_dimensions(str(DUMMY_IMAGE_FILE))
+    config = _instance_task_config(task, width, height)
+
+    # A valid row carrying a non-contiguous 3LC class id (5).
+    if task == "detect":
+        row = BoundingBoxes2D(
+            bounding_boxes=[[width / 2, height / 2, width / 4, height / 4]],
+            bounding_box_format="cxywh",
+            image_width=width,
+            image_height=height,
+            labels=[5],
+        ).to_row()
+    elif task == "segment":
+        row = SegmentationPolygons(
+            image_width=width,
+            image_height=height,
+            polygons=[[5.0, 5.0, 40.0, 5.0, 40.0, 30.0, 5.0, 30.0]],
+            labels=[5],
+        ).to_row()
+    elif task == "obb":
+        row = OrientedBoundingBoxes2D(
+            image_width=width,
+            image_height=height,
+            obbs=[[width / 2, height / 2, width / 4, height / 4, 0.0]],
+            labels=[5],
+        ).to_row()
+    else:  # pose
+        row = Keypoints2D(
+            image_width=width,
+            image_height=height,
+            keypoints=[[[10, 10], [20, 20]]],
+            keypoint_visibilities=[[2, 2]],
+            bounding_boxes=[[5, 5, 25, 25]],
+            labels=[5],
+        ).to_row()
+
+    # 3LC class id 5 maps to contiguous training index 1.
+    class_map = {5: 1}
+    dataset = _build_task_dataset(task, config, [row], "class_map_applied", class_map=class_map)
+
+    cls = dataset.labels[0]["cls"]
+    assert cls.shape == (1, 1)
+    assert int(cls[0, 0]) == 1, f"expected mapped index 1, got {cls[0, 0]} (class map was not applied)"
 
 
 def test_legacy_bb_table_default_label_path() -> None:

@@ -8,6 +8,7 @@ from ultralytics.data.dataset import ClassificationDataset
 
 from tlc_ultralytics.constants import CLASSIFY_LABEL_COLUMN_NAME, IMAGE_COLUMN_NAME
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
+from tlc_ultralytics.utils.dataset import map_label
 
 
 class _DummyImageFolder:
@@ -103,7 +104,7 @@ class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
         label = row[self._label_column_name]
 
         if self._class_map:
-            label = self._class_map[label]
+            label = map_label(self._class_map, label, self.table, self._label_column_name, "classify", example_id)
 
         self._example_ids.append(example_id)
 

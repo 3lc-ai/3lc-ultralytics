@@ -11,11 +11,7 @@ from ultralytics.data.utils import check_file_speeds, segments2boxes
 from ultralytics.utils import LOGGER, colorstr
 
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
-
-
-class IdentityDict(dict):
-    def __missing__(self, key):
-        return key
+from tlc_ultralytics.utils.dataset import IdentityDict, map_label
 
 
 class TLCYOLODataset:
@@ -234,7 +230,13 @@ class TLCYOLODetectionDataset(BaseTLCYOLODataset):
 
         valid_boxes = cxywh[valid]
         valid_labels = bb2d.labels[valid]
-        classes = np.array([self._class_map[int(lbl)] for lbl in valid_labels], dtype=np.float32).reshape(-1, 1)
+        classes = np.array(
+            [
+                map_label(self._class_map, lbl, self.table, self._label_column_name, "detect", example_id)
+                for lbl in valid_labels
+            ],
+            dtype=np.float32,
+        ).reshape(-1, 1)
 
         return {
             "im_file": im_file,
@@ -324,7 +326,9 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
                 LOGGER.warning(f"Polygon {i} in row {example_id} has fewer than 3 points and will be ignored.")
                 continue
 
-            classes.append(self._class_map[category])
+            classes.append(
+                map_label(self._class_map, category, self.table, self._label_column_name, "segment", example_id)
+            )
             row_segments = np.array(polygon, dtype=np.float32).reshape(-1, 2)
             segments.append(row_segments)
 
