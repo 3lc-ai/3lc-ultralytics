@@ -48,8 +48,6 @@ class TLCTrainerMixin(BaseTrainer):
             self._settings.label_column_name = _handle_deprecated_column_name(
                 overrides.pop("label_column_name", None),
                 self._settings.label_column_name,
-                # Don't resolve here: the label column — task default, partial-name completion and
-                # structural inference — is resolved against the table in check_tlc_dataset.
                 None,
                 column_name="label_column_name",
             )

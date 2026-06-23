@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, overload
+from typing import TYPE_CHECKING, Literal, NamedTuple, overload
 
 import tlc
 import yaml
@@ -69,7 +69,7 @@ def check_tlc_dataset(  # noqa: C901
     label_column_name: str | None,
     project_name: str | None = None,
     splits: Iterable[str] | None = None,
-    task: Literal["detect", "segment", "pose", "classify"] | None = None,
+    task: Literal["detect", "segment", "pose", "classify", "obb"] | None = None,
     settings: Settings | None = None,
 ) -> dict[str, tlc.Table | dict[float, str] | int]:
     """Get or create tables for YOLO datasets. data is ignored when tables is provided.
@@ -333,19 +333,36 @@ def resolve_label_value_path(table: tlc.Table, label_column_name: str) -> str:
     return label_column_name
 
 
-# Per-task configuration for annotation-column resolution, keyed by task. Each entry is
-# `(annotation_type, default_label_path, task_description, return_label_path)`:
-#   - `annotation_type`: the type to infer by when the configured/default column is absent.
-#   - `default_label_path`: the label path used when `label_column_name` is None.
-#   - `task_description`: a human-readable task name for error messages.
-#   - `return_label_path`: on inference, whether to return the full label value path (detect and segment index a 3-part
-#     path downstream) or just the root column name (pose and obb, where the dataset and the tlc keypoint/obb helpers
-#     take the root column).
-_ANNOTATION_TASK_CONFIG: dict[str, tuple[AnnotationType, str, str, bool]] = {
-    "detect": (AnnotationType.BOUNDING_BOXES, DETECTION_LABEL_COLUMN_NAME, "YOLO object detection", True),
-    "segment": (AnnotationType.SEGMENTATION, SEGMENTATION_LABEL_COLUMN_NAME, "YOLO instance segmentation", True),
-    "pose": (AnnotationType.KEYPOINTS, POSE_LABEL_COLUMN_NAME, "YOLO pose estimation", False),
-    "obb": (AnnotationType.ORIENTED_BOUNDING_BOXES, OBB_LABEL_COLUMN_NAME, "YOLO oriented bounding boxes", False),
+class _AnnotationTaskConfig(NamedTuple):
+    """Per-task configuration for annotation-column resolution (see `resolve_annotation_label_path`)."""
+
+    annotation_type: AnnotationType
+    """The annotation type to infer by when the configured/default column is absent."""
+
+    default_label_path: str
+    """The label path used when `label_column_name` is None."""
+
+    task_description: str
+    """A human-readable task name for error messages."""
+
+    return_label_path: bool
+    """On inference, whether to return the full label value path (detect and segment index a 3-part path downstream)
+    or just the root column name (pose and obb, where the dataset and the tlc keypoint/obb helpers take the root
+    column)."""
+
+
+# Per-task configuration for annotation-column resolution, keyed by task.
+_ANNOTATION_TASK_CONFIG: dict[str, _AnnotationTaskConfig] = {
+    "detect": _AnnotationTaskConfig(
+        AnnotationType.BOUNDING_BOXES, DETECTION_LABEL_COLUMN_NAME, "YOLO object detection", True
+    ),
+    "segment": _AnnotationTaskConfig(
+        AnnotationType.SEGMENTATION, SEGMENTATION_LABEL_COLUMN_NAME, "YOLO instance segmentation", True
+    ),
+    "pose": _AnnotationTaskConfig(AnnotationType.KEYPOINTS, POSE_LABEL_COLUMN_NAME, "YOLO pose estimation", False),
+    "obb": _AnnotationTaskConfig(
+        AnnotationType.ORIENTED_BOUNDING_BOXES, OBB_LABEL_COLUMN_NAME, "YOLO oriented bounding boxes", False
+    ),
 }
 
 
@@ -394,7 +411,8 @@ def resolve_annotation_label_path(
        default) is honoured, and the label leaf is resolved later by `resolve_label_value_path`/the task helpers.
     4. Otherwise the annotation column is inferred structurally via `AnnotationHelper.find` (column names are not
        consulted), so tables whose annotation column is not named with the default root work without the user setting
-       `label_column_name`.
+       `label_column_name`. When this fallback overrides an explicitly-configured `label_column_name` (as opposed to
+       the deferred None), a warning is logged, since that usually signals a typo or a stale configuration.
     5. If no column of the required annotation type exists, a precise ValueError is raised naming the annotation type
        the table does have (and the right task to use) and the columns present.
 
@@ -406,35 +424,49 @@ def resolve_annotation_label_path(
     :raises ValueError: If the column is absent and no annotation column of the required type can be inferred, or if
         `AnnotationHelper.find` matches more than one such column.
     """
-    annotation_type, default_path, task_description, return_label_path = _ANNOTATION_TASK_CONFIG[task]
+    config = _ANNOTATION_TASK_CONFIG[task]
 
-    resolved = label_column_name if label_column_name is not None else default_path
-    resolved = _complete_label_column_name(resolved, default_path)
+    resolved = label_column_name if label_column_name is not None else config.default_label_path
+    resolved = _complete_label_column_name(resolved, config.default_label_path)
     if resolved.split(".")[0] in table.rows_schema.values:
         return resolved
 
     # The configured/default column is absent — infer it. Asking for BOUNDING_BOXES matches both new
     # and legacy (`bbs.bb_list.label`) bounding-box columns.
-    ann = AnnotationHelper.find(table, type=annotation_type)
+    ann = AnnotationHelper.find(table, type=config.annotation_type)
     if ann is not None and ann.label_path is not None:
-        return ann.label_path if return_label_path else ann.name
+        # Inferring because an explicitly-configured column was not found likely signals a typo or a stale config —
+        # warn so it is not silently ignored. Deferred resolution (label_column_name is None) is the normal path and
+        # stays quiet.
+        if label_column_name is not None:
+            LOGGER.warning(
+                f"{TLC_COLORSTR}Configured `label_column_name='{label_column_name}'` was not found in the table; "
+                f"using the auto-detected {config.annotation_type.name} column '{ann.name}' instead. Remove "
+                "`label_column_name` to rely on auto-detection, or set it to an existing column to silence this."
+            )
+        return ann.label_path if config.return_label_path else ann.name
 
     # No column of the required type — produce a precise, actionable message naming what is present.
     columns = ", ".join(f"'{name}'" for name in table.rows_schema.values)
     try:
         other = AnnotationHelper.find(table, type=None)
     except ValueError:
-        other = None  # multiple annotation columns of differing types — fall back to the generic detail
-    if other is not None:
+        # More than one annotation column, of differing types, and none of the required type.
         detail = (
-            f"this table has {other.type.name} annotations in column '{other.name}', not the "
-            f"{annotation_type.name} annotations this task requires. Use the task matching "
-            f"{other.type.name} annotations instead."
+            f"the table has multiple annotation columns, but none are the {config.annotation_type.name} "
+            "annotations this task requires."
         )
     else:
-        detail = "no annotation columns were found in the table."
+        if other is not None:
+            detail = (
+                f"this table has {other.type.name} annotations in column '{other.name}', not the "
+                f"{config.annotation_type.name} annotations this task requires. Use the task matching "
+                f"{other.type.name} annotations instead."
+            )
+        else:
+            detail = "no annotation columns were found in the table."
     raise ValueError(
-        f"Table with url {table.url} is not compatible with {task_description}: {detail} "
+        f"Table with url {table.url} is not compatible with {config.task_description}: {detail} "
         f"Columns present: {columns}."
     )
 

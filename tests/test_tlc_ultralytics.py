@@ -42,6 +42,7 @@ from tlc_ultralytics import Settings
 from tlc_ultralytics.classify.trainer import TLCClassificationTrainer
 from tlc_ultralytics.constants import (
     DEFAULT_COLLECT_RUN_DESCRIPTION,
+    DETECTION_LABEL_COLUMN_NAME,
     EPOCH,
     FOREIGN_TABLE_ID,
     LABEL,
@@ -49,9 +50,12 @@ from tlc_ultralytics.constants import (
     MAP50_95,
     NUM_IMAGES,
     NUM_INSTANCES,
+    OBB_LABEL_COLUMN_NAME,
     PER_CLASS_METRICS_STREAM_NAME,
+    POSE_LABEL_COLUMN_NAME,
     PRECISION,
     RECALL,
+    SEGMENTATION_LABEL_COLUMN_NAME,
     TRAINING_PHASE,
 )
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
@@ -1000,32 +1004,85 @@ def test_legacy_bb_table_default_label_path() -> None:
     check_det_table(table, "image", "bbs.bb_list.label")
 
 
-def _make_detection_table_with_column(column_name: str, table_name: str) -> tlc.Table:
-    """Build a single-row 3LC detection table whose bounding-box column is `column_name`."""
-    from tlc.data_types import BoundingBoxes2D
+def _make_annotation_table(task: str, column_name: str, table_name: str) -> tlc.Table:
+    """Build a single-row 3LC table for `task` whose annotation column is named `column_name`.
 
-    row = BoundingBoxes2D(
-        bounding_boxes=[[50.0, 50.0, 25.0, 25.0]],
-        bounding_box_format="cxywh",
-        image_width=100,
-        image_height=100,
-        labels=[0],
-    ).to_row()
+    Covers all four annotation tasks so column-resolution behaviour can be exercised uniformly.
+    """
+    from tlc.data_types import BoundingBoxes2D, Keypoints2D, OrientedBoundingBoxes2D, SegmentationPolygons
+
+    classes = {0: tlc.schemas.MapElement("object")}
+    if task == "detect":
+        row = BoundingBoxes2D(
+            bounding_boxes=[[50.0, 50.0, 25.0, 25.0]],
+            bounding_box_format="cxywh",
+            image_width=100,
+            image_height=100,
+            labels=[0],
+        ).to_row()
+        schema = BoundingBoxes2D.schema(classes=classes)
+    elif task == "segment":
+        row = SegmentationPolygons(
+            image_width=100,
+            image_height=100,
+            polygons=[[5.0, 5.0, 40.0, 5.0, 40.0, 30.0, 5.0, 30.0]],
+            labels=[0],
+        ).to_row()
+        schema = SegmentationPolygons.schema(classes=classes)
+    elif task == "pose":
+        row = Keypoints2D(
+            keypoints=np.array([[[10, 10], [20, 20]]], dtype=np.float32),
+            keypoint_visibilities=np.array([[2, 2]]),
+            labels=np.array([0]),
+            bounding_boxes=np.array([[5, 5, 30, 30]], dtype=np.float32),
+            bounding_box_format="xyxy",
+            image_width=100,
+            image_height=100,
+            normalized=False,
+        ).to_row()
+        schema = Keypoints2D.schema(num_keypoints=2, classes=classes)
+    elif task == "obb":
+        row = OrientedBoundingBoxes2D(
+            obbs=np.array([[50, 50, 20, 10, 0.3]], dtype=np.float32),
+            labels=np.array([0]),
+            image_width=100,
+            image_height=100,
+            normalized=False,
+        ).to_row()
+        schema = OrientedBoundingBoxes2D.schema(classes=classes)
+    else:
+        raise ValueError(f"Unsupported task: {task}")
+
     return tlc.Table.from_dict(
         {"image": [str(DUMMY_IMAGE_FILE)], column_name: [row]},
-        schema={column_name: BoundingBoxes2D.schema(classes={0: tlc.schemas.MapElement("object")})},
-        project_name="test_detection_non_default_bbox_column",
-        dataset_name="d",
+        schema={column_name: schema},
+        project_name="test_annotation_column_resolution",
+        dataset_name=task,
         table_name=table_name,
         if_exists="overwrite",
     )
+
+
+def _make_detection_table_with_column(column_name: str, table_name: str) -> tlc.Table:
+    """Build a single-row 3LC detection table whose bounding-box column is `column_name`."""
+    return _make_annotation_table("detect", column_name, table_name)
+
+
+# Per-task fixtures for the column-resolution cross-product: the non-default column name to author the
+# table with, the task default label path, the resolved path expected from inference (full value path
+# for detect/segment, root column for pose/obb), and the annotation type name surfaced in messages.
+_ANNOTATION_RESOLUTION_CASES = {
+    "detect": ("boxes", DETECTION_LABEL_COLUMN_NAME, "boxes.instances_additional_data.label", "BOUNDING_BOXES"),
+    "segment": ("masks", SEGMENTATION_LABEL_COLUMN_NAME, "masks.instance_properties.label", "SEGMENTATION"),
+    "pose": ("kpts", POSE_LABEL_COLUMN_NAME, "kpts", "KEYPOINTS"),
+    "obb": ("my_obb", OBB_LABEL_COLUMN_NAME, "my_obb", "ORIENTED_BOUNDING_BOXES"),
+}
 
 
 def test_detection_non_default_bbox_column_end_to_end() -> None:
     # A detection table whose bounding-box column is NOT named "bbs" should work end-to-end:
     # check_tlc_dataset must infer the column, propagate the resolved label path into Settings,
     # build a value map, and the dataset must resolve labels against the actual column.
-    from tlc_ultralytics.constants import DETECTION_LABEL_COLUMN_NAME
     from tlc_ultralytics.detect.utils import build_tlc_yolo_dataset, check_det_table
     from tlc_ultralytics.utils.dataset import check_tlc_dataset, resolve_annotation_label_path
 
@@ -1083,7 +1140,6 @@ def test_detection_table_without_bounding_boxes_precise_message() -> None:
     # naming the annotation type present and the task to use instead, plus the columns present.
     from tlc.data_types import SegmentationPolygons
 
-    from tlc_ultralytics.constants import DETECTION_LABEL_COLUMN_NAME
     from tlc_ultralytics.detect.utils import check_det_table
     from tlc_ultralytics.utils.dataset import resolve_annotation_label_path
 
@@ -1127,7 +1183,6 @@ def test_segment_non_default_column_and_cross_task_message() -> None:
     # at the bounding-box task.
     from tlc.data_types import SegmentationPolygons
 
-    from tlc_ultralytics.constants import SEGMENTATION_LABEL_COLUMN_NAME
     from tlc_ultralytics.segment.utils import check_seg_table
     from tlc_ultralytics.utils.dataset import resolve_annotation_label_path
 
@@ -1160,6 +1215,111 @@ def test_segment_non_default_column_and_cross_task_message() -> None:
     det_table = _make_detection_table_with_column("bbs", "bbs_for_segment")
     with pytest.raises(ValueError, match="BOUNDING_BOXES annotations in column 'bbs'"):
         resolve_annotation_label_path(det_table, SEGMENTATION_LABEL_COLUMN_NAME, "segment")
+
+
+@pytest.mark.parametrize("task", ["detect", "segment", "pose", "obb"])
+def test_resolve_infers_non_default_column(task: str) -> None:
+    # Path 1+4: a non-default annotation column is inferred from both the task default and None,
+    # uniformly across all four annotation tasks, and the per-task checker accepts it unconfigured.
+    from tlc_ultralytics.utils.dataset import get_dataset_functions, resolve_annotation_label_path
+
+    column, default, expected, _ = _ANNOTATION_RESOLUTION_CASES[task]
+    table = _make_annotation_table(task, column, f"{task}_infer")
+
+    assert resolve_annotation_label_path(table, default, task) == expected
+    assert resolve_annotation_label_path(table, None, task) == expected
+
+    _, table_checker = get_dataset_functions(task)
+    table_checker(table, "image", None)
+    table_checker(table, "image", default)
+
+
+@pytest.mark.parametrize("task", ["detect", "segment", "pose", "obb"])
+def test_resolve_honors_existing_named_column(task: str) -> None:
+    # Path 2+3: an explicitly-named existing column (a bare root) is honored — completed to a full
+    # value path for detect/segment — without falling back to inference.
+    from tlc_ultralytics.utils.dataset import resolve_annotation_label_path
+
+    column, _, expected, _ = _ANNOTATION_RESOLUTION_CASES[task]
+    table = _make_annotation_table(task, column, f"{task}_honor")
+
+    resolved = resolve_annotation_label_path(table, column, task)
+    assert resolved == expected
+    assert resolved.split(".")[0] == column
+
+
+@pytest.mark.parametrize(
+    "task,other_task",
+    [("detect", "segment"), ("segment", "detect"), ("pose", "detect"), ("obb", "segment")],
+)
+def test_resolve_cross_task_message(task: str, other_task: str) -> None:
+    # Path 5a: a table whose only annotation column is a different type raises a precise message
+    # naming that type and column, both directly and through the task checker.
+    from tlc_ultralytics.utils.dataset import get_dataset_functions, resolve_annotation_label_path
+
+    other_column, _, _, other_type = _ANNOTATION_RESOLUTION_CASES[other_task]
+    _, default, _, _ = _ANNOTATION_RESOLUTION_CASES[task]
+    table = _make_annotation_table(other_task, other_column, f"{task}_from_{other_task}")
+
+    with pytest.raises(ValueError, match=f"{other_type} annotations in column '{other_column}'"):
+        resolve_annotation_label_path(table, default, task)
+
+    _, table_checker = get_dataset_functions(task)
+    with pytest.raises(ValueError, match=other_column):
+        table_checker(table, "image", None)
+
+
+def test_resolve_multiple_annotation_columns_message() -> None:
+    # Path 5b: a table with several annotation columns, none of the required type, must report that
+    # — not the misleading "no annotation columns were found".
+    from tlc.data_types import Keypoints2D, SegmentationPolygons
+
+    from tlc_ultralytics.utils.dataset import resolve_annotation_label_path
+
+    seg_row = SegmentationPolygons(
+        image_width=100, image_height=100, polygons=[[5.0, 5.0, 40.0, 5.0, 40.0, 30.0, 5.0, 30.0]], labels=[0]
+    ).to_row()
+    kp_row = Keypoints2D(
+        keypoints=np.array([[[10, 10], [20, 20]]], dtype=np.float32),
+        keypoint_visibilities=np.array([[2, 2]]),
+        labels=np.array([0]),
+        bounding_boxes=np.array([[5, 5, 30, 30]], dtype=np.float32),
+        bounding_box_format="xyxy",
+        image_width=100,
+        image_height=100,
+        normalized=False,
+    ).to_row()
+    table = tlc.Table.from_dict(
+        {"image": [str(DUMMY_IMAGE_FILE)], "seg": [seg_row], "kp": [kp_row]},
+        schema={
+            "seg": SegmentationPolygons.schema(classes={0: tlc.schemas.MapElement("object")}),
+            "kp": Keypoints2D.schema(num_keypoints=2, classes={0: tlc.schemas.MapElement("object")}),
+        },
+        project_name="test_annotation_column_resolution",
+        dataset_name="multi",
+        table_name="multi_ann",
+        if_exists="overwrite",
+    )
+
+    with pytest.raises(ValueError, match="multiple annotation columns, but none are the BOUNDING_BOXES"):
+        resolve_annotation_label_path(table, DETECTION_LABEL_COLUMN_NAME, "detect")
+
+
+def test_explicit_missing_label_column_warns_but_none_is_quiet() -> None:
+    # A non-None label_column_name whose root is absent warns (likely a typo or stale config) before
+    # falling back to inference; deferred resolution (None) is the normal path and stays quiet.
+    from tlc_ultralytics.utils.dataset import resolve_annotation_label_path
+
+    table = _make_annotation_table("detect", "boxes", "warn_case")
+
+    with capture_logs(logging.WARNING) as messages:
+        resolved = resolve_annotation_label_path(table, "nonexistent_column", "detect")
+    assert resolved == "boxes.instances_additional_data.label"
+    assert any("was not found in the table" in m for m in messages), messages
+
+    with capture_logs(logging.WARNING) as messages:
+        resolve_annotation_label_path(table, None, "detect")
+    assert not any("was not found in the table" in m for m in messages), messages
 
 
 def test_sampling_weights() -> None:
