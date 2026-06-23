@@ -36,7 +36,7 @@ from tlc_ultralytics.constants import (
     TLC_COLORSTR,
     TRAINING_PHASE,
 )
-from tlc_ultralytics.engine.utils import _complete_label_column_name, _handle_deprecated_column_name
+from tlc_ultralytics.engine.utils import _handle_deprecated_column_name
 from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import image_embeddings_schema, training_phase_schema
 from tlc_ultralytics.utils.schemas import _instance_embeddings_list_schema, _raw_instance_embeddings_schema
@@ -74,12 +74,10 @@ class TLCValidatorMixin(BaseValidator):
         self._settings.label_column_name = _handle_deprecated_column_name(
             label_column_name,
             self._settings.label_column_name,
-            self._default_label_column_name,
+            # Don't resolve here: the label column — task default, partial-name completion and
+            # structural inference — is resolved against the table in check_tlc_dataset.
+            None,
             column_name="label_column_name",
-        )
-        self._settings.label_column_name = _complete_label_column_name(
-            self._settings.label_column_name,
-            self._default_label_column_name,
         )
 
         self._training = training

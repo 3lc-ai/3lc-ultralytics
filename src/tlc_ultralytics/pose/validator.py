@@ -10,7 +10,6 @@ from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.constants import (
     IMAGE_COLUMN_NAME,
-    POSE_LABEL_COLUMN_NAME,
     PREDICTED_KEYPOINTS_2D,
     TLC_COLORSTR,
 )
@@ -26,7 +25,6 @@ if TYPE_CHECKING:
 
 class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
     _default_image_column_name = IMAGE_COLUMN_NAME
-    _default_label_column_name = POSE_LABEL_COLUMN_NAME
 
     def check_dataset(self, *args, **kwargs):
         return check_tlc_dataset(*args, task="pose", settings=self._settings, **kwargs)

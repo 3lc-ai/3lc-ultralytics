@@ -57,12 +57,12 @@ from tlc_ultralytics.constants import (
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
 from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
 from tlc_ultralytics.engine.dataset import TLCDatasetMixin
-from tlc_ultralytics.engine.utils import _complete_label_column_name
 from tlc_ultralytics.obb.trainer import TLCOBBTrainer
 from tlc_ultralytics.pose.trainer import TLCPoseTrainer
 from tlc_ultralytics.segment.trainer import TLCSegmentationTrainer
 from tlc_ultralytics.segment.utils import check_seg_table
 from tlc_ultralytics.utils import check_tlc_dataset
+from tlc_ultralytics.utils.dataset import _complete_label_column_name
 
 # PaCMAP embedding reduction is known not to work on macOS: the reducer collects
 # zero embeddings and silently produces no reduced table. Embedding-specific
@@ -1001,7 +1001,7 @@ def test_legacy_bb_table_default_label_path() -> None:
 
 
 def _make_detection_table_with_column(column_name: str, table_name: str) -> tlc.Table:
-    """Build a single-row 3LC detection table whose bounding-box column is ``column_name``."""
+    """Build a single-row 3LC detection table whose bounding-box column is `column_name`."""
     from tlc.data_types import BoundingBoxes2D
 
     row = BoundingBoxes2D(
@@ -1026,16 +1026,18 @@ def test_detection_non_default_bbox_column_end_to_end() -> None:
     # check_tlc_dataset must infer the column, propagate the resolved label path into Settings,
     # build a value map, and the dataset must resolve labels against the actual column.
     from tlc_ultralytics.constants import DETECTION_LABEL_COLUMN_NAME
-    from tlc_ultralytics.detect.utils import build_tlc_yolo_dataset, check_det_table, infer_detection_label_column_name
-    from tlc_ultralytics.utils.dataset import check_tlc_dataset
+    from tlc_ultralytics.detect.utils import build_tlc_yolo_dataset, check_det_table
+    from tlc_ultralytics.utils.dataset import check_tlc_dataset, resolve_annotation_label_path
 
     table = _make_detection_table_with_column("boxes", "boxes_table")
 
-    # The inferral resolves the default `bbs...` path to the actual `boxes...` path.
+    # The resolver maps the default `bbs...` path — and None (no configured column) — to the actual
+    # `boxes...` path via structural inference.
     assert (
-        infer_detection_label_column_name(table, DETECTION_LABEL_COLUMN_NAME)
+        resolve_annotation_label_path(table, DETECTION_LABEL_COLUMN_NAME, "detect")
         == "boxes.instances_additional_data.label"
     )
+    assert resolve_annotation_label_path(table, None, "detect") == "boxes.instances_additional_data.label"
 
     # The checker accepts the table even though the configured/default column is "bbs".
     check_det_table(table, "image", DETECTION_LABEL_COLUMN_NAME)
@@ -1082,7 +1084,8 @@ def test_detection_table_without_bounding_boxes_precise_message() -> None:
     from tlc.data_types import SegmentationPolygons
 
     from tlc_ultralytics.constants import DETECTION_LABEL_COLUMN_NAME
-    from tlc_ultralytics.detect.utils import check_det_table, infer_detection_label_column_name
+    from tlc_ultralytics.detect.utils import check_det_table
+    from tlc_ultralytics.utils.dataset import resolve_annotation_label_path
 
     seg_row = SegmentationPolygons(
         image_width=100,
@@ -1100,7 +1103,7 @@ def test_detection_table_without_bounding_boxes_precise_message() -> None:
     )
 
     with pytest.raises(ValueError, match="SEGMENTATION annotations in column 'segmentations'"):
-        infer_detection_label_column_name(table, DETECTION_LABEL_COLUMN_NAME)
+        resolve_annotation_label_path(table, DETECTION_LABEL_COLUMN_NAME, "detect")
 
     # The same precise message surfaces through the checker, listing the columns present.
     with pytest.raises(ValueError, match=r"Columns present:.*'segmentations'"):
@@ -1115,7 +1118,48 @@ def test_detection_table_without_bounding_boxes_precise_message() -> None:
         if_exists="overwrite",
     )
     with pytest.raises(ValueError, match="no annotation columns were found"):
-        infer_detection_label_column_name(no_ann, DETECTION_LABEL_COLUMN_NAME)
+        resolve_annotation_label_path(no_ann, DETECTION_LABEL_COLUMN_NAME, "detect")
+
+
+def test_segment_non_default_column_and_cross_task_message() -> None:
+    # The same resolution applies to segmentation: a differently-named segmentation column is
+    # inferred (from None or the default), and a detection table yields a precise message pointing
+    # at the bounding-box task.
+    from tlc.data_types import SegmentationPolygons
+
+    from tlc_ultralytics.constants import SEGMENTATION_LABEL_COLUMN_NAME
+    from tlc_ultralytics.segment.utils import check_seg_table
+    from tlc_ultralytics.utils.dataset import resolve_annotation_label_path
+
+    seg_row = SegmentationPolygons(
+        image_width=100,
+        image_height=100,
+        polygons=[[5.0, 5.0, 40.0, 5.0, 40.0, 30.0, 5.0, 30.0]],
+        labels=[0],
+    ).to_row()
+    table = tlc.Table.from_dict(
+        {"image": [str(DUMMY_IMAGE_FILE)], "masks": [seg_row]},
+        schema={"masks": SegmentationPolygons.schema(classes={0: tlc.schemas.MapElement("object")})},
+        project_name="test_segment_non_default_column",
+        dataset_name="d",
+        table_name="masks_table",
+        if_exists="overwrite",
+    )
+
+    # Both the default `segmentations...` path and None resolve to the actual `masks...` path.
+    assert resolve_annotation_label_path(table, SEGMENTATION_LABEL_COLUMN_NAME, "segment") == (
+        "masks.instance_properties.label"
+    )
+    assert resolve_annotation_label_path(table, None, "segment") == "masks.instance_properties.label"
+
+    # The checker accepts the table even though the configured/default column is "segmentations".
+    check_seg_table(table, "image", SEGMENTATION_LABEL_COLUMN_NAME)
+    check_seg_table(table, "image", None)
+
+    # A detection table routed to the segment task names bounding boxes and the right task to use.
+    det_table = _make_detection_table_with_column("bbs", "bbs_for_segment")
+    with pytest.raises(ValueError, match="BOUNDING_BOXES annotations in column 'bbs'"):
+        resolve_annotation_label_path(det_table, SEGMENTATION_LABEL_COLUMN_NAME, "segment")
 
 
 def test_sampling_weights() -> None:

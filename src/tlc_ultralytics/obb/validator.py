@@ -5,7 +5,6 @@ from ultralytics.models.yolo.obb.val import OBBValidator
 
 from tlc_ultralytics.constants import (
     IMAGE_COLUMN_NAME,
-    OBB_LABEL_COLUMN_NAME,
 )
 from tlc_ultralytics.detect.validator import TLCDetectionValidator
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
@@ -13,7 +12,6 @@ from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
     _default_image_column_name = IMAGE_COLUMN_NAME
-    _default_label_column_name = OBB_LABEL_COLUMN_NAME
 
     def check_dataset(self, *args, **kwargs):
         return check_tlc_dataset(*args, task="obb", settings=self._settings, **kwargs)

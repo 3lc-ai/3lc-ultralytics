@@ -8,7 +8,6 @@ from ultralytics.models import yolo
 
 from tlc_ultralytics.classify.dataset import TLCClassificationDataset
 from tlc_ultralytics.constants import (
-    CLASSIFY_LABEL_COLUMN_NAME,
     IMAGE_COLUMN_NAME,
 )
 from tlc_ultralytics.engine.validator import TLCValidatorMixin
@@ -17,7 +16,6 @@ from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 class TLCClassificationValidator(TLCValidatorMixin, yolo.classify.ClassificationValidator):
     _default_image_column_name = IMAGE_COLUMN_NAME
-    _default_label_column_name = CLASSIFY_LABEL_COLUMN_NAME
 
     def check_dataset(self, *args, **kwargs):
         return check_tlc_dataset(*args, task="classify", settings=self._settings, **kwargs)

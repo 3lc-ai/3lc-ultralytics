@@ -7,7 +7,6 @@ from ultralytics.models.yolo.detect import DetectionValidator
 from ultralytics.utils import LOGGER, ops
 
 from tlc_ultralytics.constants import (
-    DETECTION_LABEL_COLUMN_NAME,
     IMAGE_COLUMN_NAME,
     PREDICTED_BOUNDING_BOXES,
     TLC_COLORSTR,
@@ -25,7 +24,6 @@ from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
     _default_image_column_name = IMAGE_COLUMN_NAME
-    _default_label_column_name = DETECTION_LABEL_COLUMN_NAME
 
     def check_dataset(self, *args, **kwargs):
         return check_tlc_dataset(*args, task="detect", settings=self._settings, **kwargs)

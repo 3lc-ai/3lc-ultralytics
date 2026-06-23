@@ -8,7 +8,6 @@ from ultralytics.models import yolo
 from tlc_ultralytics.classify.dataset import TLCClassificationDataset
 from tlc_ultralytics.classify.validator import TLCClassificationValidator
 from tlc_ultralytics.constants import (
-    CLASSIFY_LABEL_COLUMN_NAME,
     IMAGE_COLUMN_NAME,
 )
 from tlc_ultralytics.engine.trainer import TLCTrainerMixin
@@ -16,7 +15,6 @@ from tlc_ultralytics.engine.trainer import TLCTrainerMixin
 
 class TLCClassificationTrainer(TLCTrainerMixin, yolo.classify.ClassificationTrainer):
     _default_image_column_name = IMAGE_COLUMN_NAME
-    _default_label_column_name = CLASSIFY_LABEL_COLUMN_NAME
     _validator_class = TLCClassificationValidator
     _loss_names: ClassVar[list[str]] = ["loss"]
     _build_dataloader_module = ultralytics.models.yolo.classify.train
