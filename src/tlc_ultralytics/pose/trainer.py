@@ -7,7 +7,7 @@ from ultralytics.nn.tasks import PoseModel
 from ultralytics.utils import LOGGER
 from ultralytics.utils.loss import E2ELoss
 
-from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, POSE_LABEL_COLUMN_NAME, TLC_COLORSTR
+from tlc_ultralytics.constants import IMAGE_COLUMN_NAME, TLC_COLORSTR
 from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
 from tlc_ultralytics.engine.trainer import TLCTrainerMixin
 from tlc_ultralytics.pose.loss import TLCPoseLoss26, TLCv8PoseLoss
@@ -25,7 +25,6 @@ PoseModel.init_criterion = _tlc_pose_init_criterion
 
 class TLCPoseTrainer(PoseTrainer, TLCDetectionTrainer):
     _default_image_column_name = IMAGE_COLUMN_NAME
-    _default_label_column_name = POSE_LABEL_COLUMN_NAME
     _validator_class = TLCPoseValidator
     _loss_names = ("box_loss", "pose_loss", "kobj_loss", "cls_loss", "dfl_loss")
     _metric_replacements: ClassVar[list[tuple[str, str]]] = [

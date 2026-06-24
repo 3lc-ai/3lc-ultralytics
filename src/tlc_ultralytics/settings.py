@@ -282,8 +282,6 @@ class Settings:
                 f"metrics_collection_function must be callable, got {type(self.metrics_collection_function)}"
             )
 
-        assert self.label_column_name is not None, "label_column_name must be set, got None"
-
         # Train / collect specific settings
         self._verify_training() if training else self._verify_collection()
 

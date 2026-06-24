@@ -9,7 +9,6 @@ from tlc_ultralytics.constants import (
     CONFIDENCE,
     IMAGE_COLUMN_NAME,
     PREDICTED_SEGMENTATIONS,
-    SEGMENTATION_LABEL_COLUMN_NAME,
 )
 from tlc_ultralytics.detect.validator import TLCDetectionValidator
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
@@ -17,7 +16,6 @@ from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
     _default_image_column_name = IMAGE_COLUMN_NAME
-    _default_label_column_name = SEGMENTATION_LABEL_COLUMN_NAME
 
     def check_dataset(self, *args, **kwargs):
         return check_tlc_dataset(*args, task="segment", settings=self._settings, **kwargs)

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import tlc
-from tlc.helpers import AnnotationHelper, AnnotationType
 
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME
 from tlc_ultralytics.detect.dataset import TLCYOLODataset
-from tlc_ultralytics.utils.dataset import resolve_label_value_path
+from tlc_ultralytics.utils.dataset import resolve_annotation_label_path, resolve_label_value_path
 
 
 def build_tlc_yolo_dataset(
@@ -56,37 +55,30 @@ def check_det_table(
 ) -> None:
     """Check that a table is compatible with the detection task in the 3LC YOLO integration.
 
-    Supports both legacy (BoundingBoxListSchema) and new (BoundingBoxes2D) formats.
+    Supports both legacy (BoundingBoxListSchema) and new (BoundingBoxes2D) formats. The bounding-box column is resolved
+    via `resolve_annotation_label_path`: when the root column of `label_column_name` is absent (or it is None), the
+    column is inferred so differently-named bounding-box tables are accepted.
 
     :param table: The table to check.
     :param image_column_name: The name of the column containing image paths.
-    :param label_column_name: The full label path of the column containing labels.
-        If None, auto-detected from the table schema.
+    :param label_column_name: The full label path of the column containing labels. If None, the default detection label
+        path is used (and inference is applied as needed).
     :raises: ValueError if the table is not compatible with the detection task.
     """
-    row_schema = table.rows_schema.values
+    # Resolve (and, if needed, infer) the bounding-box column. Raises a precise ValueError when the
+    # table genuinely has no bounding boxes.
+    label_column_name = resolve_annotation_label_path(table, label_column_name, "detect")
 
     try:
-        assert image_column_name in row_schema, f"Image column '{image_column_name}' not found."
+        assert image_column_name in table.rows_schema.values, f"Image column '{image_column_name}' not found."
 
-        if label_column_name is not None:
-            # User-provided label path — validate it exists, falling back to the label path
-            # resolved by AnnotationHelper (e.g. `bbs.bb_list.label` for legacy tables)
-            bb_column = label_column_name.split(".")[0]
-            assert bb_column in row_schema, f"Bounding box column '{bb_column}' not found."
-            label_path = resolve_label_value_path(table, label_column_name)
-            assert table.get_value_map(label_path) is not None, (
-                f"Unable to get value map for label value path {label_column_name}. Ensure that the table is "
-                "compatible with the detection task or provide a `label_column_name` that matches the value path."
-            )
-        else:
-            # Auto-detect bounding box column and label path via AnnotationHelper
-            ann = AnnotationHelper.find(table, type=AnnotationType.BOUNDING_BOXES)
-            assert ann is not None, "No bounding box column found in the table."
-            assert ann.label_path is not None, f"Bounding box column '{ann.name}' found but no label field detected."
-            assert table.get_value_map(ann.label_path) is not None, (
-                f"Unable to get value map for auto-detected label path '{ann.label_path}'."
-            )
+        # Validate the label path resolves to a value map, falling back to the label path resolved
+        # by AnnotationHelper (e.g. `bbs.bb_list.label` for legacy tables).
+        label_path = resolve_label_value_path(table, label_column_name)
+        assert table.get_value_map(label_path) is not None, (
+            f"Unable to get value map for label value path {label_column_name}. Ensure that the table is "
+            "compatible with the detection task or provide a `label_column_name` that matches the value path."
+        )
 
     except (AssertionError, KeyError) as e:
         raise ValueError(f"Table with url {table.url} is not compatible with YOLO object detection. {e}") from None

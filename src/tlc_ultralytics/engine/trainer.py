@@ -16,7 +16,6 @@ from tlc_ultralytics.constants import (
     TLC_COLORSTR,
 )
 from tlc_ultralytics.engine.utils import (
-    _complete_label_column_name,
     _handle_deprecated_column_name,
     _restore_random_state,
 )
@@ -49,13 +48,8 @@ class TLCTrainerMixin(BaseTrainer):
             self._settings.label_column_name = _handle_deprecated_column_name(
                 overrides.pop("label_column_name", None),
                 self._settings.label_column_name,
-                self._default_label_column_name,
+                None,
                 column_name="label_column_name",
-            )
-
-            self._settings.label_column_name = _complete_label_column_name(
-                self._settings.label_column_name,
-                self._default_label_column_name,
             )
 
             self._settings.verify(training=True)

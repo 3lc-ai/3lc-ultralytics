@@ -3,16 +3,27 @@ from __future__ import annotations
 import tlc
 from tlc.helpers import AnnotationHelper, AnnotationType
 
+from tlc_ultralytics.constants import IMAGE_COLUMN_NAME
+from tlc_ultralytics.utils.dataset import resolve_annotation_label_path
 
-def check_pose_table(table: tlc.Table, image_column_name: str, label_column_name: str) -> None:
+
+def check_pose_table(
+    table: tlc.Table,
+    image_column_name: str = IMAGE_COLUMN_NAME,
+    label_column_name: str | None = None,
+) -> None:
     """Verify that the table is compatible with pose keypoints.
+
+    The keypoints column is resolved via `resolve_annotation_label_path`: when the root column of `label_column_name`
+    is absent (or it is None), the column is inferred so differently-named keypoints tables are accepted.
 
     :param table: The table to check.
     :param image_column_name: The name of the image column.
-    :param label_column_name: The name of the pose label root column (e.g., 'pose').
+    :param label_column_name: The name of the pose label root column (e.g., 'keypoints_2d'). If None, the default
+        keypoints column is used (and inference is applied as needed).
     :raises ValueError: If the table is not compatible with pose.
     """
-    label_root = label_column_name.split(".")[0]
+    label_root = resolve_annotation_label_path(table, label_column_name, "pose").split(".")[0]
 
     try:
         assert image_column_name in table.rows_schema.values, f"Image column '{image_column_name}' not found."

@@ -7,7 +7,6 @@ import ultralytics
 from ultralytics.models.yolo.detect import DetectionTrainer
 
 from tlc_ultralytics.constants import (
-    DETECTION_LABEL_COLUMN_NAME,
     IMAGE_COLUMN_NAME,
 )
 from tlc_ultralytics.detect.utils import (
@@ -21,7 +20,6 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
     """Trainer class for YOLO object detection with 3LC"""
 
     _default_image_column_name = IMAGE_COLUMN_NAME
-    _default_label_column_name = DETECTION_LABEL_COLUMN_NAME
     _validator_class = TLCDetectionValidator
     _loss_names = ("box_loss", "cls_loss", "dfl_loss")
     _metric_replacements: ClassVar[list[tuple[str, str]]] = [("(B)", ""), ("metrics", "val"), ("/", "_")]

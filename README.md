@@ -191,7 +191,7 @@ In addition to tables created with `Table.from_yolo_url()` (which is called inte
 
 Working with instance segmentation in the 3LC integration is similar to object detection. If you are using `tlc.Table.from_yolo_url()` to create your tables, make sure to pass `task="segment"`, as the default is `"detect"`.
 
-For instance segmentation, you can provide `image_column_name` and `label_column_name` when calling `model.train()`, `model.val()` and `model.collect()` if you are providing your own table which has different column names to those expected by 3LC. Note that the `label_column_name` should be the path to the segmentation label field within the table schema, with the default being `"segmentations.instance_properties.label"` which points to the category labels for each segmentation instance.
+For instance segmentation, the segmentation column is auto-detected the same way as for detection (see [Column names](#column-names)), so a custom table whose column is not named `segmentations` works without configuration. If you do set `label_column_name` explicitly, the default is `"segmentations.instance_properties.label"`, which points to the category labels for each segmentation instance.
 
 ### Pose Estimation
 
@@ -292,7 +292,11 @@ Use `exclude_zero_weight_training=True` (only applies to training) and `exclude_
 
 ### Column names
 
-When providing `tables` directly or through a 3LC YOLO YAML file which have non-default column names, set the `image_column_name` and `label_column_name` in the `Settings` object. While `image_column_name` needs to be the top-level column name of image column, the `label_column_name` can be either the top level column (such as `"bbs"` for detection) or a value path to the label inside the detection column (such as `"bbs.instances_additional_data.label"` for detection).
+In most cases you don't need to specify any column names. The integration looks for the standard image column (`image`) and the task's standard annotation column (such as `bbs` for detection), and if the annotation column is named something else it is **auto-detected**: the bounding-box / segmentation / keypoints / oriented-bounding-box column is located structurally, by its contents rather than its name. This means tables whose annotation column is named differently — for example created with `tlc.Table.from_coco()` — work without any configuration, and it applies uniformly to all annotation tasks (`detect`, `segment`, `pose` and `obb`).
+
+You only need to set `label_column_name` (and/or `image_column_name`) in the `Settings` object when auto-detection cannot pick the right column on its own — for example when a table has more than one annotation column and you want to select a specific one. `label_column_name` can be either the top-level column name (such as `"bbs"` for detection) or a value path to the label inside the annotation column (such as `"bbs.instances_additional_data.label"` for detection). If the column you name does not exist in the table, auto-detection is still attempted as a fallback. `image_column_name` must be the top-level name of the image column; it is not auto-detected and defaults to `"image"`.
+
+If a table has no annotation column compatible with the current task, a clear error is raised that names the annotation type the table does contain (and which task to use for it) and lists the columns present.
 
 ## Dashboard Output
 
