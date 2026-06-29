@@ -112,12 +112,11 @@ class TLCOBBDataset(BaseTLCYOLODataset):
         segments = []
         # obbs has shape (N, 5): [center_x, center_y, size_x, size_y, rotation_radians]
         for cx, cy, sx, sy, r in instances.obbs:
-            xc_n = cx / image_width
-            yc_n = cy / image_height
-            w_n = sx / image_width
-            h_n = sy / image_height
             r_deg = r * 180 / np.pi  # cv2.boxPoints expects degrees
-            corner_points = cv2.boxPoints(((xc_n, yc_n), (w_n, h_n), r_deg))
+            # Build the corners in pixel space, then normalize each coordinate by the image size.
+            corner_points = cv2.boxPoints(((cx, cy), (sx, sy), r_deg))
+            corner_points[:, 0] /= image_width
+            corner_points[:, 1] /= image_height
             segments.append(corner_points)
             boxes.append(corner_points_to_xywh(corner_points))
 

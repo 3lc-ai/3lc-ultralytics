@@ -920,6 +920,54 @@ def test_missing_image_dimensions_fallback(task: str) -> None:
     np.testing.assert_allclose(got_label["bboxes"], ref_label["bboxes"], atol=1e-6)
 
 
+@pytest.mark.parametrize("rotation_deg", [90.0, 60.0, 30.0, 0.0])
+def test_obb_not_squashed_on_non_square_image(rotation_deg: float) -> None:
+    """Oriented boxes read from a 3LC table must keep their shape on non-square images.
+
+    The dataset stores each box as normalized corner points. Normalizing the box's local
+    `size_x`/`size_y` by image width/height *before* applying the rotation squashes tall boxes
+    toward square on non-square images: the two extents are scaled by different factors and the
+    rotation then mixes the axes. Corners must be built in pixel space and normalized afterwards.
+    """
+    from tlc.data_types import OrientedBoundingBoxes2D
+
+    # Deliberately non-square, and independent of the dummy image's real size: the stored
+    # dimensions are positive so the dataset uses them directly.
+    width, height = 1920, 1080
+    cx, cy, size_x, size_y = 960.0, 540.0, 438.0, 167.0
+    rotation = np.deg2rad(rotation_deg)
+
+    config = _instance_task_config("obb", width, height)
+    tall_row = OrientedBoundingBoxes2D(
+        image_width=width,
+        image_height=height,
+        obbs=[[cx, cy, size_x, size_y, rotation]],
+        labels=[0],
+    ).to_row()
+
+    dataset = _build_task_dataset("obb", config, [tall_row], f"obb_squash_{int(rotation_deg)}")
+
+    label = dataset.labels[0]
+    assert label["shape"] == (height, width)
+
+    # The dataset returns normalized corner points; scale them back to pixel space
+    (segment,) = label["segments"]
+    corners_px = np.asarray(segment, dtype=np.float64).copy()
+    corners_px[:, 0] *= width
+    corners_px[:, 1] *= height
+
+    # Recover the rotated box and compare its side lengths to what was stored
+    (_, _), (rec_w, rec_h), _ = cv2.minAreaRect(corners_px.astype(np.float32))
+    recovered = sorted([rec_w, rec_h])
+    expected = sorted([size_x, size_y])
+    np.testing.assert_allclose(
+        recovered,
+        expected,
+        atol=1.0,
+        err_msg=f"OBB squashed: stored {expected} px but read back {recovered} px",
+    )
+
+
 @pytest.mark.parametrize("task", ["detect", "segment", "obb", "pose"])
 def test_unlabeled_row(task: str) -> None:
     """An unlabeled row (no instances) must not crash. The instance dataclasses come back with
