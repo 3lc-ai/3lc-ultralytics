@@ -6,14 +6,25 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Added
+
+- Raise a clear `TypeError` when the `tables` passed to `model.collect()` is not a mapping of `{split_name: table}`, instead of failing later with a confusing error ([#80](https://github.com/3lc-ai/3lc-ultralytics/pull/80)).
+
+### Changed
+
+- Auto-detect the annotation column for all annotation tasks (`detect`, `segment`, `pose` and `obb`). Tables whose annotation column is not named the task default now work without configuration, and `label_column_name` only needs to be set to disambiguate when a table has more than one annotation column. If an explicitly set `label_column_name` does not exist in the table, auto-detection is attempted as a fallback ([#81](https://github.com/3lc-ai/3lc-ultralytics/pull/81)).
+
+- Disable `save_json` with a warning instead of crashing, since COCO/LVIS JSON evaluation reads on-disk annotation files that 3LC Tables don't have ([#79](https://github.com/3lc-ai/3lc-ultralytics/pull/79)).
+
 ### Fixed
 
-- Fix oriented bounding boxes being squashed toward square when reading OBB tables for non-square
-images.
+- Fix oriented bounding boxes being squashed toward square when reading OBB tables for non-square images ([#83](https://github.com/3lc-ai/3lc-ultralytics/pull/83)).
 
 - Apply the class map to OBB annotations. Previously, OBB datasets emitted raw 3LC class ids instead of contiguous training indices, producing incorrect labels whenever the value map's ids were not already contiguous from zero ([#78](https://github.com/3lc-ai/3lc-ultralytics/pull/78)).
 
 - Raise an actionable error when a `detect`, `segment`, `pose` or `obb` table contains an annotation whose class id is not present in the label column's value map, instead of failing with an opaque `KeyError` ([#78](https://github.com/3lc-ai/3lc-ultralytics/pull/78)).
+
+- Degrade gracefully when the images cache cannot be written (for example a read-only or full filesystem, insufficient permissions, or a stale file where the cache directory should be). Such failures now emit a warning and continue without a persisted cache rather than aborting dataset construction, and failures reading an existing cache are likewise tolerated ([#82](https://github.com/3lc-ai/3lc-ultralytics/pull/82)).
 
 ## [0.3.3] - 2026-06-19
 
