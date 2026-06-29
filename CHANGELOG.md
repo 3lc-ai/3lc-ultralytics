@@ -8,6 +8,9 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Fixed
 
+- Fix oriented bounding boxes being squashed toward square when reading OBB tables for non-square
+images.
+
 - Apply the class map to OBB annotations. Previously, OBB datasets emitted raw 3LC class ids instead of contiguous training indices, producing incorrect labels whenever the value map's ids were not already contiguous from zero ([#78](https://github.com/3lc-ai/3lc-ultralytics/pull/78)).
 
 - Raise an actionable error when a `detect`, `segment`, `pose` or `obb` table contains an annotation whose class id is not present in the label column's value map, instead of failing with an opaque `KeyError` ([#78](https://github.com/3lc-ai/3lc-ultralytics/pull/78)).
