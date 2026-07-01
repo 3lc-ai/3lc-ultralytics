@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-07-01
+
 ### Added
 
 - Raise a clear `TypeError` when the `tables` passed to `model.collect()` is not a mapping of `{split_name: table}`, instead of failing later with a confusing error ([#80](https://github.com/3lc-ai/3lc-ultralytics/pull/80)).
