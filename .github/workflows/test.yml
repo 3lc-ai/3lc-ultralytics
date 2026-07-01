@@ -92,5 +92,5 @@ jobs:
           uv run --no-sources --no-sync --python ${{ matrix.python-version }} pytest tests/ -v -n 1
         env:
           TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
-          ${{ secrets.VARIABLE_NAME }}: ${{ secrets.VARIABLE_VALUE }}
-          ${{ secrets.RUNTIME_NAME }}: ${{ secrets.RUNTIME_VALUE }}
+          ${{ secrets.DEFAULT_TESTING_S_ENV_NAME }}: ${{ secrets.DEFAULT_TESTING_S_ENV_VALUE }}
+          ${{ secrets.DEFAULT_TESTING_RUNTIME_NAME }}: ${{ secrets.DEFAULT_TESTING_RUNTIME_VALUE }}
