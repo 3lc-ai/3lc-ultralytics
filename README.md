@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-<a href="https://docs.ultralytics.com/">Ultralytics YOLO</a> classification, object detection and segmentation with 3LC integrated.
+<a href="https://docs.ultralytics.com/">Ultralytics YOLO</a> classification, object detection, instance segmentation, pose estimation and OBB with 3LC integrated.
 </p>
 
 ## About 3LC
