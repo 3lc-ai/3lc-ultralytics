@@ -742,7 +742,11 @@ class TLCValidatorMixin(BaseValidator):
 
         world_size = dist.get_world_size()  # type: ignore[possibly-missing-attribute]
         payload = (table_url_strs, metrics_infos, pred_instance_counts, input_table_url)
-        gathered = [None] * world_size if RANK == 0 else None
+        # gather_object fills this in place on RANK 0 with each rank's payload tuple;
+        # annotate so the post-gather element type (not None) is known to the type checker.
+        gathered: list[tuple[list[str], list, list[int], str]] | None = (
+            [None] * world_size if RANK == 0 else None
+        )
         dist.gather_object(payload, gathered, dst=0)  # type: ignore[possibly-missing-attribute]
 
         input_table_urls: list[str] = []
