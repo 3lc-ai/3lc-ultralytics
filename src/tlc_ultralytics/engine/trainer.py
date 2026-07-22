@@ -21,7 +21,7 @@ from tlc_ultralytics.engine.utils import (
 )
 from tlc_ultralytics.overrides import build_dataloader
 from tlc_ultralytics.settings import Settings
-from tlc_ultralytics.utils import create_sampler, reduce_embeddings
+from tlc_ultralytics.utils import create_sampler
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
 from tlc_ultralytics.utils.generate_ddp import generate_ddp_command
 
@@ -323,18 +323,15 @@ class TLCTrainerMixin(BaseTrainer):
 
         if RANK in {-1, 0}:
             self._save_confidence_metrics()
-            if self._settings.image_embeddings_dim > 0:
-                train_url = self.data["train"].url
-                val_url = self.data["val"].url if "val" in self.data else self.data["test"].url
-                foreign_table_url = train_url if not self._settings.collection_val_only else val_url
-                reduce_embeddings(
-                    self._run,
-                    method=self._settings.image_embeddings_reducer,
-                    n_components=self._settings.image_embeddings_dim,
-                    foreign_table_url=foreign_table_url,
-                    reducer_args=self._settings.image_embeddings_reducer_args,
-                )
             self._run.set_status_completed()
+
+            # TEMP(embeddings): embeddings are reduced per validation pass in the
+            # validator; drop this run's fitted reducers now that the run is done
+            # so a later run cannot inherit a stale embedding space.
+            if self._settings.instance_embeddings_dim > 0 or self._settings.image_embeddings_dim > 0:
+                from tlc_ultralytics.utils._instance_reduce import _clear_fitted_reducers
+
+                _clear_fitted_reducers(self._run.url.to_str())
 
     def _save_confidence_metrics(self):
         if self.args.task not in ("detect", "segment", "pose", "obb"):

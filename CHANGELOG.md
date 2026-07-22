@@ -6,6 +6,16 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Added
+
+- Bound peak host memory during metrics collection by flushing to new metrics tables whenever the in-memory buffer exceeds the new `metrics_max_buffer_mb` setting (default 2048).
+
+### Changed
+
+- Reduce image and instance embeddings natively in the integration, on at most `image_embeddings_fit_sample_size` images and `instance_embeddings_fit_sample_size` instances (new settings, default 10000) respectively. This bounds the memory and runtime of the fit on large datasets.
+
+- Transform image and instance embeddings on each metrics table at a time, rather than on all of the data for a split at once. This reduces the memory footprint of the transform calls on large datasets.
+
 ## [0.3.4] - 2026-07-01
 
 ### Added

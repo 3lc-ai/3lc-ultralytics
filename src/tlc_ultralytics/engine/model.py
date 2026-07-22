@@ -20,7 +20,7 @@ from tlc_ultralytics.obb import TLCOBBTrainer, TLCOBBValidator
 from tlc_ultralytics.pose import TLCPoseTrainer, TLCPoseValidator
 from tlc_ultralytics.segment import TLCSegmentationTrainer, TLCSegmentationValidator
 from tlc_ultralytics.settings import Settings
-from tlc_ultralytics.utils import check_requirements, reduce_embeddings
+from tlc_ultralytics.utils import check_requirements
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -93,7 +93,7 @@ class YOLO(YOLOBase):
             },
         }
 
-    def collect( # noqa: C901
+    def collect(
         self,
         data: str | None = None,
         splits: Iterable[str] | None = None,
@@ -104,10 +104,9 @@ class YOLO(YOLOBase):
     ) -> dict[str, dict[str, float]]:
         """Perform calls to model.val() to collect metrics on a set of splits, all under one tlc.Run.
 
-        If enabled, embeddings are reduced at the end of validation. When instance
-        embeddings are enabled and multiple splits are collected, the first split
-        (train) defines the reduction space and subsequent splits are projected
-        into it.
+        If enabled, embeddings are reduced at the end of each split's validation
+        pass. When multiple splits are collected, the first split (train) defines
+        the reduction spaces and subsequent splits are projected into them.
 
         :param data: Path to a YOLO or 3LC YAML file. If provided, splits must also be provided.
         :param splits: List of splits to collect metrics for. If provided, data must also be provided.
@@ -164,37 +163,20 @@ class YOLO(YOLOBase):
                 if progress_callback:
                     progress_callback("split_start", 0, 0)
                 results_dict[split] = self.val(settings=settings, **split_val_kwargs[split], **kwargs)
-
-            if settings.image_embeddings_dim > 0:
-                self._reduce_image_embeddings(settings, progress_callback)
         finally:
-            # TEMP(instance-embeddings): drop this run's fitted reducer (also on
+            # TEMP(embeddings): drop this run's fitted reducers (also on
             # failure — a later collect() may reuse the same active run and must
             # not inherit a stale embedding space).
-            if settings.instance_embeddings_dim > 0 and tlc.active_run() is not None:
-                from tlc_ultralytics.utils._instance_reduce import _clear_fitted_reducer
+            if (
+                settings.instance_embeddings_dim > 0 or settings.image_embeddings_dim > 0
+            ) and tlc.active_run() is not None:
+                from tlc_ultralytics.utils._instance_reduce import _clear_fitted_reducers
 
-                _clear_fitted_reducer(tlc.active_run().url.to_str())
+                _clear_fitted_reducers(tlc.active_run().url.to_str())
 
         tlc.active_run().set_status_completed()
 
         return results_dict
-
-    @staticmethod
-    def _reduce_image_embeddings(settings: Settings, progress_callback: object | None) -> None:
-        """Reduce image embeddings server-side across all collected splits."""
-        if progress_callback:
-            progress_callback("image_embeddings", 0, 0)
-
-        reduce_embeddings(
-            tlc.active_run(),
-            method=settings.image_embeddings_reducer,
-            n_components=settings.image_embeddings_dim,
-            reducer_args=settings.image_embeddings_reducer_args,
-        )
-
-        if progress_callback:
-            progress_callback("image_embeddings_done", 0, 0)
 
 
 class TLCYOLO(YOLO):

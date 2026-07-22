@@ -62,6 +62,33 @@ def _raw_instance_embeddings_schema(c_raw: int, display_name: str | None = None)
     )
 
 
+def _reduced_image_embeddings_schema(n_components: int, method: str) -> tlc.Schema:
+    """TEMP(image-embeddings): schema for the reduced per-image embedding column.
+
+    Mirrors the schema produced by core 3LC's dimensional-reduction tables: a fixed-size float32 vector whose
+    size dimension carries the `xy_component` / `xyz_component` number role, which is what makes the Dashboard
+    render the column as 2D/3D points. Goes away when reduction moves back to a core 3LC interface.
+
+    :param n_components: The number of reduced dimensions (2 or 3).
+    :param method: The reduction method name, used in the column name and descriptions.
+    :returns: A Schema for the reduced image embedding column.
+    """
+    from tlc.constants import NUMBER_ROLE_XY_COMPONENT, NUMBER_ROLE_XYZ_COMPONENT
+
+    number_role_mapping = {2: NUMBER_ROLE_XY_COMPONENT, 3: NUMBER_ROLE_XYZ_COMPONENT}
+
+    schema = Float32Schema(
+        display_name=f"embeddings_{method}",
+        description="A property containing the low-dimensional values of column 'embeddings'",
+        shape=(n_components,),
+        writable=False,
+    )
+    schema.size0.display_name = f"{method} component"
+    schema.size0.description = f"The size-n dimension of the {method} embedding"
+    schema.size0.number_role = number_role_mapping.get(n_components, f"{method} Component")
+    return schema
+
+
 def image_embeddings_schema(activation_size=512) -> tlc.Schema:
     """Create a 3LC schema for YOLO image embeddings.
 

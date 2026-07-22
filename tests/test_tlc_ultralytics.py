@@ -26,7 +26,6 @@ from testing_helpers import (
     stub_model_with_stride,
 )
 from tlc._core.objects.tables.from_table.edited_table import EditedTable
-from tlc._core.objects.tables.from_table.pacmap_table import PacmapTable
 from tlc._core.objects.tables.null_overlay import NullOverlay
 from tlc.constants._run_status import RUN_STATUS_COMPLETED
 from tlc.helpers import KeypointHelper
@@ -635,12 +634,12 @@ def test_embeddings_collection() -> None:
 
     run = _get_run_from_settings(settings)
     assert len(run.metrics_tables) == 2, "Expected 2 metrics tables to be written"
-    assert any(isinstance(metrics_table, PacmapTable) for metrics_table in run.metrics_tables), "Expected a PaCMAPTable"
 
     embeddings_table = next(
-        metrics_table for metrics_table in run.metrics_tables if isinstance(metrics_table, PacmapTable)
+        (metrics_table for metrics_table in run.metrics_tables if "embeddings_pacmap" in metrics_table.columns),
+        None,
     )
-    assert "embeddings_pacmap" in embeddings_table.columns, "Expected embeddings column"
+    assert embeddings_table is not None, "Expected a metrics table with the reduced embeddings column"
 
     embeddings_column_arrow = embeddings_table.get_column_as_pyarrow_array("embeddings_pacmap")
     embeddings_column_list = embeddings_column_arrow.tolist()
@@ -3107,47 +3106,46 @@ def test_all_embeddings_combined() -> None:
 def test_instance_reducer_fit_then_transform(reducer: str) -> None:
     """Unit test: each reducer must survive a fit followed by a fresh .transform().
 
-    Exercises ``_reduce_instance_embeddings`` and ``_transform_instance_embeddings``
+    Exercises ``_fit_embeddings_reducer`` and ``_transform_embeddings``
     directly on synthetic data so the test doesn't depend on a full model run or
     the size of the YOLO test dataset. This is the scenario that catches pacmap's
     ``save_tree=True`` requirement — without it the fitted reducer can't project
-    GT embeddings into the predicted space.
+    instances outside the fit sample into the fitted space.
     """
     pytest.importorskip(reducer if reducer != "pca" else "sklearn")
 
     from tlc_ultralytics.utils._instance_reduce import (
-        _reduce_instance_embeddings,
-        _transform_instance_embeddings,
+        _fit_embeddings_reducer,
+        _transform_embeddings,
     )
 
     rng = np.random.default_rng(0)
-    raw_per_image = [rng.normal(size=(20, 32)).astype(np.float32) for _ in range(10)]
+    sample = rng.normal(size=(200, 32)).astype(np.float32)
 
     try:
         # random_state is a raw constructor kwarg for all three reducers; passing it through
         # exercises that instance_embeddings_reducer_kwargs are forwarded to the constructor.
-        reduced, fitted = _reduce_instance_embeddings(
-            raw_per_image,
+        fitted = _fit_embeddings_reducer(
+            sample,
             method=reducer,
             n_components=2,
             random_state=42,
         )
     except ValueError as exc:
-        # pacmap on macOS ARM currently fails during fit_transform with a
+        # pacmap on macOS ARM currently fails during fit with a
         # broadcast/shape error from its internal KNN. Skip rather than fail —
         # the post-fit .transform() path (the save_tree=True regression guard)
         # can only be checked when fit itself works.
         pytest.skip(f"{reducer} fit failed in this environment: {exc}")
 
     assert fitted is not None
-    assert all(r.shape == (20, 2) for r in reduced)
     # The forwarded kwarg reached the underlying reducer constructor.
     assert fitted.random_state == 42
 
     # Transform a disjoint batch with the fitted reducer — this crashes on
     # pacmap when save_tree=False, which is the bug the in-process reducer guards.
     new_raw = [rng.normal(size=(5, 32)).astype(np.float32) for _ in range(3)]
-    projected = _transform_instance_embeddings(new_raw, fitted, n_components=2)
+    projected = _transform_embeddings(new_raw, fitted, n_components=2)
     assert all(r.shape == (5, 2) for r in projected)
 
 
@@ -3175,10 +3173,9 @@ def test_gt_instance_embeddings_incompatible_with_collection_disable() -> None:
 
 
 def test_reducer_validation_split() -> None:
-    """pca is only supported by the in-process instance reduction, not the native image reduction."""
+    """pca is supported by the in-process reduction for both image and instance embeddings."""
     settings = Settings(image_embeddings_dim=2, image_embeddings_reducer="pca", label_column_name="test")
-    with pytest.raises(ValueError, match="image_embeddings_reducer"):
-        settings.verify(training=False)
+    settings.verify(training=False)
 
     settings = Settings(instance_embeddings_dim=2, instance_embeddings_reducer="pca", label_column_name="test")
     settings.verify(training=False)
@@ -3187,38 +3184,173 @@ def test_reducer_validation_split() -> None:
     with pytest.raises(ValueError, match="instance_embeddings_reducer"):
         settings.verify(training=False)
 
+    settings = Settings(image_embeddings_dim=2, image_embeddings_reducer="illegal", label_column_name="test")
+    with pytest.raises(ValueError, match="image_embeddings_reducer"):
+        settings.verify(training=False)
 
-def test_split_reduced_by_rank() -> None:
-    """Unit test for the DDP re-split of flattened reduced embeddings back to per-rank lists."""
-    from tlc_ultralytics.engine.validator import TLCValidatorMixin
 
-    rng = np.random.default_rng(0)
+def test_rolling_metrics_writer_rolls_by_bytes() -> None:
+    """Unit test: the rolling writer flushes to a new metrics table when the buffer threshold is crossed,
+    and the flushed tables together hold all rows in order."""
+    from tlc_ultralytics.utils._rolling_writer import _RollingMetricsWriter
 
-    def make_payload(n_images, n_instances):
-        return [rng.normal(size=(n_instances, 16)).astype(np.float32) for _ in range(n_images)]
+    run = tlc.init(project_name="test_rolling_writer", run_name="test_rolling_writer")
 
-    # Rank 0: 3 images, rank 1: 2 images (pred); GT counts differ from pred counts
-    gathered = [
-        (make_payload(3, 4), make_payload(3, 2)),
-        (make_payload(2, 4), make_payload(2, 2)),
-    ]
-    pred_reduced_all = [rng.normal(size=(4, 2)).astype(np.float32) for _ in range(5)]
-    gt_reduced_all = [rng.normal(size=(2, 2)).astype(np.float32) for _ in range(5)]
+    writer = _RollingMetricsWriter(
+        run_url=run.url,
+        foreign_table_url=run.url / "dummy_table",
+        schema={"value": tlc.schemas.Float32Schema()},
+        max_buffer_bytes=1,  # every batch crosses the threshold -> one table per batch
+    )
 
-    per_rank = TLCValidatorMixin._split_reduced_by_rank(gathered, pred_reduced_all, gt_reduced_all)
+    assert writer.num_flushed_tables == 0
+    for i in range(3):
+        writer.add_batch({"example_id": [2 * i, 2 * i + 1], "value": [0.5, 1.5]})
+        assert writer.num_flushed_tables == i + 1
 
-    assert len(per_rank) == 2
-    pred_r0, gt_r0 = per_rank[0]
-    pred_r1, gt_r1 = per_rank[1]
-    assert len(pred_r0) == 3 and len(gt_r0) == 3
-    assert len(pred_r1) == 2 and len(gt_r1) == 2
-    # Order is preserved: rank 1's first image is the 4th flattened entry
-    np.testing.assert_array_equal(pred_r1[0], pred_reduced_all[3])
-    np.testing.assert_array_equal(gt_r1[1], gt_reduced_all[4])
+    table_urls, metrics_infos = writer.finalize()
+    assert len(table_urls) == 3
+    assert len(metrics_infos) == 3
+    assert all(info["stream_name"] == "default_stream" for info in metrics_infos)
 
-    # Without GT, gt side is None for every rank
-    per_rank_no_gt = TLCValidatorMixin._split_reduced_by_rank(gathered, pred_reduced_all, None)
-    assert all(gt is None for _, gt in per_rank_no_gt)
+    df = pd.concat([tlc.Table.from_url(url).to_pandas() for url in table_urls], ignore_index=True)
+    assert sorted(df["example_id"].tolist()) == list(range(6))
+
+    # Each flushed table was registered on the run as it was written
+    run = tlc.Run.from_url(run.url)
+    registered_urls = {info["url"] for info in run.metrics}
+    assert {info["url"] for info in metrics_infos} <= registered_urls
+
+    # A finalized writer must reject further batches and repeated finalize calls
+    with pytest.raises(RuntimeError):
+        writer.add_batch({"example_id": [0], "value": [0.0]})
+    with pytest.raises(RuntimeError):
+        writer.finalize()
+
+
+def test_metrics_flushing_end_to_end() -> None:
+    """Collect with a zero buffer threshold: metrics are flushed to multiple tables that together
+    hold one row per dataset image."""
+    settings = Settings(
+        project_name="test_metrics_flushing",
+        run_name="test_metrics_flushing",
+        metrics_max_buffer_mb=0,  # flush after every batch
+    )
+
+    model = TLCYOLO(TASK2MODEL["detect"])
+    model.collect(data=TASK2DATASET["detect"], splits=("train",), settings=settings, batch=2, device="cpu", workers=0)
+
+    run = _get_run_from_settings(settings)
+    default_tables = get_metrics_tables_from_run(run)["default_stream"]
+    assert len(default_tables) >= 2, "Expected the zero buffer threshold to flush multiple metrics tables"
+
+    df = pd.concat([t.to_pandas() for t in default_tables], ignore_index=True)
+    assert sorted(df["example_id"].tolist()) == [0, 1, 2, 3], "Flushed tables should cover every image exactly once"
+
+
+def test_metrics_flushing_with_instance_embeddings() -> None:
+    """Collect with a zero buffer threshold and instance embeddings: every raw table is rewritten with a
+    reduced embedding column, raw columns and tables are gone, and rows are preserved."""
+    dim = 2
+    settings = Settings(
+        project_name="test_metrics_flushing_instance_emb",
+        run_name="test_metrics_flushing_instance_emb",
+        metrics_max_buffer_mb=0,  # flush after every batch
+        instance_embeddings_dim=dim,
+        instance_embeddings_reducer="pca",
+        instance_embeddings_fit_sample_size=5,  # force the sampled-fit path
+        label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
+    )
+
+    model = TLCYOLO(TASK2MODEL["detect"])
+    model.collect(data=TASK2DATASET["detect"], splits=("train",), settings=settings, batch=2, device="cpu", workers=0)
+
+    run = _get_run_from_settings(settings)
+    default_tables = get_metrics_tables_from_run(run)["default_stream"]
+    assert len(default_tables) >= 2, "Expected the zero buffer threshold to flush multiple metrics tables"
+
+    df = pd.concat([t.to_pandas() for t in default_tables], ignore_index=True)
+    assert sorted(df["example_id"].tolist()) == [0, 1, 2, 3], "Rewritten tables should cover every image exactly once"
+
+    assert "predicted_instance_embedding" in df.columns, "Expected the reduced embedding column in every table"
+    assert "predicted_instance_embedding_raw" not in df.columns, "Raw embedding columns should have been rewritten"
+
+    total_instances = 0
+    for row_embs in df["predicted_instance_embedding"]:
+        for emb in row_embs:
+            assert len(emb) == dim
+            total_instances += 1
+    assert total_instances > 0, "Expected at least some reduced instance embeddings"
+
+
+def test_metrics_flushing_with_image_embeddings() -> None:
+    """Collect with a zero buffer threshold and image embeddings: the reducer is fitted on a sample drawn
+    across the flushed tables and every table is rewritten with the reduced column in place of the raw one."""
+    dim = 2
+    settings = Settings(
+        project_name="test_metrics_flushing_image_emb",
+        run_name="test_metrics_flushing_image_emb",
+        metrics_max_buffer_mb=0,  # flush after every batch
+        image_embeddings_dim=dim,
+        image_embeddings_reducer="pca",
+        image_embeddings_fit_sample_size=3,  # force the sampled-fit path (fewer than the 4 images)
+    )
+
+    model = TLCYOLO(TASK2MODEL["detect"])
+    model.collect(data=TASK2DATASET["detect"], splits=("train",), settings=settings, batch=2, device="cpu", workers=0)
+
+    run = _get_run_from_settings(settings)
+    default_tables = get_metrics_tables_from_run(run)["default_stream"]
+    assert len(default_tables) >= 2, "Expected the zero buffer threshold to flush multiple metrics tables"
+
+    df = pd.concat([t.to_pandas() for t in default_tables], ignore_index=True)
+    assert sorted(df["example_id"].tolist()) == [0, 1, 2, 3], "Rewritten tables should cover every image exactly once"
+
+    assert "embeddings_pca" in df.columns, "Expected the reduced image-embeddings column"
+    assert "embeddings" not in df.columns, "The raw image-embeddings column should have been rewritten"
+    for emb in df["embeddings_pca"]:
+        assert len(emb) == dim
+
+
+def test_metrics_flushing_segment_all_embeddings() -> None:
+    """The bug-report scenario: segmentation masks plus image, predicted and ground-truth instance embeddings,
+    with a zero buffer threshold. Every flushed table is rewritten with all three reduced columns while the
+    heavy mask column is carried through the rewrite."""
+    dim = 2
+    settings = Settings(
+        project_name="test_metrics_flushing_seg_all",
+        run_name="test_metrics_flushing_seg_all",
+        metrics_max_buffer_mb=0,  # flush after every batch
+        image_embeddings_dim=dim,
+        image_embeddings_reducer="pca",
+        instance_embeddings_dim=dim,
+        instance_embeddings_reducer="pca",
+        ground_truth_instance_embeddings=True,
+        label_column_name=TASK2LABEL_COLUMN_NAME["segment"],
+    )
+
+    model = TLCYOLO(TASK2MODEL["segment"])
+    model.collect(data=TASK2DATASET["segment"], splits=("train",), settings=settings, batch=2, device="cpu", workers=0)
+
+    run = _get_run_from_settings(settings)
+    default_tables = get_metrics_tables_from_run(run)["default_stream"]
+    assert len(default_tables) >= 2, "Expected the zero buffer threshold to flush multiple metrics tables"
+
+    df = pd.concat([t.to_pandas() for t in default_tables], ignore_index=True)
+    assert sorted(df["example_id"].tolist()) == [0, 1, 2, 3], "Rewritten tables should cover every image exactly once"
+
+    # The heavy mask column survived the rewrite alongside all three reduced embedding columns
+    assert "segmentations_predicted" in df.columns, "Expected the predicted segmentations column"
+    for column in ("embeddings_pca", "predicted_instance_embedding", "ground_truth_instance_embedding"):
+        assert column in df.columns, f"Expected reduced column '{column}'"
+    for raw_column in ("embeddings", "predicted_instance_embedding_raw", "ground_truth_instance_embedding_raw"):
+        assert raw_column not in df.columns, f"Raw column '{raw_column}' should have been rewritten"
+
+    for emb in df["embeddings_pca"]:
+        assert len(emb) == dim
+    for row_embs in df["predicted_instance_embedding"]:
+        for emb in row_embs:
+            assert len(emb) == dim
 
 
 def test_instance_embeddings_cross_split_shared_space() -> None:
@@ -3247,10 +3379,11 @@ def test_instance_embeddings_cross_split_shared_space() -> None:
             for emb in row_embs:
                 assert len(emb) == dim
 
-    # The run's reducer must not leak past collect()
+    # The run's reducers must not leak past collect()
     from tlc_ultralytics.utils._instance_reduce import _get_fitted_reducer
 
-    assert _get_fitted_reducer(run.url.to_str()) is None
+    assert _get_fitted_reducer(run.url.to_str(), "instance") is None
+    assert _get_fitted_reducer(run.url.to_str(), "image") is None
 
 
 def test_instance_embeddings_explicit_layer() -> None:

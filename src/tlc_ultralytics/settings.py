@@ -30,6 +30,9 @@ class Settings:
     max_det: int = field(default=300)
     """Maximum number of detections collected per image. Default: 300"""
 
+    metrics_max_buffer_mb: int = field(default=2048)
+    """Maximum size in MB of metrics in memory before they are flushed to a metrics table in storage. Default: 2048"""
+
     project_name: str | None = field(default=None)
     """The name of the 3LC project. Default: None"""
 
@@ -51,16 +54,18 @@ class Settings:
     """Image embeddings dimension. 0 means no embeddings, 2 means 2D embeddings, 3 means 3D embeddings. Default: 0"""
 
     image_embeddings_reducer: str = field(default="pacmap")
-    """Reduction algorithm for image embeddings. Options: pacmap and umap. Only used if IMAGE_EMBEDDINGS_DIM > 0.
-    Default: 'pacmap'"""
+    """Reduction algorithm for image embeddings. Options: 'pacmap', 'umap' and 'pca'.
+    Only used if IMAGE_EMBEDDINGS_DIM > 0. Default: 'pacmap'"""
 
     image_embeddings_reducer_args: dict = field(default_factory=dict)
-    """Reduction-method specific arguments to exert fine-grained control over the reduction process.
+    """Raw constructor kwargs for the chosen reducer (`pacmap.PaCMAP`, `umap.UMAP` or
+    `sklearn.decomposition.PCA`) to exert fine-grained control over the reduction process. Default: {}"""
 
-    See [PaCMAPTableArgs](https://docs.3lc.ai/3lc/latest/apidocs/tlc/tlc.client.reduce.pacmap.html#tlc.client.reduce.pacmap.PaCMAPTableArgs)
-    or [UMAPTableArgs](https://docs.3lc.ai/3lc/latest/apidocs/tlc/tlc.client.reduce.umap.html#tlc.client.reduce.umap.UMAPTableArgs)
-     for more details.
-    """
+    image_embeddings_fit_sample_size: int = field(default=10_000)
+    """Maximum number of images the image-embeddings reducer is fitted on. When a split contains more images,
+    a uniform random sample of this size is used for the fit and all images are projected into the fitted
+    space with the reducer's transform. Bounds both the memory and the runtime of the fit on large datasets.
+    Default: 10000"""
 
     instance_embeddings_dim: int = field(default=0)
     """Per-instance embeddings dimension. 0 means disabled, 2 means 2D, 3 means 3D. Default: 0"""
@@ -78,6 +83,12 @@ class Settings:
     """Raw constructor kwargs for the chosen reducer (`pacmap.PaCMAP`, `umap.UMAP` or
     `sklearn.decomposition.PCA`) — unlike `image_embeddings_reducer_args`, which takes 3LC
     reduction-table args. Default: {}"""
+
+    instance_embeddings_fit_sample_size: int = field(default=10_000)
+    """Maximum number of instances the instance-embeddings reducer is fitted on. When a split contains more
+    instances, a uniform random sample of this size is used for the fit and all instances are projected into the
+    fitted space with the reducer's transform. Bounds both the memory and the runtime of the fit on large
+    datasets. Default: 10000"""
 
     ground_truth_instance_embeddings: bool = field(default=False)
     """Whether to collect instance embeddings for ground-truth annotations.
@@ -243,8 +254,9 @@ class Settings:
             )
 
         if self.image_embeddings_dim > 0:
-            # The native 3LC reduction used for image embeddings supports pacmap and umap only.
-            self._check_reducer_available(self.image_embeddings_reducer, ("pacmap", "umap"), "image_embeddings_reducer")
+            self._check_reducer_available(
+                self.image_embeddings_reducer, ("pacmap", "umap", "pca"), "image_embeddings_reducer"
+            )
 
         assert self.instance_embeddings_dim >= 0, (
             f"Invalid instance embeddings dimension {self.instance_embeddings_dim}, must be non-negative."
@@ -264,12 +276,16 @@ class Settings:
             self._check_reducer_available(
                 self.instance_embeddings_reducer, ("pacmap", "umap", "pca"), "instance_embeddings_reducer"
             )
-            LOGGER.warning(
-                f"{TLC_COLORSTR}On large datasets or datasets with with many detections per image, instance embeddings "
-                "collection can use a lot of memory (tens of GB at full-COCO scale). To reduce it, collect on a "
-                "smaller split, lower max_det, or raise conf_thres. A memory-bounded path is planned, but not yet "
-                "available."
-            )
+
+        assert self.metrics_max_buffer_mb >= 0, (
+            f"Invalid metrics_max_buffer_mb {self.metrics_max_buffer_mb}, must be non-negative."
+        )
+        assert self.instance_embeddings_fit_sample_size > 0, (
+            f"Invalid instance_embeddings_fit_sample_size {self.instance_embeddings_fit_sample_size}, must be positive."
+        )
+        assert self.image_embeddings_fit_sample_size > 0, (
+            f"Invalid image_embeddings_fit_sample_size {self.image_embeddings_fit_sample_size}, must be positive."
+        )
 
         if self.ground_truth_instance_embeddings:
             assert self.instance_embeddings_dim > 0, (
