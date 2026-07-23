@@ -744,9 +744,7 @@ class TLCValidatorMixin(BaseValidator):
         payload = (table_url_strs, metrics_infos, pred_instance_counts, input_table_url)
         # gather_object fills this in place on RANK 0 with each rank's payload tuple;
         # annotate so the post-gather element type (not None) is known to the type checker.
-        gathered: list[tuple[list[str], list, list[int], str]] | None = (
-            [None] * world_size if RANK == 0 else None
-        )
+        gathered: list[tuple[list[str], list, list[int], str]] | None = [None] * world_size if RANK == 0 else None
         dist.gather_object(payload, gathered, dst=0)  # type: ignore[possibly-missing-attribute]
 
         input_table_urls: list[str] = []
@@ -809,8 +807,11 @@ class TLCValidatorMixin(BaseValidator):
         if self._settings.instance_embeddings_dim == 0 and image_reducer is None:
             return None
 
+        LOGGER.info(f"{TLC_COLORSTR}Reducing embeddings across {len(raw_table_urls)} metrics table(s)...")
+
         dst_writer = None
-        for url_str in raw_table_urls:
+        for table_number, url_str in enumerate(raw_table_urls, start=1):
+            LOGGER.debug(f"{TLC_COLORSTR}Reducing embeddings for metrics table {table_number}/{len(raw_table_urls)}.")
             raw_table = tlc.Table.from_url(url_str)
             if dst_writer is None:
                 dst_writer = self._reduced_table_writer(raw_table, image_reducer)
@@ -821,6 +822,7 @@ class TLCValidatorMixin(BaseValidator):
 
         assert dst_writer is not None
         _, reduced_metrics_infos = dst_writer.finalize()
+        LOGGER.info(f"{TLC_COLORSTR}Done reducing embeddings.")
         return reduced_metrics_infos
 
     def _fit_or_reuse_instance_reducer(self, raw_table_urls, pred_instance_counts):
@@ -1041,13 +1043,14 @@ class TLCValidatorMixin(BaseValidator):
         from tlc_ultralytics.utils._instance_reduce import _read_image_embedding_column, _transform_embeddings
 
         progress_cb = getattr(self._settings, "_reduction_progress_callback", None)
+        show_bar = self._should_show_reduction_bar()
         num_rows = len(raw_table)
         reduced_columns: dict[str, list] = {}
         skip_columns: set[str] = set()
 
         if PREDICTED_INSTANCE_EMBEDDING_RAW in raw_table.rows_schema.values:
             pred_reduced = self._transform_raw_column(
-                raw_table, PREDICTED_INSTANCE_EMBEDDING_RAW, instance_reducer, progress_cb, label="predicted"
+                raw_table, PREDICTED_INSTANCE_EMBEDDING_RAW, instance_reducer, progress_cb, show_bar, label="predicted"
             )
             assert len(pred_reduced) == num_rows, (
                 f"Instance embedding row count mismatch: {len(pred_reduced)} reduced entries for {num_rows} rows."
@@ -1057,7 +1060,12 @@ class TLCValidatorMixin(BaseValidator):
 
         if GROUND_TRUTH_INSTANCE_EMBEDDING_RAW in raw_table.rows_schema.values:
             gt_reduced = self._transform_raw_column(
-                raw_table, GROUND_TRUTH_INSTANCE_EMBEDDING_RAW, instance_reducer, progress_cb, label="ground-truth"
+                raw_table,
+                GROUND_TRUTH_INSTANCE_EMBEDDING_RAW,
+                instance_reducer,
+                progress_cb,
+                show_bar,
+                label="ground-truth",
             )
             reduced_columns[GROUND_TRUTH_INSTANCE_EMBEDDING] = [arr.astype(np.float32).tolist() for arr in gt_reduced]
             skip_columns.add(GROUND_TRUTH_INSTANCE_EMBEDDING_RAW)
@@ -1071,6 +1079,7 @@ class TLCValidatorMixin(BaseValidator):
                     n_components=self._settings.image_embeddings_dim,
                     progress_callback=progress_cb,
                     label="image",
+                    show_progress_bar=show_bar,
                 )[0]
                 assert len(image_reduced) == num_rows, (
                     f"Image embedding row count mismatch: {len(image_reduced)} reduced entries for {num_rows} rows."
@@ -1081,7 +1090,20 @@ class TLCValidatorMixin(BaseValidator):
 
         return reduced_columns, skip_columns
 
-    def _transform_raw_column(self, raw_table, column_name, reducer, progress_callback, label):
+    def _should_show_reduction_bar(self) -> bool:
+        """Whether to draw a default tqdm bar for the transform step.
+
+        Only when no reduction progress callback was supplied (the caller drives its own
+        reporting otherwise), on the main process, and to an interactive stdout — so DDP ranks
+        and non-interactive environments (logs, CI) stay quiet.
+        """
+        import sys
+
+        if getattr(self._settings, "_reduction_progress_callback", None) is not None:
+            return False
+        return RANK in {-1, 0} and sys.stdout.isatty()
+
+    def _transform_raw_column(self, raw_table, column_name, reducer, progress_callback, show_progress_bar, label):
         """TEMP(instance-embeddings): read one raw instance embedding column and
         project it into the reduced space, returning one [N_i, dim] array per
         table row.
@@ -1101,7 +1123,12 @@ class TLCValidatorMixin(BaseValidator):
             return [np.empty((0, n), dtype=np.float32) for _ in range(len(per_row_counts))]
 
         reduced = _transform_embeddings(
-            [matrix], reducer, n_components=n, progress_callback=progress_callback, label=label
+            [matrix],
+            reducer,
+            n_components=n,
+            progress_callback=progress_callback,
+            label=label,
+            show_progress_bar=show_progress_bar,
         )[0]
         return np.split(reduced, np.cumsum(per_row_counts)[:-1])
 

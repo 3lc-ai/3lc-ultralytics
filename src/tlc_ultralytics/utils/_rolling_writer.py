@@ -15,6 +15,9 @@ from typing import TYPE_CHECKING, Any
 
 import tlc
 from tlc._core.object_registry import ObjectRegistry
+from ultralytics.utils import LOGGER
+
+from tlc_ultralytics.constants import TLC_COLORSTR
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping
@@ -105,9 +108,15 @@ class _RollingMetricsWriter:
     def _roll(self) -> None:
         """Finalize the current inner writer and arrange for a fresh one on the next batch."""
         assert self._writer is not None
+        row_count = self._writer.row_count
         table = self._writer.finalize()
         self._flushed_infos.extend(self._writer.get_written_metrics_infos())
         self._flushed_urls.append(table.url)
+
+        LOGGER.debug(
+            f"{TLC_COLORSTR}Flushed metrics table {len(self._flushed_urls)} "
+            f"({row_count} rows, {self._buffered_bytes / (1024 * 1024):.1f} MB) to {table.url}."
+        )
 
         # Drop the table object and evict it from the object caches so flushed data doesn't linger in RAM.
         ObjectRegistry._delete_object_from_caches(table.url)

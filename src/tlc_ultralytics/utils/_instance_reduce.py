@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
-from ultralytics.utils import LOGGER
+from ultralytics.utils import LOGGER, TQDM
 
 from tlc_ultralytics.constants import TLC_COLORSTR
 
@@ -164,6 +164,7 @@ def _transform_embeddings(
     n_components: int,
     progress_callback: object | None = None,
     label: str = "instance",
+    show_progress_bar: bool = False,
 ) -> list[np.ndarray]:
     """Transform raw embeddings using an already-fitted reducer.
 
@@ -177,6 +178,9 @@ def _transform_embeddings(
         n_components: target dimensionality (must match the reducer)
         progress_callback: Optional callable(phase, current, total) for progress reporting.
         label: Human-readable label for log messages (e.g. "predicted", "ground-truth", "image").
+        show_progress_bar: Draw a tqdm bar over the batches. Ignored when progress_callback is
+            given (the caller drives its own reporting); the caller is responsible for the TTY/RANK
+            guard so this stays quiet under DDP and in non-interactive environments.
 
     Returns:
         list of [N_i, n_components] arrays (or empty arrays for entries with no rows)
@@ -194,19 +198,24 @@ def _transform_embeddings(
     if progress_callback:
         progress_callback("transform", 0, total_instances)
 
-    if total_instances > _TRANSFORM_BATCH_SIZE:
-        reduced_parts = []
-        for start in range(0, total_instances, _TRANSFORM_BATCH_SIZE):
-            end = min(start + _TRANSFORM_BATCH_SIZE, total_instances)
-            chunk = all_embeddings[start:end]
-            reduced_parts.append(reducer.transform(chunk).astype(np.float32))
-            if progress_callback:
-                progress_callback("transform", end, total_instances)
-        reduced = np.concatenate(reduced_parts, axis=0)
-    else:
-        reduced = reducer.transform(all_embeddings).astype(np.float32)
+    pbar = None
+    if show_progress_bar and not progress_callback:
+        pbar = TQDM(total=total_instances, desc=f"{TLC_COLORSTR}Transforming {label} embeddings", unit=" emb")
+
+    # One batched loop covers both sizes: for total <= _TRANSFORM_BATCH_SIZE it runs a single
+    # iteration over the whole array, matching the un-chunked transform.
+    reduced_parts = []
+    for start in range(0, total_instances, _TRANSFORM_BATCH_SIZE):
+        end = min(start + _TRANSFORM_BATCH_SIZE, total_instances)
+        reduced_parts.append(reducer.transform(all_embeddings[start:end]).astype(np.float32))
         if progress_callback:
-            progress_callback("transform", total_instances, total_instances)
+            progress_callback("transform", end, total_instances)
+        if pbar is not None:
+            pbar.update(end - start)
+    reduced = np.concatenate(reduced_parts, axis=0)
+
+    if pbar is not None:
+        pbar.close()
 
     result = []
     idx = 0
