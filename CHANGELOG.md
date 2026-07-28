@@ -16,6 +16,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 - Transform image and instance embeddings on each metrics table at a time, rather than on all of the data for a split at once. This reduces the memory footprint of the transform calls on large datasets.
 
+- `image_embeddings_reducer_args` now takes raw constructor kwargs for the chosen reducer (`pacmap.PaCMAP`, `umap.UMAP` or `sklearn.decomposition.PCA`), matching `instance_embeddings_reducer_kwargs`, instead of 3LC reduction-table args (`PaCMAPTableArgs`/`UMAPTableArgs`). Keys specific to the table args (e.g. `retain_source_embedding_column`) are no longer accepted and will raise a `TypeError` from the reducer constructor. A user-supplied `n_components` is ignored in favor of `image_embeddings_dim` and `instance_embeddings_dim`.
+
 ## [0.3.4] - 2026-07-01
 
 ### Added

@@ -3258,6 +3258,8 @@ def test_metrics_flushing_with_instance_embeddings() -> None:
         metrics_max_buffer_mb=0,  # flush after every batch
         instance_embeddings_dim=dim,
         instance_embeddings_reducer="pca",
+        # A user-supplied n_components must be ignored in favor of instance_embeddings_dim
+        instance_embeddings_reducer_kwargs={"n_components": 7},
         instance_embeddings_fit_sample_size=5,  # force the sampled-fit path
         label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
     )
@@ -3293,6 +3295,8 @@ def test_metrics_flushing_with_image_embeddings() -> None:
         metrics_max_buffer_mb=0,  # flush after every batch
         image_embeddings_dim=dim,
         image_embeddings_reducer="pca",
+        # A user-supplied n_components must be ignored in favor of image_embeddings_dim
+        image_embeddings_reducer_args={"n_components": 7},
         image_embeddings_fit_sample_size=3,  # force the sampled-fit path (fewer than the 4 images)
     )
 

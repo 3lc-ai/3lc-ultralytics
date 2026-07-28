@@ -861,13 +861,15 @@ class TLCValidatorMixin(BaseValidator):
             LOGGER.warning(f"{TLC_COLORSTR}{msg}")
             return None
 
+        reducer_kwargs = dict(self._settings.instance_embeddings_reducer_kwargs or {})
+        reducer_kwargs.pop("n_components", None)  # provided via instance_embeddings_dim
         reducer = _fit_embeddings_reducer(
             sample,
             method=self._settings.instance_embeddings_reducer,
             n_components=self._settings.instance_embeddings_dim,
             progress_callback=getattr(self._settings, "_reduction_progress_callback", None),
             label="instance",
-            **(self._settings.instance_embeddings_reducer_kwargs or {}),
+            **reducer_kwargs,
         )
         _set_fitted_reducer(run_url_str, "instance", reducer)
         return reducer

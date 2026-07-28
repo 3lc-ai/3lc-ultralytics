@@ -58,8 +58,9 @@ class Settings:
     Only used if IMAGE_EMBEDDINGS_DIM > 0. Default: 'pacmap'"""
 
     image_embeddings_reducer_args: dict = field(default_factory=dict)
-    """Raw constructor kwargs for the chosen reducer (`pacmap.PaCMAP`, `umap.UMAP` or
-    `sklearn.decomposition.PCA`) to exert fine-grained control over the reduction process. Default: {}"""
+    """Raw constructor kwargs for the chosen reducer (`pacmap.PaCMAP`, `umap.UMAP` or `sklearn.decomposition.PCA`)
+    to exert fine-grained control over the reduction process. `n_components` is set via `image_embeddings_dim` and
+    ignored here. Default: {}"""
 
     image_embeddings_fit_sample_size: int = field(default=10_000)
     """Maximum number of images the image-embeddings reducer is fitted on. When a split contains more images,
@@ -76,13 +77,12 @@ class Settings:
 
     instance_embeddings_reducer: str = field(default="pacmap")
     """Reduction algorithm for instance embeddings. Options: 'pacmap', 'umap' and 'pca'.
-    Only used if instance_embeddings_dim > 0. Experimental: reduced in-process for now,
-    and 'pca' is in-process only. Default: 'pacmap'"""
+    Only used if instance_embeddings_dim > 0. Experimental: reduced in-process for now. Default: 'pacmap'"""
 
     instance_embeddings_reducer_kwargs: dict = field(default_factory=dict)
-    """Raw constructor kwargs for the chosen reducer (`pacmap.PaCMAP`, `umap.UMAP` or
-    `sklearn.decomposition.PCA`) — unlike `image_embeddings_reducer_args`, which takes 3LC
-    reduction-table args. Default: {}"""
+    """Raw constructor kwargs for the chosen reducer (`pacmap.PaCMAP`, `umap.UMAP` or `sklearn.decomposition.PCA`),
+    like `image_embeddings_reducer_args`. `n_components` is set via `instance_embeddings_dim` and ignored here.
+    Default: {}"""
 
     instance_embeddings_fit_sample_size: int = field(default=10_000)
     """Maximum number of instances the instance-embeddings reducer is fitted on. When a split contains more
