@@ -256,7 +256,9 @@ The way in which embeddings are collected is different for the different tasks:
 - **Classification**: The integration scans your model for the first occurrence of a `torch.nn.Linear` layer. The inputs to this layer are used to extract image embeddings.
 - **Object Detection and Instance Segmentation**: The output of the spatial pooling function is used to extract embeddings.
 
-You can change which `3lc`-supported reducer to use by setting `image_embeddings_reducer`. `pacmap` is the default.
+Choose the reduction algorithm with `image_embeddings_reducer` (`pacmap`, `umap` or `pca`; `pacmap` is the default) and pass arguments to its constructor via `image_embeddings_reducer_args`. The reducer is fitted on a uniform random sample of at most `image_embeddings_fit_sample_size` images (default 10000) and all images are projected into the fitted space, so memory and fit time stay bounded on large datasets.
+
+> **Experimental:** image embeddings are currently reduced in-process by the integration. This will move to a native 3LC interface in the future, at which point some of these settings may change.
 
 ### Instance Embeddings
 
@@ -266,11 +268,9 @@ By default embeddings are extracted from the classification branch of the detect
 
 Instance embeddings have been tested with the YOLOv8, YOLO11 and YOLO26 detection heads. YOLO11 and YOLO26 use the classification branch directly; for YOLOv8 the integration automatically falls back to a neck layer. Other architectures are not guaranteed to be supported and may require setting `instance_embeddings_layer` explicitly.
 
-Choose the reduction algorithm with `instance_embeddings_reducer` (`pacmap`, `umap` or `pca`) and pass arguments to its constructor via `instance_embeddings_reducer_kwargs`.
+Choose the reduction algorithm with `instance_embeddings_reducer` (`pacmap`, `umap` or `pca`) and pass arguments to its constructor via `instance_embeddings_reducer_kwargs`. The reducer is fitted on a uniform random sample of at most `instance_embeddings_fit_sample_size` instances (default 10000) and all instances are projected into the fitted space, so memory and fit time stay bounded on large datasets.
 
 > **Experimental:** instance embeddings are currently reduced in-process by the integration. This will move to a native 3LC interface in the future, at which point some of these settings may change.
-
-> **Memory:** Instance embeddings holds the full feature vector for each instance — so on large datasets or with many detections it can use a lot of memory (tens of GB at full-COCO scale). To reduce it, collect on a smaller split, lower `max_det`, or raise `conf_thres`. A memory-bounded reduction path is planned.
 
 ### Run Properties
 
@@ -289,6 +289,7 @@ Use `exclude_zero_weight_training=True` (only applies to training) and `exclude_
 - **`collection_val_only=True`**: Disable metrics collection on the training set. This only applies to training.
 - **`collection_disable=True`**: Disable metrics collection entirely. This only applies to training. A run will still be created, and hyperparameters and aggregate metrics will be logged to 3LC.
 - **`collection_epoch_start` and `collection_epoch_interval`**: Define when to collect metrics during training. The start epoch is 1-based, i.e. 1 means after the first epoch. As an example, `collection_epoch_start=1` with `collection_epoch_interval=2` means metrics collection will occur after the first epoch and then every other epoch after that.
+- **`metrics_max_buffer_mb`**: Maximum size in MB of metrics buffered in memory before they are flushed to a metrics table and a new one is started (default 256). This keeps the metrics buffer from growing with dataset size; the flushed tables are joined back together in the 3LC Dashboard. Lower this when collecting heavy per-row metrics (segmentation masks, instance embeddings) on machines with limited memory.
 
 ### Column names
 

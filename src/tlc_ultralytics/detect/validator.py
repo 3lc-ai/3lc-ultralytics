@@ -52,8 +52,8 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
         bbox_schema = yolo_predicted_bounding_box_schema(self.data["names_3lc"])
 
         # Instance-embedding columns (raw + reduced) are added by the mixin in
-        # _pre_validation / _fit_and_rewrite — task validators only contribute
-        # task-specific schemas here.
+        # _pre_validation / _reduce_and_rewrite_raw_tables — task validators only
+        # contribute task-specific schemas here.
         return {
             PREDICTED_BOUNDING_BOXES: bbox_schema,
             **loss_schemas,
