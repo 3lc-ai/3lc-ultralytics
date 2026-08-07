@@ -8,15 +8,15 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Added
 
-- Bound peak host memory during metrics collection by flushing to new metrics tables whenever the in-memory buffer exceeds the new `metrics_max_buffer_mb` setting (default 256).
+- Bound peak host memory during metrics collection by flushing to new metrics tables whenever the in-memory buffer exceeds the new `metrics_max_buffer_mb` setting (default 256) ([#85](https://github.com/3lc-ai/3lc-ultralytics/pull/85)).
 
 ### Changed
 
-- Reduce image and instance embeddings natively in the integration, on at most `image_embeddings_fit_sample_size` images and `instance_embeddings_fit_sample_size` instances (new settings, default 10000) respectively. This bounds the memory and runtime of the fit on large datasets.
+- Reduce image and instance embeddings natively in the integration, on at most `image_embeddings_fit_sample_size` images and `instance_embeddings_fit_sample_size` instances (new settings, default 10000) respectively. This bounds the memory and runtime of the fit on large datasets ([#85](https://github.com/3lc-ai/3lc-ultralytics/pull/85)).
 
-- Transform image and instance embeddings on each metrics table at a time, rather than on all of the data for a split at once. This reduces the memory footprint of the transform calls on large datasets.
+- Transform image and instance embeddings on each metrics table at a time, rather than on all of the data for a split at once. This reduces the memory footprint of the transform calls on large datasets ([#85](https://github.com/3lc-ai/3lc-ultralytics/pull/85)).
 
-- `image_embeddings_reducer_args` now takes raw constructor kwargs for the chosen reducer (`pacmap.PaCMAP`, `umap.UMAP` or `sklearn.decomposition.PCA`), matching `instance_embeddings_reducer_kwargs`, instead of 3LC reduction-table args (`PaCMAPTableArgs`/`UMAPTableArgs`). Keys specific to the table args (e.g. `retain_source_embedding_column`) are no longer accepted and will raise a `TypeError` from the reducer constructor. A user-supplied `n_components` is ignored in favor of `image_embeddings_dim` and `instance_embeddings_dim`.
+- `image_embeddings_reducer_args` now takes raw constructor kwargs for the chosen reducer (`pacmap.PaCMAP`, `umap.UMAP` or `sklearn.decomposition.PCA`), matching `instance_embeddings_reducer_kwargs`, instead of 3LC reduction-table args (`PaCMAPTableArgs`/`UMAPTableArgs`). Keys specific to the table args (e.g. `retain_source_embedding_column`) are no longer accepted and will raise a `TypeError` from the reducer constructor. A user-supplied `n_components` is ignored in favor of `image_embeddings_dim` and `instance_embeddings_dim` ([#85](https://github.com/3lc-ai/3lc-ultralytics/pull/85)).
 
 ## [0.3.4] - 2026-07-01
 
