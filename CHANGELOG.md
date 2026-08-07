@@ -8,7 +8,7 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Added
 
-- Bound peak host memory during metrics collection by flushing to new metrics tables whenever the in-memory buffer exceeds the new `metrics_max_buffer_mb` setting (default 2048).
+- Bound peak host memory during metrics collection by flushing to new metrics tables whenever the in-memory buffer exceeds the new `metrics_max_buffer_mb` setting (default 256).
 
 ### Changed
 

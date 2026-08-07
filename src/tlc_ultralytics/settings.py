@@ -30,8 +30,8 @@ class Settings:
     max_det: int = field(default=300)
     """Maximum number of detections collected per image. Default: 300"""
 
-    metrics_max_buffer_mb: int = field(default=2048)
-    """Maximum size in MB of metrics in memory before they are flushed to a metrics table in storage. Default: 2048"""
+    metrics_max_buffer_mb: int = field(default=256)
+    """Maximum size in MB of metrics in memory before they are flushed to a metrics table in storage. Default: 256"""
 
     project_name: str | None = field(default=None)
     """The name of the 3LC project. Default: None"""

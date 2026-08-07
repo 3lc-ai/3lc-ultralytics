@@ -289,7 +289,7 @@ Use `exclude_zero_weight_training=True` (only applies to training) and `exclude_
 - **`collection_val_only=True`**: Disable metrics collection on the training set. This only applies to training.
 - **`collection_disable=True`**: Disable metrics collection entirely. This only applies to training. A run will still be created, and hyperparameters and aggregate metrics will be logged to 3LC.
 - **`collection_epoch_start` and `collection_epoch_interval`**: Define when to collect metrics during training. The start epoch is 1-based, i.e. 1 means after the first epoch. As an example, `collection_epoch_start=1` with `collection_epoch_interval=2` means metrics collection will occur after the first epoch and then every other epoch after that.
-- **`metrics_max_buffer_mb`**: Maximum size in MB of metrics buffered in memory before they are flushed to a metrics table and a new one is started (default 2048). Peak host memory during collection stays bounded regardless of dataset size; the flushed tables are joined back together in the 3LC Dashboard. Lower this when collecting heavy per-row metrics (segmentation masks, instance embeddings) on machines with limited memory.
+- **`metrics_max_buffer_mb`**: Maximum size in MB of metrics buffered in memory before they are flushed to a metrics table and a new one is started (default 256). This keeps the metrics buffer from growing with dataset size; the flushed tables are joined back together in the 3LC Dashboard. Lower this when collecting heavy per-row metrics (segmentation masks, instance embeddings) on machines with limited memory.
 
 ### Column names
 

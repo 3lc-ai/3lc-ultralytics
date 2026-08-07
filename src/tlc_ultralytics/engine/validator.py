@@ -530,14 +530,15 @@ class TLCValidatorMixin(BaseValidator):
         In DDP mode, each rank collects metrics for its portion of the data.
         These are gathered to RANK 0 in _post_validation.
 
-        All metrics stream through a rolling writer that flushes to a new
-        metrics table whenever its in-memory buffer exceeds
-        ``Settings.metrics_max_buffer_mb``, so peak host memory is bounded
-        regardless of dataset size. When instance_embeddings_dim > 0, raw
-        per-instance embeddings are written inline as
-        ``predicted_instance_embedding_raw`` / ``ground_truth_..._raw`` columns
-        and reduced from the written tables at end of pass — nothing
-        accumulates in RAM here.
+        All metrics stream through a rolling writer that flushes to a new metrics table whenever its in-memory
+        buffer exceeds `Settings.metrics_max_buffer_mb`, so the buffer itself does not grow with dataset size.
+        When instance_embeddings_dim > 0, raw per-instance embeddings are written inline as
+        `predicted_instance_embedding_raw` / `ground_truth_..._raw` columns and reduced from the written tables
+        at end of pass, so they are not held in RAM here either.
+
+        This bounds the metrics buffer only. Two other terms still scale with the pass and are outside this
+        writer's reach: the dataloader worker processes, and Ultralytics' own `validator.metrics.stats`, which
+        retains six numpy arrays per image so it can compute mAP over the full split (~4.5 MB per 1000 images).
         """
         batch_size = self._infer_batch_size(preds, batch)
 
