@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-07
+
 ### Added
 
 - Bound peak host memory during metrics collection by flushing to new metrics tables whenever the in-memory buffer exceeds the new `metrics_max_buffer_mb` setting (default 256) ([#85](https://github.com/3lc-ai/3lc-ultralytics/pull/85)).
