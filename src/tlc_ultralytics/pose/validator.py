@@ -115,12 +115,13 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
     def _prepare_loss_fn(self, model):
         loss_model = model.model if hasattr(model.model, "model") else model
 
-        # Check if this is a YOLO26 (end2end) model - per-sample loss is not supported for these
+        # YOLO26 (end2end) pose models use ultralytics' `PoseLoss26`, whose optional RLE/flow-model keypoint
+        # loss has no unreduced counterpart here yet - per-sample loss is not supported for these.
         is_end2end = getattr(loss_model.model[-1], "end2end", False) if hasattr(loss_model, "model") else False
 
         if is_end2end and self._settings.collect_loss:
             LOGGER.warning(
-                f"{TLC_COLORSTR}Per-sample loss collection is not supported for YOLO26 (end2end) models. "
+                f"{TLC_COLORSTR}Per-sample loss collection is not supported for YOLO26 (end2end) pose models. "
                 "Disabling loss collection for this run."
             )
             self._settings.collect_loss = False

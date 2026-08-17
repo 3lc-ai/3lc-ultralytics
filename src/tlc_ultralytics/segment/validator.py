@@ -3,12 +3,13 @@ import torch
 from tlc.data_types import SegmentationMasks
 from tlc.schemas import ConfidenceSchema
 from ultralytics.models.yolo.segment.val import SegmentationValidator
-from ultralytics.utils import ops
+from ultralytics.utils import LOGGER, ops
 
 from tlc_ultralytics.constants import (
     CONFIDENCE,
     IMAGE_COLUMN_NAME,
     PREDICTED_SEGMENTATIONS,
+    TLC_COLORSTR,
 )
 from tlc_ultralytics.detect.validator import TLCDetectionValidator
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
@@ -43,6 +44,14 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
 
     def _compute_3lc_metrics(self, preds, batch):
         return {PREDICTED_SEGMENTATIONS: self._process_predictions(preds, batch)}
+
+    def _prepare_loss_fn(self, model):
+        if self._settings.collect_loss:
+            LOGGER.warning(
+                f"{TLC_COLORSTR}Per-sample loss collection is not supported for the 'segment' task. "
+                "Disabling loss collection for this run."
+            )
+            self._settings.collect_loss = False
 
     def _build_annotation(self, scaled, mapped_classes, h, w):
         return tlc.data_types.SegmentationMasks(

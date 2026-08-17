@@ -54,14 +54,15 @@ class UnreducedBboxLoss(BboxLoss):
 class v8UnreducedDetectionLoss(v8DetectionLoss):
     """v8DetectionLoss that returns unreduced losses for per-sample computation."""
 
-    def __init__(self, model, tal_topk: int = 10, training: bool = False):
+    def __init__(self, model, tal_topk: int = 10, tal_topk2: int | None = None, training: bool = False):
         """Initialize the unreduced detection loss.
 
         :param model: The YOLO model
         :param tal_topk: Top-k for TAL assignment
+        :param tal_topk2: Second-stage top-k for TAL assignment, used by end-to-end (YOLO26) models
         :param training: Whether in training mode
         """
-        super().__init__(model, tal_topk=tal_topk)
+        super().__init__(model, tal_topk=tal_topk, tal_topk2=tal_topk2)
 
         m = model.model[-1]  # Detect() module
         self.bbox_loss = UnreducedBboxLoss(m.reg_max)
@@ -75,6 +76,10 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
         :return: Dictionary containing unreduced losses
         """
         preds_dict = preds[1] if isinstance(preds, (list, tuple)) else preds
+        if "one2one" in preds_dict:
+            # End-to-end (YOLO26) models output both head branches; the one2one branch is the one
+            # used for inference and the one whose loss ultralytics reports during training.
+            preds_dict = preds_dict["one2one"]
         pred_distri = preds_dict["boxes"].permute(0, 2, 1).contiguous()
         pred_scores = preds_dict["scores"].permute(0, 2, 1).contiguous()
         feats = preds_dict["feats"]
@@ -131,8 +136,10 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
         losses = {
             "cls_loss": cls_loss,
             "box_loss": box_loss_full,
-            "dfl_loss": dfl_loss_full,
         }
+        # DFL-free models (YOLO26, reg_max == 1) have no DFL loss - omit the column instead of writing zeros.
+        if self.use_dfl:
+            losses["dfl_loss"] = dfl_loss_full
 
         if self.training:
             cls_weight = self.hyp.cls if hasattr(self.hyp, "cls") else self.hyp["cls"]

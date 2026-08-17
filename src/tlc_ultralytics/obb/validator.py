@@ -2,9 +2,11 @@ import numpy as np
 import tlc
 import torch
 from ultralytics.models.yolo.obb.val import OBBValidator
+from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.constants import (
     IMAGE_COLUMN_NAME,
+    TLC_COLORSTR,
 )
 from tlc_ultralytics.detect.validator import TLCDetectionValidator
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
@@ -28,6 +30,14 @@ class TLCOBBValidator(TLCDetectionValidator, OBBValidator):
 
     def _compute_3lc_metrics(self, preds, batch):
         return {"oriented_bbs_2d_predicted": self._process_predictions(preds, batch)}
+
+    def _prepare_loss_fn(self, model):
+        if self._settings.collect_loss:
+            LOGGER.warning(
+                f"{TLC_COLORSTR}Per-sample loss collection is not supported for the 'obb' task. "
+                "Disabling loss collection for this run."
+            )
+            self._settings.collect_loss = False
 
     def _build_annotation(self, scaled, mapped_classes, h, w):
         # OrientedBoundingBoxes2D stores all OBBs in a single (N, 5) ndarray.
