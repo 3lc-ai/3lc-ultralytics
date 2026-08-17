@@ -46,9 +46,8 @@ jobs:
       matrix:
         os: ${{ fromJSON(inputs.os-matrix || '["ubuntu-latest"]') }}
         python-version: ['3.10', '3.13']
-        # 3lc is released only on 3LC's public index (not PyPI). We test against
-        # the latest 3lc minor (3.0), pinned to its latest patch.
-        tlc-version: ['3.0']
+        # We test against the latest 3lc minor (3.2), pinned to its latest patch.
+        tlc-version: ['3.2']
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -65,9 +64,8 @@ jobs:
           # Pin to match build-system.requires (uv_build>=0.7.19,<0.8.0). When
           # uv's bundled uv_build satisfies that range it builds this project
           # with the bundled backend and makes no network request. A newer uv
-          # (e.g. "latest") would instead fetch an old uv-build from an index,
-          # and unsafe-best-match routes that fetch to the (sometimes slow) 3lc
-          # index, which can time out. release.yml pins the same version.
+          # (e.g. "latest") would instead fetch an old uv-build from an index.
+          # release.yml pins the same version.
           version: "0.7.19"
 
       - name: Install dependencies
@@ -77,15 +75,9 @@ jobs:
       - name: Pin 3lc to ${{ matrix.tlc-version }}.*
         # Installs into the project .venv created by `uv sync` above; the test step
         # uses --no-sync so this pinned version is what actually runs.
-        # `shell: bash` is required so the `\` line continuations below work on the
-        # Windows runners, whose default shell (PowerShell) does not understand them.
         shell: bash
         run: |
-          uv pip install \
-            --index-url https://pypi.org/simple \
-            --extra-index-url https://pypi.3lc.ai/public/repositories/releases-public \
-            --index-strategy unsafe-best-match \
-            "3lc==${{ matrix.tlc-version }}.*"
+          uv pip install "3lc==${{ matrix.tlc-version }}.*"
 
       - name: Run tests (3lc ${{ matrix.tlc-version }}, Python ${{ matrix.python-version }})
         run: |

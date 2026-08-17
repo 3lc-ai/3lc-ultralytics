@@ -30,20 +30,10 @@
 Install the package and requirements into a virtual environment (Python 3.10–3.13):
 
 ```bash
-pip install 3lc-ultralytics --extra-index-url https://pypi.3lc.ai/public/repositories/releases-public
+pip install 3lc-ultralytics
 ```
 
-The `--extra-index-url` is required because `3lc` is published on [3LC's public package index](https://pypi.3lc.ai/public/repositories/releases-public), not on PyPI.
-
-If you use [`uv`](https://docs.astral.sh/uv/), the equivalent command line is:
-
-```bash
-uv pip install 3lc-ultralytics \
-  --extra-index-url https://pypi.3lc.ai/public/repositories/releases-public \
-  --index-strategy unsafe-best-match
-```
-
-`--index-strategy unsafe-best-match` is required for `uv` (but not `pip`). See the [GitHub README](https://github.com/3lc-ai/3lc-ultralytics#installation) for details and for the `uv add` / `uv sync` project setup.
+If you use [`uv`](https://docs.astral.sh/uv/), the equivalent commands are `uv pip install 3lc-ultralytics`, or `uv add 3lc-ultralytics` to add it to a `uv` project.
 
 ### Dataset and Training
 

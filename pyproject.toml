@@ -8,7 +8,7 @@ authors = [
 ]
 requires-python = ">=3.10,<3.14"
 dependencies = [
-    "3lc<4.0.0,>=3.0.0",
+    "3lc<4.0.0,>=3.2.0",
     "pacmap>=0.8.0,<0.9",
     "ultralytics>=8.4.0,<8.4.67",
 ]
@@ -27,7 +27,7 @@ module-name = "tlc_ultralytics"
 
 [dependency-groups]
 dev = [
-    "3lc[pandas]>=3.0.0,<4.0.0",
+    "3lc[pandas]>=3.2.0,<4.0.0",
     "pytest>=9.0.3",
     "pytest-mock>=3.15.1",
     "pytest-xdist>=3.8.0",
@@ -38,21 +38,6 @@ dev = [
 [tool.uv]
 default-groups = ["dev"]
 required-version = ">=0.7.19"
-# 3lc is published on 3LC's public index (below), every other dependency on
-# PyPI. That index responds 200 for *any* package name (returning an empty
-# listing for ones it does not host), so uv's default "first-index" strategy
-# would wrongly conclude e.g. pacmap is unavailable instead of falling through
-# to PyPI. "unsafe-best-match" considers all indexes together and picks the
-# best match — the same multi-index behavior as `pip --extra-index-url`.
-index-strategy = "unsafe-best-match"
-
-# 3lc is published on 3LC's public package index, not on PyPI. Declaring it here
-# (rather than only via --extra-index-url) means it is honored even with
-# `uv sync --no-sources`, since --no-sources only strips [tool.uv.sources], not
-# index declarations. PyPI remains the default index for everything else.
-[[tool.uv.index]]
-name = "3lc"
-url = "https://pypi.3lc.ai/public/repositories/releases-public"
 
 [tool.uv.sources]
 "3lc" = [

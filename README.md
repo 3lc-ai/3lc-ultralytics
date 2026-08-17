@@ -39,33 +39,12 @@
 Install the package and requirements into a virtual environment (Python 3.10–3.13):
 
 ```bash
-pip install 3lc-ultralytics --extra-index-url https://pypi.3lc.ai/public/repositories/releases-public
+pip install 3lc-ultralytics
 ```
 
-> `3lc` is published on [3LC's public package index](https://pypi.3lc.ai/public/repositories/releases-public), not on PyPI, so the `--extra-index-url` above is required for `pip` to find it. This installs both [`3lc`](https://3lc.ai) and [`ultralytics`](https://pypi.org/project/ultralytics/), which are dependencies of `3lc-ultralytics`. Refer to the respective projects for how to set up a 3LC user and the Ultralytics License.
+> This installs both [`3lc`](https://pypi.org/project/3lc/) and [`ultralytics`](https://pypi.org/project/ultralytics/), which are dependencies of `3lc-ultralytics`. Refer to the respective projects for how to set up a 3LC user and the Ultralytics License.
 
-If you use [`uv`](https://docs.astral.sh/uv/), the equivalent command line is:
-
-```bash
-uv pip install 3lc-ultralytics \
-  --extra-index-url https://pypi.3lc.ai/public/repositories/releases-public \
-  --index-strategy unsafe-best-match
-```
-
-> `--index-strategy unsafe-best-match` is required for `uv` (but not `pip`). `uv` otherwise stops at the first index that responds for a given package name, and since 3LC's index responds to *any* name (returning an empty listing for packages it does not host), `uv` would fail to find `3lc-ultralytics` on PyPI. `unsafe-best-match` makes `uv` consider all indexes together, the way `pip` does by default.
-
-When adding `3lc-ultralytics` to a `uv` project (via `uv add` / `uv sync`), declare the index and strategy in your project's `pyproject.toml` instead, so they are applied automatically:
-
-```toml
-[[tool.uv.index]]
-name = "3lc"
-url = "https://pypi.3lc.ai/public/repositories/releases-public"
-
-[tool.uv]
-# 3LC's index responds to any package name, so let uv match versions across all
-# indexes (PyPI for everything else) rather than stopping at the first match.
-index-strategy = "unsafe-best-match"
-```
+If you use [`uv`](https://docs.astral.sh/uv/), the equivalent commands are `uv pip install 3lc-ultralytics`, or `uv add 3lc-ultralytics` to add it to a `uv` project.
 
 ### Basic Training
 
