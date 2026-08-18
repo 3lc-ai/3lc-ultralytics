@@ -29,6 +29,7 @@ from tlc._core.objects.tables.from_table.edited_table import EditedTable
 from tlc._core.objects.tables.null_overlay import NullOverlay
 from tlc.constants._run_status import RUN_STATUS_COMPLETED
 from tlc.helpers import KeypointHelper
+from tmp_paths import PROJECT_ROOT, TMP
 from ultralytics.cfg import ASSETS
 from ultralytics.models.yolo import YOLO
 from ultralytics.models.yolo.detect import DetectionTrainer
@@ -77,8 +78,7 @@ skip_pacmap_on_macos = pytest.mark.skipif(
 )
 
 DUMMY_IMAGE_FILE = Path(__file__).parent.parent / "src" / "tlc_ultralytics" / "_static" / "dashboard.png"
-TMP = Path(__file__).parent / "tmp"
-TMP_PROJECT_ROOT_URL = tlc.Url(TMP / "3LC")
+TMP_PROJECT_ROOT_URL = tlc.Url(PROJECT_ROOT)
 tlc.url.register_url_alias("<TEST_ALIAS>", "/test/alias")
 tlc.configuration.Configuration.instance().project_root_url = TMP_PROJECT_ROOT_URL
 tlc._core.objects.tables.system_tables.indexing_tables.table_indexing_table.TableIndexingTable.instance().add_scan_url(
@@ -2282,6 +2282,8 @@ def test_dataset_determinism_with_random_tracking(mode, task) -> None:
 
         with open(output_file) as f:
             tracking_result = json.load(f)
+
+        assert "error" not in tracking_result, f"Subprocess failed:\n{tracking_result['error']}"
 
         assert tracking_result["rows_count_3lc"] == tracking_result["rows_count_ultralytics"], (
             "Number of batches should be the same"

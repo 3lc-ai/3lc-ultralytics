@@ -7,6 +7,7 @@ with the same seed across separate processes.
 from __future__ import annotations
 
 import json
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -97,7 +98,9 @@ def create_dataset_samples_with_tracking(mode: str, task: str, output_file: str 
         reset_tracking()
         enable_tracking()
 
-        settings = Settings(project_name=f"test_dataset_determinism_mode_{mode}_{task}")
+        # Distinct from the project used by `create_dataset_samples`: that helper runs in the pytest process while
+        # this one runs in a subprocess, so sharing a project name would have two processes create the same tables.
+        settings = Settings(project_name=f"test_dataset_determinism_tracking_mode_{mode}_{task}")
         overrides = {
             "data": TASK2DATASET[task],
             "model": TASK2MODEL[task],
@@ -143,8 +146,10 @@ def create_dataset_samples_with_tracking(mode: str, task: str, output_file: str 
                 json.dump(result, f)
         else:
             print(json.dumps(result))
-    except Exception as e:
-        error_result = {"error": str(e)}
+    except Exception:
+        # The caller only sees this file, so hand it the whole traceback - a bare `str(e)` turns any failure in here
+        # into an opaque KeyError on `rows_count_3lc` on the other side.
+        error_result = {"error": traceback.format_exc()}
         if output_file:
             with open(output_file, "w") as f:
                 json.dump(error_result, f)
