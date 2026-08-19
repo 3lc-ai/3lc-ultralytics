@@ -1,17 +1,18 @@
 import shutil
-from pathlib import Path
 
-TMP = Path(__file__).parent / "tmp"
+from tmp_paths import TMP, TMP_ROOT
 
 
 def pytest_sessionstart(session):
     """Create the TMP directory before running tests."""
     if getattr(session.config, "workerinput", None) is not None:
-        # No need to create the TMP directory, the master process does this at the start
+        # The master process wipes the shared root before any worker starts, so a worker only has to create the
+        # per-worker subdirectory it is about to write into.
+        TMP.mkdir(parents=True, exist_ok=True)
         return
 
-    if TMP.exists():
-        shutil.rmtree(TMP)
+    if TMP_ROOT.exists():
+        shutil.rmtree(TMP_ROOT)
 
     TMP.mkdir(parents=True, exist_ok=True)
 
@@ -25,5 +26,5 @@ def pytest_sessionfinish(session, exitstatus):
         # No need to delete the TMP directory, the master process does this at the end
         return
 
-    if TMP.exists():
-        shutil.rmtree(TMP)
+    if TMP_ROOT.exists():
+        shutil.rmtree(TMP_ROOT)
