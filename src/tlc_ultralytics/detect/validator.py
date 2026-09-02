@@ -42,8 +42,17 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
             label_column_name=self._settings.label_column_name,
         )
 
-    def postprocess(self, preds):
+    def _stash_raw_preds(self, preds):
+        """Keep the raw model output of the current batch for per-sample loss collection.
+
+        Subclasses that replace `postprocess` wholesale rather than delegating to it — `TLCSegmentationValidator`
+        does, to keep the mask coefficients — must call this, so anything added around the raw predictions here
+        applies to them too.
+        """
         self._curr_raw_preds = preds if self._settings.collect_loss else None
+
+    def postprocess(self, preds):
+        self._stash_raw_preds(preds)
         return super().postprocess(preds)
 
     def _get_metrics_schemas(self):

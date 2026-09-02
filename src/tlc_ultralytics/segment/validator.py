@@ -25,7 +25,13 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
     _default_image_column_name = IMAGE_COLUMN_NAME
 
     _mask_chunk_instances = 32
-    """Upper bound on how many instances have their masks upsampled at a time in `_masks_at_original_resolution`."""
+    """Upper bound on how many instances have their masks upsampled at a time in `_masks_at_original_resolution`.
+
+    Keep this below 50: on CPU, `ops.crop_mask` switches at `n < 50` from exact float box comparisons to a loop over
+    rounded integer box coordinates, so a chunk size at or above 50 would make chunked and unchunked mask generation
+    differ by up to a boundary pixel for the chunks that reach it. Below the threshold every chunk takes the same
+    (rounding) branch, so the chunking itself does not change the result.
+    """
 
     _mask_chunk_pixels = 64 * 1024 * 1024
     """Pixel budget per mask chunk, bounding the float32 transient of the upsampling to ~256 MB.
@@ -55,14 +61,18 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         """
         proto = preds[0][1] if isinstance(preds[0], tuple) else preds[1]
 
-        # Called explicitly rather than through `super()`: the next `postprocess` in the MRO is
-        # `SegmentationValidator`'s, which is exactly the mask handling being replaced below. Loss collection's
-        # stash of the raw predictions (`TLCDetectionValidator.postprocess`) is kept.
-        self._curr_raw_preds = preds if self._settings.collect_loss else None
+        # `DetectionValidator.postprocess` is called explicitly rather than through `super()`: the next
+        # `postprocess` in the MRO is `SegmentationValidator`'s, which is exactly the mask handling being replaced
+        # below. Everything `TLCDetectionValidator.postprocess` does around it goes through `_stash_raw_preds`.
+        self._stash_raw_preds(preds)
         outputs = DetectionValidator.postprocess(self, preds[0])
 
         process = self.process
-        assert process is not None, "init_metrics selects the mask processing function and runs before postprocess"
+        if process is None:
+            raise RuntimeError(
+                "No mask processing function is set. `init_metrics` selects one and always runs before the first "
+                "batch is post-processed."
+            )
 
         imgsz = [4 * x for x in proto.shape[2:]]  # get image size from proto
         self._mask_imgsz = imgsz
@@ -111,24 +121,28 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
     ) -> torch.Tensor:
         """Build binary masks for one image's filtered instances at its original resolution.
 
-        Upsampling is chunked (see `_mask_chunk_pixels`) and each chunk is reduced to uint8 before the next is
-        allocated: a single `N x H_ori x W_ori` float32 tensor is ~18 GB for 300 instances on a 4K image, which is
-        one allocation the CUDA caching allocator cannot be expected to serve, let alone repeatedly at varying
-        sizes.
+        Upsampling is chunked (see `_mask_chunk_pixels`) and each chunk is written straight into the uint8 result,
+        so the float32 transient is one chunk rather than the whole set: `N x H_ori x W_ori` float32 is ~10 GB for
+        300 instances on a 3840x2160 image, one allocation the CUDA caching allocator cannot be expected to serve,
+        let alone repeatedly at varying sizes. Peak here is the returned uint8 tensor plus a single chunk's
+        transients; the intermediate `ops.process_mask_native` builds at `_mask_imgsz`, which is smaller than
+        `ori_shape` whenever the image was downscaled to the model input, so sizing the chunk from `ori_shape`
+        bounds both steps.
         """
         h, w = pbatch["ori_shape"]
-        chunk_size = max(1, min(self._mask_chunk_instances, self._mask_chunk_pixels // max(1, int(h) * int(w))))
+        num_instances = coefficients.shape[0]
+        masks = torch.empty((num_instances, int(h), int(w)), dtype=torch.uint8, device=proto.device)
 
-        chunks = []
-        for start in range(0, coefficients.shape[0], chunk_size):
-            stop = start + chunk_size
+        chunk_size = max(1, min(self._mask_chunk_instances, self._mask_chunk_pixels // max(1, int(h) * int(w))))
+        for start in range(0, num_instances, chunk_size):
+            stop = min(start + chunk_size, num_instances)
             native = ops.process_mask_native(
                 proto, coefficients[start:stop], bboxes[start:stop], shape=self._mask_imgsz
             )
-            chunks.append(ops.scale_masks(native[None], (h, w), ratio_pad=pbatch["ratio_pad"])[0].byte())
+            masks[start:stop] = ops.scale_masks(native[None], (h, w), ratio_pad=pbatch["ratio_pad"])[0].byte()
             del native
 
-        return chunks[0] if len(chunks) == 1 else torch.cat(chunks)
+        return masks
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         instance_properties_structure = {
@@ -173,7 +187,15 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
     _instance_geometry_kind = "mask"
 
     def _instance_regions(self, source, h: int, w: int, device) -> torch.Tensor:
+        """Return one image's predicted or ground-truth masks for instance-embedding pooling.
+
+        Both come at the prototype resolution (`imgsz // 4`): predicted masks from Ultralytics' `postprocess`,
+        ground-truth masks from its `_prepare_batch`. The pooling resizes them to the feature-map resolution, so
+        `h` and `w` are unused here — a mask resolution is neither claimed nor required.
+        """
         masks = source.get("masks") if source is not None else None
         if masks is None or masks.numel() == 0:
-            return torch.empty((0, h, w), device=device)
+            # Only the instance count is read for an empty set, and the spatial dims of the real masks are not
+            # this method's `h`/`w`, so no resolution is invented here.
+            return torch.empty((0, 0, 0), device=device)
         return masks.to(device)

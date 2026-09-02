@@ -2137,16 +2137,20 @@ def test_segment_masks_built_only_for_filtered_predictions(monkeypatch) -> None:
     from tlc_ultralytics.engine.validator import PREDICTION_INDEX
     from tlc_ultralytics.segment.validator import TLCSegmentationValidator
 
-    torch.manual_seed(0)
-
     imgsz = [64, 64]  # model input size, four times the prototype resolution below
     ori_shape = (50, 80)
-    num_predictions = 10
+    num_predictions = 8
 
-    proto = torch.randn(32, 16, 16)
-    coefficients = torch.randn(num_predictions, 32)
-    bboxes = torch.tensor([[4.0, 14.0, 30.0, 44.0], [20.0, 16.0, 60.0, 50.0]] * (num_predictions // 2))
-    conf = torch.linspace(0.05, 0.95, num_predictions)
+    # Each prediction gets its own vertical stripe: prototype channel j is positive only in the columns its own
+    # box covers, and coefficient j selects channel j. A mask is therefore non-empty only if it was built from the
+    # coefficients that belong to the box it was cropped with — pairing prediction j's box with any other
+    # prediction's coefficients crops the stripe away entirely.
+    proto = torch.full((num_predictions, 16, 16), -1.0)
+    for j in range(num_predictions):
+        proto[j, :, 2 * j : 2 * j + 2] = 1.0
+    coefficients = torch.eye(num_predictions)
+    bboxes = torch.tensor([[8.0 * j, 14.0, 8.0 * j + 8.0, 44.0] for j in range(num_predictions)])
+    conf = torch.tensor([0.10, 0.20, 0.30, 0.55, 0.60, 0.70, 0.80, 0.90])
     pred = {
         "bboxes": bboxes,
         "conf": conf,
@@ -2196,15 +2200,78 @@ def test_segment_masks_built_only_for_filtered_predictions(monkeypatch) -> None:
     assert len(scaled["conf"]) == len(scaled["cls"]) == scaled["masks"].shape[0]
     assert torch.equal(scaled["conf"], conf[kept])
 
-    # Each mask is cropped to its own (scaled) box, which only holds if the coefficients selected by
-    # PREDICTION_INDEX belong to the same instances as the boxes.
+    # Every mask survives the crop to its own box, which by construction (see the stripes above) only happens if
+    # the coefficients PREDICTION_INDEX selected belong to the same instances as the boxes they were cropped with.
+    # Containment is guaranteed by crop_mask whatever the pairing, so it is only checked as a sanity bound.
     for mask, box in zip(scaled["masks"], scaled["bboxes"], strict=True):
         rows, cols = torch.nonzero(mask, as_tuple=True)
-        if rows.numel() == 0:
-            continue
+        assert rows.numel() > 0, "Mask is empty, so its coefficients do not belong to the box it was cropped with"
         x0, y0, x1, y1 = box.tolist()
         assert rows.min() >= y0 - 1 and rows.max() <= y1 + 1, "Mask extends outside its bounding box vertically"
         assert cols.min() >= x0 - 1 and cols.max() <= x1 + 1, "Mask extends outside its bounding box horizontally"
+
+
+def test_segment_postprocess_stashes_mask_sources(monkeypatch) -> None:
+    # postprocess must stash one (prototypes, coefficients) pair per image, in order, and start over on the next
+    # batch - a stale or misaligned stash would silently hand an image another image's masks.
+    import torch
+    from ultralytics.models.yolo.detect import DetectionValidator
+    from ultralytics.utils import ops
+
+    from tlc_ultralytics.segment.validator import TLCSegmentationValidator
+
+    mask_dim = 4
+    nms_outputs = []
+
+    def fake_nms_postprocess(self, preds):
+        return nms_outputs.pop(0)
+
+    monkeypatch.setattr(DetectionValidator, "postprocess", fake_nms_postprocess)
+
+    def queue_batch(proto_values, instance_counts):
+        """Queue one batch: distinguishable prototypes, and coefficients distinguishable per image."""
+        proto = torch.stack([torch.full((mask_dim, 8, 8), value) for value in proto_values])
+        coefficients = [torch.full((n, mask_dim), float(i + 1)) for i, n in enumerate(instance_counts)]
+        nms_outputs.append(
+            [
+                {
+                    "bboxes": torch.tensor([[1.0, 1.0, 20.0, 20.0]] * n).reshape(n, 4),
+                    "conf": torch.full((n,), 0.9),
+                    "cls": torch.zeros(n),
+                    "extra": coefficients[i],
+                }
+                for i, n in enumerate(instance_counts)
+            ]
+        )
+        return [torch.zeros(len(proto_values), 1), proto], proto, coefficients
+
+    validator = TLCSegmentationValidator.__new__(TLCSegmentationValidator)
+    validator._settings = Settings(collect_loss=True)
+    validator.process = ops.process_mask  # Ultralytics' default: masks at the prototype resolution
+
+    # One image with instances and one without, so the empty-coefficient branch cannot shift the stash.
+    preds, proto, coefficients = queue_batch([1.0, 2.0], [3, 0])
+    outputs = validator.postprocess(preds)
+
+    assert validator._curr_raw_preds is preds, "The raw predictions must still be stashed for loss collection"
+    assert validator._mask_imgsz == [32, 32], "Model input size is four times the prototype resolution"
+    assert len(validator._mask_sources) == 2, "One stash entry per image in the batch"
+    for i, (stashed_proto, stashed_coefficients) in enumerate(validator._mask_sources):
+        assert torch.equal(stashed_proto, proto[i]), f"Image {i} stashed another image's prototypes"
+        assert torch.equal(stashed_coefficients, coefficients[i]), f"Image {i} stashed another image's coefficients"
+
+    # The coefficients are consumed from the predictions, and Ultralytics' masks stay at prototype resolution.
+    assert all("extra" not in pred for pred in outputs)
+    assert outputs[0]["masks"].shape == (3, 8, 8)
+    assert outputs[1]["masks"].shape == (0, 8, 8)
+
+    # A second batch replaces the stash rather than appending to it.
+    preds, proto, coefficients = queue_batch([7.0], [2])
+    validator.postprocess(preds)
+
+    assert len(validator._mask_sources) == 1, "The stash must be reset for each batch"
+    assert torch.equal(validator._mask_sources[0][0], proto[0])
+    assert torch.equal(validator._mask_sources[0][1], coefficients[0])
 
 
 def test_segment_annotation_masks_at_original_resolution(monkeypatch) -> None:

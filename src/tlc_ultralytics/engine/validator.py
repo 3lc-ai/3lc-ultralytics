@@ -315,6 +315,7 @@ class TLCValidatorMixin(BaseValidator):
                 continue
 
             scaled = self._scale_filtered_pred(i, filtered, pbatch)
+            scaled.pop(PREDICTION_INDEX, None)  # bookkeeping for the scaling step; not annotation input
             mapped_classes = [self.data["range_to_3lc_class"][int(c)] for c in scaled["cls"].tolist()]
             results.append(self._build_annotation(scaled, mapped_classes, h, w))
 
@@ -473,11 +474,14 @@ class TLCValidatorMixin(BaseValidator):
     def _instance_regions(self, source, h: int, w: int, device) -> torch.Tensor:
         """Return one image's instance geometry, aligned with the feature map.
 
-        ``source`` is either a filtered prediction dict or a prepared GT batch
-        (both keyed the same way), or None when there are no instances. Both are
-        in model-input (letterboxed) coords — the same spatial domain as the
-        feature map. Returns [N, 4] xyxy bboxes (or [N, H, W] masks for
-        subclasses with _instance_geometry_kind = "mask").
+        `source` is either a filtered prediction dict or a prepared GT batch (both keyed the same way), or None when
+        there are no instances. This default returns [N, 4] xyxy boxes in model-input (letterboxed) coords, whose
+        `h`/`w` argument is the model-input size the boxes are scaled against.
+
+        Subclasses with `_instance_geometry_kind = "mask"` return [N, H, W] masks instead, at whatever resolution
+        the task produces them: rasterized at model-input size for obb, at the prototype resolution (`imgsz // 4`)
+        for segmentation, which takes them straight from Ultralytics. The mask pooling resizes them to the
+        feature-map resolution, so it does not depend on which.
         """
         bboxes = source.get("bboxes") if source is not None else None
         if bboxes is None or bboxes.numel() == 0:
