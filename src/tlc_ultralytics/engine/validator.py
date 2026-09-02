@@ -819,20 +819,27 @@ class TLCValidatorMixin(BaseValidator):
         every row/instance is projected into the fitted space with the
         reducer's transform. Tables are processed one at a time and evicted
         from the object caches when done, so peak memory is bounded by a single
-        table regardless of dataset size.
+        table regardless of dataset size: roughly one raw table's arrow
+        footprint plus, while its replacement is being finalized, the
+        serialized parquet held in memory to be written out — a small constant
+        factor, still O(``metrics_max_buffer_mb``) and independent of image
+        resolution, instance count and dataset size.
 
         One reduced table is written per raw table: a raw table's arrow data is
         already bounded by ``metrics_max_buffer_mb`` (that is what made the
         writer flush it), and the reduced table is strictly smaller than the raw
         one, so a 1:1 rewrite is bounded by construction without a second layer
-        of buffer accounting.
+        of buffer accounting. The cost is one run-json rewrite
+        (``Run.update_metrics``) per raw table, which is unremarkable at
+        production buffer sizes but chatty when ``metrics_max_buffer_mb`` is
+        turned right down (0 flushes one raw table per batch).
 
         Returns the metrics infos of the rewritten tables, or None when no
-        rewrite was performed (no tables, or the image-embeddings fit failed
-        while instance embeddings are disabled — the raw tables are then kept).
-        Goes away when core 3LC reduces these columns server-side; the raw
-        columns are already tagged ``NUMBER_ROLE_NN_EMBEDDING`` for that future
-        flow.
+        rewrite was performed (no tables, no rows in any of them, or the
+        image-embeddings fit failed while instance embeddings are disabled — the
+        raw tables are then kept). Goes away when core 3LC reduces these columns
+        server-side; the raw columns are already tagged
+        ``NUMBER_ROLE_NN_EMBEDDING`` for that future flow.
         """
         if not raw_table_urls:
             return None
@@ -872,6 +879,13 @@ class TLCValidatorMixin(BaseValidator):
             # Evict the processed table so only one raw table is in RAM at a time.
             ObjectRegistry._delete_object_from_caches(raw_table.url)
             del raw_table
+
+        if not reduced_metrics_infos:
+            # Every raw table turned out to be empty, so there is nothing to point the run at. Report "no
+            # rewrite" rather than an empty result: the caller reads any list, empty included, as licence to
+            # deregister and delete the raw tables.
+            LOGGER.warning(f"{TLC_COLORSTR}No rows found in the flushed metrics tables; skipping the rewrite.")
+            return None
 
         LOGGER.info(f"{TLC_COLORSTR}Done reducing embeddings.")
         return reduced_metrics_infos
@@ -1056,6 +1070,9 @@ class TLCValidatorMixin(BaseValidator):
         columns are read as values, and only to be transformed into the reduced
         ones. Peak memory is one raw table's arrow data plus the reduced
         columns, never a multiple of a decoded mask.
+
+        Returns an empty list for a raw table with no rows — the rolling writer
+        never flushes one, but there is no table worth writing if it did.
         """
         from tlc_ultralytics.utils._table_rewrite import (
             _build_rewritten_arrow_table,

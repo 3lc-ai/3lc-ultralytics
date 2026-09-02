@@ -3600,6 +3600,44 @@ def test_build_rewritten_arrow_table() -> None:
     assert np.allclose(rewritten.column("embeddings_pca").to_pylist(), [[0.3, 0.4], [0.5, 0.6]])
 
 
+def test_rewrite_default_fill_tolerates_mistyped_default() -> None:
+    """Unit test: a default whose type the column cannot hold leaves the column alone rather than failing the
+    rewrite, which would strand the run's raw metrics tables."""
+    import pyarrow as pa
+
+    from tlc_ultralytics.utils._table_rewrite import _filled_with_default
+
+    column = pa.chunked_array([pa.nulls(2, type=pa.int32())])
+    mistyped = tlc.schemas.Int32Schema(default_value="not an int")
+
+    assert _filled_with_default(column, mistyped).to_pylist() == [None, None]
+    assert _filled_with_default(column, tlc.schemas.Int32Schema(default_value=7)).to_pylist() == [7, 7]
+
+
+def test_write_rewritten_metrics_table_refuses_empty() -> None:
+    """Unit test: an empty rewrite must raise before a table url is allocated.
+
+    `_reduce_and_rewrite_raw_tables` deregisters and deletes the raw tables as soon as it is handed any list of
+    metrics infos, so writing (or returning) nothing for a table would throw the run's metrics away.
+    """
+    import pyarrow as pa
+
+    from tlc_ultralytics.utils._table_rewrite import _write_rewritten_metrics_table
+
+    run = tlc.init(project_name="test_rewrite_empty", run_name="test_rewrite_empty")
+    empty = pa.table({"example_id": pa.array([], type=pa.int32())})
+
+    with pytest.raises(ValueError, match="empty metrics table"):
+        _write_rewritten_metrics_table(
+            arrow_table=empty,
+            schema={"example_id": tlc.schemas.ExampleIdSchema()},
+            run_url=run.url,
+            foreign_table_url=run.url / "dummy_table",
+        )
+
+    assert not tlc.Run.from_url(run.url).metrics, "No metrics table should have been registered on the run"
+
+
 def test_rolling_metrics_writer_rolls_by_bytes() -> None:
     """Unit test: the rolling writer flushes to a new metrics table when the buffer threshold is crossed,
     and the flushed tables together hold all rows in order."""

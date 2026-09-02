@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any
 import pyarrow as pa
 import pyarrow.compute as pc
 import tlc
+from tlc._core.object_registry import ObjectRegistry
 from tlc.helpers.schema_helper import SchemaHelper
 
 if TYPE_CHECKING:
@@ -64,10 +65,21 @@ def _default_value(column_schema: tlc.Schema) -> Any:
 def _filled_with_default(
     column: pa.Array | pa.ChunkedArray, column_schema: tlc.Schema | None
 ) -> pa.Array | pa.ChunkedArray:
-    """Replace *column*'s nulls with its schema's default value, if it has both nulls and a default.
+    """Replace *column*'s nulls with its schema's default value, when it has both nulls and a default.
 
-    Only plain (non-nested) columns are filled — a default value for a list or struct column is not something the
-    metrics writer produces, and such a column's nulls are left as they are.
+    A column can be declared with a default and never actually written — `input_table_id`, which the metrics
+    writer declares for itself, is one, and a `Settings.metrics_schemas` entry the user never fills is another.
+    The row view then reads back all-null where a row-by-row copy, which goes through the sample view, would have
+    seen the default. Filling here reproduces what that copy wrote.
+
+    This deliberately covers less ground than tlc's own row-view defaulting
+    (`SchemaHelper.populate_default_values`), which substitutes something for every null it meets: the declared
+    default, an empty list for a list column, or the value type's fallback default. Nested columns and nulls in
+    columns with no declared default are left as nulls here instead — which is exactly what the source table
+    stores for them, and any reader resolves both tables through the same row view, so it reads the same either
+    way. A default whose type disagrees with the column's arrow type is likewise left unfilled rather than
+    failing: the raw tables have already been written by this point, and a mistyped default in a user-supplied
+    schema is not worth losing them over.
     """
     if column.null_count == 0 or column_schema is None or pa.types.is_nested(column.type):
         return column
@@ -76,7 +88,10 @@ def _filled_with_default(
     if default is None:
         return column
 
-    return pc.fill_null(column, pa.scalar(default, type=column.type))
+    try:
+        return pc.fill_null(column, pa.scalar(default, type=column.type))
+    except (pa.ArrowInvalid, pa.ArrowTypeError, pa.ArrowNotImplementedError):
+        return column
 
 
 def _build_rewritten_arrow_table(
@@ -93,9 +108,7 @@ def _build_rewritten_arrow_table(
     source's order with the dropped columns removed, then the reduced columns appended.
 
     Columns the source's parquet has no data for at all (`input_table_id`, for one) surface in its row view as
-    all-null, where a row-by-row copy would have seen the schema's default value instead. Those are filled with
-    the default so the reduced table holds what a row-by-row copy would have written, values and column order
-    both.
+    all-null; see `_filled_with_default` for how those are put back.
     """
     columns: list[pa.Array | pa.ChunkedArray] = []
     names: list[str] = []
@@ -129,7 +142,14 @@ def _write_rewritten_metrics_table(
     unchanged, so the result is indistinguishable from a table written batch by batch.
 
     Returns the written table's url and its metrics infos, urls relative to the run url.
+
+    Raises ValueError when *arrow_table* has no rows: an empty metrics table would be registered on the run with
+    nothing in it, and the caller treats "nothing was rewritten" as a reason to keep the raw tables instead.
     """
+    if arrow_table.num_rows == 0:
+        msg = "Refusing to write an empty metrics table; callers must skip raw tables with no rows."
+        raise ValueError(msg)
+
     writer = tlc.MetricsTableWriter(
         run_url=run_url,
         foreign_table_url=foreign_table_url,
@@ -139,13 +159,10 @@ def _write_rewritten_metrics_table(
         stream_name=stream_name,
     )
 
-    # Fail loudly rather than write a table with the wrong row count if a tlc release renames the writer state
-    # the injection below stands in for.
-    missing = [
-        name
-        for name in ("buffer", "row_count", "_pyarrow_schema", "_pyarrow_schema_ready")
-        if not hasattr(writer, name)
-    ]
+    # `finalize()` reads the record-batch buffer and the row count off the writer, and nothing else that
+    # `add_batch` would have set. Guard those two by name so that a rename in a future 3lc surfaces here rather
+    # than as a silently zero-row table.
+    missing = [name for name in ("buffer", "row_count") if not hasattr(writer, name)]
     if missing:
         msg = (
             f"tlc.MetricsTableWriter no longer has {', '.join(missing)}; the arrow-level metrics table rewrite in "
@@ -153,14 +170,47 @@ def _write_rewritten_metrics_table(
         )
         raise RuntimeError(msg)
 
-    # Stand in for what add_batch would have set up: the pyarrow schema it derives from the resolved 3LC schema,
-    # the column signature it validates later batches against, and the buffer of record batches finalize() turns
-    # into the parquet file. to_batches() slices the columns without copying their buffers.
-    writer._pyarrow_schema = arrow_table.schema
-    writer._pyarrow_schema_ready = True
-    writer._column_signature = set(arrow_table.column_names)
+    # to_batches() slices the columns without copying their buffers.
     writer.buffer.extend(arrow_table.to_batches())
     writer.row_count = arrow_table.num_rows
 
     table = writer.finalize()
-    return table.url, list(writer.get_written_metrics_infos())
+    metrics_infos = list(writer.get_written_metrics_infos())
+
+    # Drop the written table from RAM the way `_RollingMetricsWriter` does for the tables it flushes, then read
+    # the persisted table back and check it against what the writer was handed. That check is the
+    # version-agnostic half of the guard above: finalize() also derives the written rows schema from
+    # `self._pipeline.context.resolved_schema or self._table_schema`, and it is that fallback — the pipeline
+    # never having run — which makes writing without add_batch work at all. Nothing names it, so verify the
+    # outcome instead. Reading the json sidecar back is cheap; the parquet stays unloaded.
+    ObjectRegistry._delete_object_from_caches(table.url)
+    _verify_written_table(table.url, arrow_table)
+    ObjectRegistry._delete_object_from_caches(table.url)
+
+    return table.url, metrics_infos
+
+
+def _verify_written_table(table_url: tlc.Url, arrow_table: pa.Table) -> None:
+    """Check that the metrics table persisted at *table_url* describes the data it was written from.
+
+    Reads the table back from its json sidecar — no parquet load — and compares the two things the injected
+    writer state is responsible for: the row count, and a rows schema that covers every written column.
+    """
+    written = tlc.Table.from_url(table_url)
+
+    if written.row_count != arrow_table.num_rows:
+        msg = (
+            f"Rewritten metrics table at {table_url} reports {written.row_count} rows for "
+            f"{arrow_table.num_rows} written; the arrow-level metrics table rewrite in "
+            "tlc_ultralytics.utils._table_rewrite needs updating for this version of 3lc."
+        )
+        raise RuntimeError(msg)
+
+    missing_columns = [name for name in arrow_table.column_names if name not in written.rows_schema.values]
+    if missing_columns:
+        msg = (
+            f"Rewritten metrics table at {table_url} has no schema for written column(s) "
+            f"{', '.join(missing_columns)}; the arrow-level metrics table rewrite in "
+            "tlc_ultralytics.utils._table_rewrite needs updating for this version of 3lc."
+        )
+        raise RuntimeError(msg)
