@@ -2127,6 +2127,117 @@ def test_absolute_segmentation_polygons() -> None:
     assert results, "Training should succeed"
 
 
+def test_segment_masks_built_only_for_filtered_predictions(monkeypatch) -> None:
+    # Full-resolution masks are the single most expensive per-instance product of segmentation metrics
+    # collection, so they must be generated for the filtered predictions only, at the original image
+    # resolution, and index-aligned with the other per-instance columns.
+    import torch
+    from ultralytics.utils import ops
+
+    from tlc_ultralytics.engine.validator import PREDICTION_INDEX
+    from tlc_ultralytics.segment.validator import TLCSegmentationValidator
+
+    torch.manual_seed(0)
+
+    imgsz = [64, 64]  # model input size, four times the prototype resolution below
+    ori_shape = (50, 80)
+    num_predictions = 10
+
+    proto = torch.randn(32, 16, 16)
+    coefficients = torch.randn(num_predictions, 32)
+    bboxes = torch.tensor([[4.0, 14.0, 30.0, 44.0], [20.0, 16.0, 60.0, 50.0]] * (num_predictions // 2))
+    conf = torch.linspace(0.05, 0.95, num_predictions)
+    pred = {
+        "bboxes": bboxes,
+        "conf": conf,
+        "cls": torch.zeros(num_predictions),
+        # Ultralytics' own masks, at the prototype resolution — not what is written to 3LC.
+        "masks": torch.zeros(num_predictions, 16, 16, dtype=torch.uint8),
+    }
+    pbatch = {"imgsz": imgsz, "ori_shape": ori_shape, "ratio_pad": None}
+
+    validator = TLCSegmentationValidator.__new__(TLCSegmentationValidator)
+    validator._settings = Settings(conf_thres=0.5, max_det=4)
+    validator._mask_sources = [(proto, coefficients)]
+    validator._mask_imgsz = imgsz
+    validator._mask_chunk_instances = 2  # force several chunks for the four surviving predictions
+
+    filtered = validator._filter_top_predictions(pred)
+    kept = filtered[PREDICTION_INDEX]
+    assert len(kept) == 4, "Expected the confidence threshold and max_det to leave four predictions"
+
+    # Reference: the same masks, generated in one go for the same instances.
+    reference = ops.scale_masks(
+        ops.process_mask_native(proto, coefficients[kept], bboxes[kept], shape=imgsz)[None],
+        ori_shape,
+        ratio_pad=None,
+    )[0].byte()
+
+    processed_instances = []
+    real_process_mask_native = ops.process_mask_native
+
+    def counting_process_mask_native(protos, masks_in, boxes, shape):
+        processed_instances.append(masks_in.shape[0])
+        return real_process_mask_native(protos, masks_in, boxes, shape)
+
+    monkeypatch.setattr(ops, "process_mask_native", counting_process_mask_native)
+
+    scaled = validator._scale_filtered_pred(0, filtered, pbatch)
+
+    # Only the filtered instances are turned into full-resolution masks, and never more than a chunk at a time.
+    assert sum(processed_instances) == 4, f"Expected masks for the four filtered predictions, got {processed_instances}"
+    assert max(processed_instances) <= validator._mask_chunk_instances, "Mask generation was not chunked"
+
+    assert scaled["masks"].shape == (4, *ori_shape), "Masks must be at the original image resolution"
+    assert scaled["masks"].dtype == torch.uint8
+    assert torch.equal(scaled["masks"], reference), "Chunked masks differ from the unchunked reference"
+
+    # Per-instance columns stay aligned: one mask per confidence/class, in the same order.
+    assert len(scaled["conf"]) == len(scaled["cls"]) == scaled["masks"].shape[0]
+    assert torch.equal(scaled["conf"], conf[kept])
+
+    # Each mask is cropped to its own (scaled) box, which only holds if the coefficients selected by
+    # PREDICTION_INDEX belong to the same instances as the boxes.
+    for mask, box in zip(scaled["masks"], scaled["bboxes"], strict=True):
+        rows, cols = torch.nonzero(mask, as_tuple=True)
+        if rows.numel() == 0:
+            continue
+        x0, y0, x1, y1 = box.tolist()
+        assert rows.min() >= y0 - 1 and rows.max() <= y1 + 1, "Mask extends outside its bounding box vertically"
+        assert cols.min() >= x0 - 1 and cols.max() <= x1 + 1, "Mask extends outside its bounding box horizontally"
+
+
+def test_segment_annotation_masks_at_original_resolution(monkeypatch) -> None:
+    # End-to-end counterpart of the unit test above: every segmentation annotation written during a real
+    # collection pass carries one mask per written instance, at the original image resolution.
+    from tlc_ultralytics.segment.validator import TLCSegmentationValidator
+
+    recorded = []
+    build_annotation = TLCSegmentationValidator._build_annotation
+
+    def recording_build_annotation(self, scaled, mapped_classes, h, w):
+        recorded.append((tuple(scaled["masks"].shape), (int(h), int(w)), scaled["conf"].tolist(), mapped_classes))
+        return build_annotation(self, scaled, mapped_classes, h, w)
+
+    monkeypatch.setattr(TLCSegmentationValidator, "_build_annotation", recording_build_annotation)
+
+    settings = Settings(
+        project_name="test_segment_mask_resolution",
+        run_name="test_segment_mask_resolution",
+        conf_thres=0.25,
+    )
+    model = TLCYOLO(TASK2MODEL["segment"])
+    model.collect(data=TASK2DATASET["segment"], splits=("val",), settings=settings, device="cpu", workers=0)
+
+    assert recorded, "Expected at least one image with predictions above the confidence threshold"
+    for mask_shape, ori_shape, confidences, labels in recorded:
+        num_masks, mask_h, mask_w = mask_shape
+        assert (mask_h, mask_w) == ori_shape, f"Masks at {(mask_h, mask_w)}, expected original shape {ori_shape}"
+        assert num_masks == len(confidences) == len(labels), "One mask per written instance"
+        assert num_masks <= settings.max_det
+        assert all(confidence >= settings.conf_thres for confidence in confidences)
+
+
 def test_absolutize_image_url() -> None:
     # Unexpanded aliases should fail
     url = tlc.Url("<UNEXPANDED_ALIAS>/in/my/url.png")
