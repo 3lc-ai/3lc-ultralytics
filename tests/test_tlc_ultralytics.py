@@ -3550,6 +3550,56 @@ def test_reducer_validation_split() -> None:
         settings.verify(training=False)
 
 
+def test_build_rewritten_arrow_table() -> None:
+    """Unit test: the rewrite drops the raw embedding columns, carries the rest through by reference and types
+    the reduced columns from their schemas."""
+    import pyarrow as pa
+
+    from tlc_ultralytics.utils._table_rewrite import _build_rewritten_arrow_table
+    from tlc_ultralytics.utils.schemas import _instance_embeddings_list_schema, _reduced_image_embeddings_schema
+
+    source = pa.table(
+        {
+            "example_id": pa.array([0, 1], type=pa.int32()),
+            "rles": pa.array([[b"abc"], [b"de", b"f"]]),
+            "input_table_id": pa.nulls(2, type=pa.int32()),  # declared with a default, no data in the parquet
+            "embeddings": pa.array([[0.0] * 4, [1.0] * 4], type=pa.list_(pa.float32(), 4)),
+            "predicted_instance_embedding_raw": pa.array([[[0.0] * 4], []], type=pa.list_(pa.list_(pa.float32(), 4))),
+        }
+    )
+    schema = {
+        "example_id": tlc.schemas.ExampleIdSchema(),
+        "rles": tlc.Schema(),
+        "input_table_id": tlc.schemas.ForeignTableIdSchema(foreign_table_url="../table"),
+        "predicted_instance_embedding": _instance_embeddings_list_schema(2),
+        "embeddings_pca": _reduced_image_embeddings_schema(2, "pca"),
+    }
+    reduced_columns = {
+        "predicted_instance_embedding": [[[0.1, 0.2]], []],
+        "embeddings_pca": [[0.3, 0.4], [0.5, 0.6]],
+    }
+
+    rewritten = _build_rewritten_arrow_table(
+        source, schema, reduced_columns, {"embeddings", "predicted_instance_embedding_raw"}
+    )
+
+    assert rewritten.column_names == [
+        "example_id",
+        "rles",
+        "input_table_id",
+        "predicted_instance_embedding",
+        "embeddings_pca",
+    ]
+    # Pass-through columns are the source's own arrow data, not a re-encoded copy
+    assert rewritten.column("rles").to_pylist() == source.column("rles").to_pylist()
+    # A column with no data in the source parquet gets its schema default, as a row-by-row copy would have
+    assert rewritten.column("input_table_id").to_pylist() == [0, 0]
+    # The reduced columns are typed from their schemas, exactly as tlc's own writer would type them
+    assert rewritten.schema.field("predicted_instance_embedding").type == pa.list_(pa.list_(pa.float32(), 2))
+    assert rewritten.schema.field("embeddings_pca").type == pa.list_(pa.float32(), 2)
+    assert np.allclose(rewritten.column("embeddings_pca").to_pylist(), [[0.3, 0.4], [0.5, 0.6]])
+
+
 def test_rolling_metrics_writer_rolls_by_bytes() -> None:
     """Unit test: the rolling writer flushes to a new metrics table when the buffer threshold is crossed,
     and the flushed tables together hold all rows in order."""
@@ -3716,6 +3766,83 @@ def test_metrics_flushing_segment_all_embeddings() -> None:
     for row_embs in df["predicted_instance_embedding"]:
         for emb in row_embs:
             assert len(emb) == dim
+
+
+def test_metrics_rewrite_does_not_decode_masks() -> None:
+    """The embedding rewrite must carry the RLE mask column through without decoding it.
+
+    Decoding an RLE row (`SegmentationHelper.masks_from_rles`) inflates it to a dense (H, W, N) uint8 array at
+    original image resolution, and re-encoding it (`rles_from_masks`) throws that away again - for a column the
+    rewrite is only copying. Counting both while the rewrite runs locks the arrow-level passthrough in place.
+    """
+    from tlc.helpers.segmentation_helper import SegmentationHelper
+
+    from tlc_ultralytics.engine.validator import TLCValidatorMixin
+
+    calls = {"decode": 0, "encode": 0, "rewrites": 0}
+    original_masks_from_rles = SegmentationHelper.masks_from_rles
+    original_rles_from_masks = SegmentationHelper.rles_from_masks
+    original_reduce = TLCValidatorMixin._reduce_and_rewrite_raw_tables
+    rewriting = False
+
+    def counting_masks_from_rles(*args, **kwargs):
+        if rewriting:
+            calls["decode"] += 1
+        return original_masks_from_rles(*args, **kwargs)
+
+    def counting_rles_from_masks(*args, **kwargs):
+        if rewriting:
+            calls["encode"] += 1
+        return original_rles_from_masks(*args, **kwargs)
+
+    def counting_reduce(self, *args, **kwargs):
+        # Only mask work done by the rewrite itself counts; the pass that produced the raw tables encodes masks
+        # legitimately, and reading the tables back afterwards decodes them again.
+        nonlocal rewriting
+        calls["rewrites"] += 1
+        rewriting = True
+        try:
+            return original_reduce(self, *args, **kwargs)
+        finally:
+            rewriting = False
+
+    settings = Settings(
+        project_name="test_metrics_rewrite_no_decode",
+        run_name="test_metrics_rewrite_no_decode",
+        metrics_max_buffer_mb=0,  # flush after every batch, so several tables are rewritten
+        image_embeddings_dim=2,
+        image_embeddings_reducer="pca",
+        instance_embeddings_dim=2,
+        instance_embeddings_reducer="pca",
+        ground_truth_instance_embeddings=True,
+        label_column_name=TASK2LABEL_COLUMN_NAME["segment"],
+    )
+
+    model = TLCYOLO(TASK2MODEL["segment"])
+    with (
+        patch.object(SegmentationHelper, "masks_from_rles", staticmethod(counting_masks_from_rles)),
+        patch.object(SegmentationHelper, "rles_from_masks", staticmethod(counting_rles_from_masks)),
+        patch.object(TLCValidatorMixin, "_reduce_and_rewrite_raw_tables", counting_reduce),
+    ):
+        model.collect(
+            data=TASK2DATASET["segment"],
+            splits=("train",),
+            settings=settings,
+            batch=2,
+            device="cpu",
+            workers=0,
+        )
+
+    assert calls["rewrites"] == 1, "Expected the rewrite to run once for the single collected split"
+    assert calls["decode"] == 0, "The rewrite decoded RLE masks instead of copying the column through"
+    assert calls["encode"] == 0, "The rewrite re-encoded masks instead of copying the column through"
+
+    # ... and the masks are still there and still readable afterwards
+    run = _get_run_from_settings(settings)
+    default_tables = get_metrics_tables_from_run(run)["default_stream"]
+    df = pd.concat([t.to_pandas() for t in default_tables], ignore_index=True)
+    assert sorted(df["example_id"].tolist()) == [0, 1, 2, 3]
+    assert "segmentations_predicted" in df.columns
 
 
 def test_instance_embeddings_cross_split_shared_space() -> None:

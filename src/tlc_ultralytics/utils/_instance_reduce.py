@@ -13,17 +13,12 @@ supports variable-length embedding list columns. All symbols here are private
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 from ultralytics.utils import LOGGER, TQDM
 
 from tlc_ultralytics.constants import TLC_COLORSTR
-
-if TYPE_CHECKING:
-    import tlc
 
 # Fitted reducers shared across one run's validation passes, keyed by
 # (run URL, kind) where kind is "instance" or "image". The first split to fit
@@ -105,53 +100,56 @@ def _fit_embeddings_reducer(
     return reducer
 
 
-def _read_raw_embedding_column(table: tlc.Table, column_name: str) -> tuple[np.ndarray | None, np.ndarray]:
+def _combine_chunks(column: pa.Array | pa.ChunkedArray) -> pa.Array:
+    """Return *column* as a single contiguous `pa.Array`.
+
+    Columns read out of a `pa.Table` are chunked, and `pa.ChunkedArray.flatten()` means something else entirely
+    (it splits struct fields into separate columns) than `pa.Array.flatten()`, so the list-peeling reads below
+    need a plain array to work on.
+    """
+    return column.combine_chunks() if isinstance(column, pa.ChunkedArray) else column
+
+
+def _read_raw_embedding_column(column: pa.Array | pa.ChunkedArray) -> tuple[np.ndarray | None, np.ndarray]:
     """Read a variable-length raw-embedding list column as a flat matrix plus per-row instance counts.
 
-    Reads the column directly as pyarrow data, avoiding per-row sample-type decoding and Python-object
-    materialization of the (potentially large) float lists.
+    Works on the column's pyarrow data, avoiding per-row sample-type decoding and Python-object materialization
+    of the (potentially large) float lists.
 
     Args:
-        table: the metrics table to read from (fully loaded into memory by the read; callers should evict it
-            from the object caches when done to bound memory across many tables)
-        column_name: name of the raw embedding column, a list of fixed-size float vectors per row
+        column: the raw embedding column, a list of fixed-size float vectors per row
 
     Returns:
         Tuple of (matrix, per_row_counts) where matrix is a [total_instances, C] float32 array, or None when the
         column holds no instances, and per_row_counts has one instance count per table row.
     """
-    column = table.get_column_as_pyarrow_array(column_name)
     per_row_counts = pc.list_value_length(column).to_numpy(zero_copy_only=False).astype(np.int64)
 
     total_instances = int(per_row_counts.sum())
     if total_instances == 0:
         return None, per_row_counts
 
-    per_instance = column.flatten()  # one entry per instance, honoring row offsets
-    if isinstance(per_instance, pa.ChunkedArray):
-        per_instance = per_instance.combine_chunks()
-    flat_values = per_instance.flatten().to_numpy(zero_copy_only=False)
+    # One entry per instance, honoring row offsets, then one float per channel.
+    per_instance = _combine_chunks(column).flatten()
+    flat_values = _combine_chunks(per_instance).flatten().to_numpy(zero_copy_only=False)
 
     channels = flat_values.size // total_instances
     matrix = flat_values.astype(np.float32, copy=False).reshape(total_instances, channels)
     return matrix, per_row_counts
 
 
-def _read_image_embedding_column(table: tlc.Table, column_name: str) -> np.ndarray | None:
+def _read_image_embedding_column(column: pa.Array | pa.ChunkedArray) -> np.ndarray | None:
     """Read a fixed-size per-row embedding column as a [n_rows, C] float32 matrix.
 
     The image-embedding counterpart to `_read_raw_embedding_column`: one fixed-size vector per row instead
-    of a variable-length list of vectors. Returns None when the table has no rows.
+    of a variable-length list of vectors. Returns None when the column has no rows.
     """
-    column = table.get_column_as_pyarrow_array(column_name)
     n_rows = len(column)
     if n_rows == 0:
         return None
 
-    flat = column.flatten()
-    if isinstance(flat, pa.ChunkedArray):
-        flat = flat.combine_chunks()
-    flat_values = flat.to_numpy(zero_copy_only=False).astype(np.float32, copy=False)
+    flat = _combine_chunks(column).flatten()
+    flat_values = _combine_chunks(flat).to_numpy(zero_copy_only=False).astype(np.float32, copy=False)
     return flat_values.reshape(n_rows, flat_values.size // n_rows)
 
 
