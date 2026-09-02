@@ -206,7 +206,9 @@ class TLCValidatorMixin(BaseValidator):
             ultralytics.engine.validator.check_det_dataset = ultralytics.data.utils.check_det_dataset
             ultralytics.engine.validator.check_cls_dataset = ultralytics.data.utils.check_cls_dataset
 
-        # Per-class metrics only on RANK 0 (uses aggregate metrics from gather_stats)
+        # Per-class metrics only on RANK 0 (uses aggregate metrics from gather_stats).
+        # _write_per_class_metrics_tables is itself gated on self._should_collect, so it's a
+        # no-op on non-collection epochs and when collection is disabled.
         if RANK in {-1, 0}:
             self._write_per_class_metrics_tables()
 
@@ -1163,6 +1165,7 @@ class TLCValidatorMixin(BaseValidator):
         except Exception as exc:
             LOGGER.warning(f"{TLC_COLORSTR}Failed to delete intermediate raw metrics table at {table_url}: {exc}")
 
+    @execute_when_collecting
     def _write_per_class_metrics_tables(self) -> None:
         if self.args.task not in ("detect", "segment", "obb"):
             # Per-class metrics currently only supported for detection, segmentation, and obb tasks
@@ -1198,7 +1201,10 @@ class TLCValidatorMixin(BaseValidator):
         )
 
         metrics_writer.add_batch(metrics_batch)
-        metrics_writer.finalize()
+        table = metrics_writer.finalize()
+
+        # Improve memory usage - don't cache the written table
+        ObjectRegistry._delete_object_from_caches(table.url)
 
     def _per_class_metrics_schemas(self):
         metrics_schemas = {
