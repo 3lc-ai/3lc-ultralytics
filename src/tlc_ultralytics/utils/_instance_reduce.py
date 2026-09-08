@@ -123,7 +123,9 @@ def _read_raw_embedding_column(column: pa.Array | pa.ChunkedArray) -> tuple[np.n
         Tuple of (matrix, per_row_counts) where matrix is a [total_instances, C] float32 array, or None when the
         column holds no instances, and per_row_counts has one instance count per table row.
     """
-    per_row_counts = pc.list_value_length(column).to_numpy(zero_copy_only=False).astype(np.int64)
+    # A declared-but-never-written column reads back as nulls, whose list length is null rather than 0.
+    lengths = pc.fill_null(pc.list_value_length(column), 0)
+    per_row_counts = lengths.to_numpy(zero_copy_only=False).astype(np.int64)
 
     total_instances = int(per_row_counts.sum())
     if total_instances == 0:
@@ -134,6 +136,10 @@ def _read_raw_embedding_column(column: pa.Array | pa.ChunkedArray) -> tuple[np.n
     flat_values = _combine_chunks(per_instance).flatten().to_numpy(zero_copy_only=False)
 
     channels = flat_values.size // total_instances
+    assert channels * total_instances == flat_values.size, (
+        f"Raw embedding column holds {flat_values.size} floats, not a whole number of vectors "
+        f"across {total_instances} instances."
+    )
     matrix = flat_values.astype(np.float32, copy=False).reshape(total_instances, channels)
     return matrix, per_row_counts
 
@@ -150,7 +156,11 @@ def _read_image_embedding_column(column: pa.Array | pa.ChunkedArray) -> np.ndarr
 
     flat = _combine_chunks(column).flatten()
     flat_values = _combine_chunks(flat).to_numpy(zero_copy_only=False).astype(np.float32, copy=False)
-    return flat_values.reshape(n_rows, flat_values.size // n_rows)
+    channels = flat_values.size // n_rows
+    assert channels * n_rows == flat_values.size, (
+        f"Image embedding column holds {flat_values.size} floats, not a whole number of vectors across {n_rows} rows."
+    )
+    return flat_values.reshape(n_rows, channels)
 
 
 _TRANSFORM_BATCH_SIZE = 5000
