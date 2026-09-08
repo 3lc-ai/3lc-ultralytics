@@ -511,6 +511,40 @@ def test_collect_loss_unsupported_task_warns(task) -> None:
     assert "loss" not in metrics_df.columns, f"Expected no 'loss' column for {task}"
 
 
+def test_pose_yolo26_disables_per_sample_loss() -> None:
+    """Test that collect_loss=True warns and is disabled for YOLO26 (end2end) pose models."""
+    task = "pose"
+    settings = Settings(
+        project_name=f"test_{task}_no_loss",
+        run_name=f"test_{task}_no_loss",
+        collect_loss=True,
+    )
+
+    model_3lc = TLCYOLO(TASK2MODEL[task])
+    with capture_logs() as log_messages:
+        model_3lc.val(
+            data=TASK2DATASET[task],
+            device="cpu",
+            imgsz=320,
+            batch=4,
+            workers=0,
+            settings=settings,
+        )
+
+    loss_warning_found = any(
+        "Per-sample loss collection is not supported for YOLO26 (end2end) pose models" in msg for msg in log_messages
+    )
+    assert loss_warning_found, "Expected warning about YOLO26 pose loss collection not being supported"
+
+    run = _get_run_from_settings(settings)
+    metrics_tables = get_metrics_tables_from_run(run)
+    metrics_df = pd.concat(
+        [m.to_pandas() for m in metrics_tables["default_stream"]],
+        ignore_index=True,
+    )
+    assert "loss" not in metrics_df.columns, "Expected no 'loss' column for YOLO26 pose"
+
+
 def test_classify_training() -> None:
     model = TASK2MODEL["classify"]
     data = TASK2DATASET["classify"]
