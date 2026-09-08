@@ -45,19 +45,12 @@ class TLCDatasetMixin:
         self._table_url = table.url if isinstance(table, tlc.Table) else None
 
     def __getstate__(self) -> dict[str, Any]:
-        """Drop every reference to the `tlc.Table` from the state pickled to dataloader workers.
+        """Replace every reference to the `tlc.Table` with its `tlc.Url` before pickling to a dataloader worker.
 
-        Workers only ever read `self.labels` and `self.im_files` - the per-item path never touches the Table, which
-        is fully consumed at construction time by `_get_rows_from_table`. A Table however holds all of its row data
-        resident as a `pyarrow.Table`, and `tlc.Table.__getstate__` pickles that data as-is, so any surviving
-        reference ships the entire dataset's annotations to every worker. On platforms where dataloader workers are
-        spawned rather than forked (macOS, Windows, and `spawn` start methods generally) that is `workers` extra
-        copies of data nothing reads. All references have to go, not just `self.table`: pickle memoizes, so a single
-        surviving one costs the full Table.
-
-        The references are `self.table`, `self.img_path` (Ultralytics stores the first constructor argument, which
-        is the Table for our datasets) and the `train`/`val` entries of `self.data`. Each is replaced by the
-        corresponding `tlc.Url`; `self.table` is restored lazily from that URL should anything ask for it.
+        A Table keeps all of its row data resident in memory, and workers never read it - labels are built once at
+        construction. This only takes effect when the dataset is actually pickled, i.e. under `spawn`/`forkserver`
+        dataloader worker start methods (the default on macOS and Windows); under `fork`, workers inherit memory
+        without pickling and this method never runs.
 
         :return: The dataset state to pickle, with Tables replaced by their URLs.
         """
@@ -65,7 +58,7 @@ class TLCDatasetMixin:
         state["_table"] = None
 
         if isinstance(state.get("img_path"), tlc.Table) and self._table_url is not None:
-            state["img_path"] = self._table_url.to_str()
+            state["img_path"] = self._table_url
 
         data = state.get("data")
         if isinstance(data, dict):

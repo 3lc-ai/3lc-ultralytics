@@ -2404,7 +2404,7 @@ def test_dataset_cache(task) -> None:
     assert cache_data["corrupt_example_ids"] == []
 
 
-@pytest.mark.parametrize("task", ["detect", "segment", "classify"])
+@pytest.mark.parametrize("task", ["detect", "segment", "classify", "obb", "pose"])
 def test_dataset_does_not_pickle_table(task: str) -> None:
     """No `tlc.Table` may cross the pickle boundary into a dataloader worker.
 

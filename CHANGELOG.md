@@ -20,7 +20,7 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 - `collect_loss=True` now warns and is disabled for the `segment` and `obb` tasks instead of being silently ignored, and loss schemas are no longer declared when loss collection is disabled.
 
-- Datasets no longer carry the `tlc.Table` into dataloader workers. A Table keeps all of its row data resident in memory, and where workers are spawned rather than forked (macOS and Windows) each worker received a full copy of the annotations of both the train and the val table - memory nothing in the worker reads, since labels are built once at dataset construction. The Table is now replaced by its URL when the dataset is pickled, and restored lazily if anything asks for it, so `dataset.table` keeps working everywhere it is used.
+- Datasets no longer carry the `tlc.Table` into dataloader workers. This applies wherever the dataset is pickled into worker processes - the `spawn`/`forkserver` start methods, which are the default on macOS and Windows - and previously copied the full annotations of both the train and val tables into every worker, even though workers never read them. The Table is now replaced by its URL before pickling and restored lazily if anything asks for it, so `dataset.table` keeps working everywhere it is used.
 
 ## [0.4.0] - 2026-08-07
 
