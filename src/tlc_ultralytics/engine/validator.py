@@ -207,8 +207,6 @@ class TLCValidatorMixin(BaseValidator):
             ultralytics.engine.validator.check_cls_dataset = ultralytics.data.utils.check_cls_dataset
 
         # Per-class metrics only on RANK 0 (uses aggregate metrics from gather_stats).
-        # _write_per_class_metrics_tables is itself gated on self._should_collect, so it's a
-        # no-op on non-collection epochs and when collection is disabled.
         if RANK in {-1, 0}:
             self._write_per_class_metrics_tables()
 
