@@ -12,7 +12,7 @@ from tlc_ultralytics.utils.dataset import map_label
 
 
 class _DummyImageFolder:
-    def __init__(self, root: tlc.Table, allow_empty: bool = False, samples: list[tuple[str, int]] | None = None):
+    def __init__(self, root: str, allow_empty: bool = False, samples: list[tuple[str, int]] | None = None):
         self._root = root
         self._samples = samples
 
@@ -22,7 +22,7 @@ class _DummyImageFolder:
 
     @property
     def root(self):
-        return self._root.url
+        return self._root
 
     @property
     def classes(self):
@@ -75,7 +75,8 @@ class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
         OriginalImageFolder = torchvision.datasets.ImageFolder
         torchvision.datasets.ImageFolder = partial(_DummyImageFolder, samples=self.samples)
 
-        ClassificationDataset.__init__(self, table, args, augment=augment, prefix=prefix)
+        # Pass the table URL as the root, as the parent treats it as a path
+        ClassificationDataset.__init__(self, table.url.to_str(), args, augment=augment, prefix=prefix)
 
         # Restore torchvision ImageFolder
         torchvision.datasets.ImageFolder = OriginalImageFolder

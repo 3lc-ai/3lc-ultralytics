@@ -17,7 +17,9 @@ import numpy as np
 import pandas as pd
 import pytest
 import tlc
+import ultralytics
 import yaml
+from packaging.version import Version
 from PIL import Image
 from testing_helpers import (
     check_pose_table_and_metrics_tables,
@@ -247,8 +249,15 @@ def test_training(task: str) -> None:
         atol = 0.1
     elif task == "pose":
         atol = 0.1
+
+    # Precision and recall are read off a single confidence threshold, so they move a lot for tiny changes
+    # in the predictions. The first training in a process is not bit-identical to the ones after it in
+    # ultralytics (two identical back-to-back ultralytics trainings differ the same way), so compare them
+    # with a looser tolerance than the mAP metrics.
+    pr_atol = max(atol, 0.15)
     for k in results_ultralytics.results_dict.keys():
-        assert np.isclose(results_ultralytics.results_dict[k], results_3lc.results_dict[k], atol=atol), (
+        k_atol = pr_atol if "precision" in k or "recall" in k else atol
+        assert np.isclose(results_ultralytics.results_dict[k], results_3lc.results_dict[k], atol=k_atol), (
             f"Results validation metrics 3LC different from Ultralytics for {k}"
         )
 
@@ -2602,6 +2611,13 @@ def test_single_sample_equality(task: str, mode: str) -> None:
         "seed": 42,
         "deterministic": True,
     }
+
+    if task == "obb" and mode == "train" and Version(ultralytics.__version__) >= Version("8.4.118"):
+        # 3LC stores oriented boxes as rotated rectangles, while DOTA labels them as arbitrary
+        # quadrilaterals, so a few corners differ by a handful of pixels. Since ultralytics 8.4.118 mosaic
+        # clips instances at the image borders while preserving the box direction, and drops the ones left
+        # without any area, which turns those few pixels into a different number of surviving instances.
+        pytest.skip("Instance counts differ at mosaic borders, see comment")
 
     overrides_3lc = overrides.copy()
     overrides_3lc["settings"] = settings

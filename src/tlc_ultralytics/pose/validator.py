@@ -93,7 +93,8 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             image_height=int(h),
             image_width=int(w),
         )
-        kpts = scaled["kpts"]  # scale_preds outputs scaled keypoints under "kpts"
+        # scale_preds outputs scaled keypoints under "keypoints" since ultralytics 8.4.91, "kpts" before that
+        kpts = scaled["keypoints"] if "keypoints" in scaled else scaled["kpts"]
         for j in range(len(mapped_classes)):
             kxy = kpts[j, :, 0:2].cpu().numpy().astype(np.float32)
             kconf = kpts[j, :, 2].cpu().numpy().astype(np.float32).tolist() if kpts.shape[2] == 3 else None

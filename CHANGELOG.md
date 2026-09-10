@@ -8,6 +8,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Changed
 
+- The supported `ultralytics` range is now `>=8.4.0,<8.4.122` (up from `<8.4.67`), i.e. `ultralytics` 8.4.121 is the newest tested version.
+
 - The supported `3lc` range is now `>=3.2.0,<4.0.0` (up from `>=3.0.0`). `3lc` 3.0 and 3.1 were only ever published to 3LC's public package index and are not available on PyPI, so they are no longer supported.
 
 ### Fixed
