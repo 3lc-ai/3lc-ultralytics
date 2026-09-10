@@ -597,13 +597,14 @@ class TLCValidatorMixin(BaseValidator):
 
         In DDP mode, each rank prepares its own metrics writer.
         """
+        # Must run before _get_metrics_schemas: tasks without per-sample loss support disable `collect_loss` here.
+        self._prepare_loss_fn(model)
+
         column_schemas = {}
         column_schemas.update(self._get_metrics_schemas())  # Add task-specific metrics schema
 
         if self._settings.metrics_schemas:
             column_schemas.update(self._settings.metrics_schemas)
-
-        self._prepare_loss_fn(model)
 
         if self._settings.image_embeddings_dim > 0:
             # Add hook and get the activation size

@@ -100,21 +100,23 @@ def yolo_predicted_bounding_box_schema(
     )
 
 
-def yolo_loss_schemas(training: bool = False) -> dict[str, tlc.Schema]:
+def yolo_loss_schemas(training: bool = False, use_dfl: bool = True) -> dict[str, tlc.Schema]:
     """Create a 3LC schema for YOLO per-sample loss metrics.
 
     :param training: Whether metrics are collected during training.
-    :returns: The YOLO loss schemas for each of the three components.
+    :param use_dfl: Whether the model has a DFL loss component. DFL-free models (YOLO26) get no `dfl_loss` column.
+    :returns: The YOLO loss schemas for each of the loss components.
     """
     schemas = {}
     schemas["box_loss"] = tlc.schemas.Float32Schema(
         description="Box Loss",
         writable=False,
     )
-    schemas["dfl_loss"] = tlc.schemas.Float32Schema(
-        description="Distribution Focal Loss",
-        writable=False,
-    )
+    if use_dfl:
+        schemas["dfl_loss"] = tlc.schemas.Float32Schema(
+            description="Distribution Focal Loss",
+            writable=False,
+        )
     schemas["cls_loss"] = tlc.schemas.Float32Schema(
         description="Classification Loss",
         writable=False,

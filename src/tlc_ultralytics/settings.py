@@ -43,10 +43,9 @@ class Settings:
     """The description of the 3LC run. Default: None"""
 
     collect_loss: bool = field(default=False)
-    """Whether to collect per-sample loss values for the 'detect' task.
-
-    Cross-Entropy loss is always computed for the 'classify' task.
-    Not yet supported for the 'segment' task.
+    """Whether to collect per-sample loss values for the 'detect' and 'pose' tasks, including end-to-end
+    (YOLO26) detection models. Not supported for YOLO26 pose models or for the 'segment' and 'obb' tasks,
+    where it is disabled with a warning. Cross-Entropy loss is always computed for the 'classify' task.
 
     Default: False"""
 

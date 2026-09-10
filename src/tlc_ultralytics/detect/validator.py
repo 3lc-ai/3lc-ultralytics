@@ -4,12 +4,11 @@ import weakref
 
 import torch
 from ultralytics.models.yolo.detect import DetectionValidator
-from ultralytics.utils import LOGGER, ops
+from ultralytics.utils import ops
 
 from tlc_ultralytics.constants import (
     IMAGE_COLUMN_NAME,
     PREDICTED_BOUNDING_BOXES,
-    TLC_COLORSTR,
 )
 from tlc_ultralytics.detect.loss import v8UnreducedDetectionLoss
 from tlc_ultralytics.detect.utils import (
@@ -48,7 +47,11 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
         return super().postprocess(preds)
 
     def _get_metrics_schemas(self):
-        loss_schemas = yolo_loss_schemas(training=self._training) if self._settings.collect_loss else {}
+        loss_schemas = (
+            yolo_loss_schemas(training=self._training, use_dfl=getattr(self.loss_fn, "use_dfl", True))
+            if self._settings.collect_loss
+            else {}
+        )
         bbox_schema = yolo_predicted_bounding_box_schema(self.data["names_3lc"])
 
         # Instance-embedding columns (raw + reduced) are added by the mixin in
@@ -79,25 +82,17 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
         return construct_bbox_struct([], image_width=w, image_height=h)
 
     def _prepare_loss_fn(self, model):
-        # Get the inner model for checking end2end attribute
-        inner_model = model.model if hasattr(model.model, "model") else model
-
-        # Check if this is a YOLO26 (end2end) model - per-sample loss is not supported for these
-        is_end2end = getattr(inner_model.model[-1], "end2end", False) if hasattr(inner_model, "model") else False
-
-        if is_end2end and self._settings.collect_loss:
-            LOGGER.warning(
-                f"{TLC_COLORSTR}Per-sample loss collection is not supported for YOLO26 (end2end) models. "
-                "Disabling loss collection for this run."
-            )
-            self._settings.collect_loss = False
+        if not self._settings.collect_loss:
             return
 
-        if self._settings.collect_loss:
-            self.loss_fn = v8UnreducedDetectionLoss(
-                inner_model,
-                training=self._training,
-            )
+        inner_model = model.model if hasattr(model.model, "model") else model
+        is_end2end = getattr(inner_model.model[-1], "end2end", False) if hasattr(inner_model, "model") else False
+
+        if is_end2end:
+            # Mirror the one2one branch of ultralytics' E2ELoss, whose loss items ultralytics reports for these models.
+            self.loss_fn = v8UnreducedDetectionLoss(inner_model, tal_topk=7, tal_topk2=1, training=self._training)
+        else:
+            self.loss_fn = v8UnreducedDetectionLoss(inner_model, training=self._training)
 
     def _add_embeddings_hook(self, model) -> int:
         if hasattr(model.model, "model"):
