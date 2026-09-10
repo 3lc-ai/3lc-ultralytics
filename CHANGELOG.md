@@ -10,6 +10,10 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 - The supported `3lc` range is now `>=3.2.0,<4.0.0` (up from `>=3.0.0`). `3lc` 3.0 and 3.1 were only ever published to 3LC's public package index and are not available on PyPI, so they are no longer supported.
 
+### Fixed
+
+- Only write per-class metrics tables when metrics collection is active, instead of unconditionally on every validation pass. Previously these tables were written even on non-collection training epochs and when `collection_disable` was set, needlessly growing the run's metrics list and leaking table objects in the object registry cache.
+
 ## [0.4.0] - 2026-08-07
 
 ### Added

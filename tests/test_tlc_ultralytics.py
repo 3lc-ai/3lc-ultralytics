@@ -668,8 +668,8 @@ def test_train_collection_val_only() -> None:
     assert len(run.metrics_tables) == 1, "Expected only validation metrics to be collected after training"
 
 
-def test_train_collection_disabled() -> None:
-    task = "classify"
+@pytest.mark.parametrize("task", ["classify", "detect", "segment", "obb"])
+def test_train_collection_disabled(task: str) -> None:
     model_arg = TASK2MODEL[task]
     overrides = {"data": TASK2DATASET[task], "device": "cpu", "epochs": 1, "batch": 4, "imgsz": 224}
 
@@ -677,12 +677,12 @@ def test_train_collection_disabled() -> None:
 
     settings = Settings(
         collection_disable=True,
-        project_name="test_train_collection_disabled",
-        run_name="test_train_collection_disabled",
+        project_name=f"test_train_collection_disabled_{task}",
+        run_name=f"test_train_collection_disabled_{task}",
     )
     model.train(**overrides, settings=settings)
 
-    # Ensure that only validation metrics are collected after training
+    # classify never writes per-class tables, so only detect/segment/obb can catch a gating regression here.
     run = _get_run_from_settings(settings)
     assert len(run.metrics_tables) == 0, "Expected no metrics tables to be written"
 
