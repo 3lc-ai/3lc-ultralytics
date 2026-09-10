@@ -77,8 +77,7 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
         """
         preds_dict = preds[1] if isinstance(preds, (list, tuple)) else preds
         if "one2one" in preds_dict:
-            # End-to-end (YOLO26) models output both head branches; the one2one branch is the one
-            # used for inference and the one whose loss ultralytics reports during training.
+            # End-to-end (YOLO26) models: use the one2one branch, whose loss ultralytics reports during training.
             preds_dict = preds_dict["one2one"]
         pred_distri = preds_dict["boxes"].permute(0, 2, 1).contiguous()
         pred_scores = preds_dict["scores"].permute(0, 2, 1).contiguous()
@@ -137,7 +136,7 @@ class v8UnreducedDetectionLoss(v8DetectionLoss):
             "cls_loss": cls_loss,
             "box_loss": box_loss_full,
         }
-        # DFL-free models (YOLO26, reg_max == 1) have no DFL loss - omit the column instead of writing zeros.
+        # DFL-free models (reg_max == 1, e.g. YOLO26) have no DFL loss component.
         if self.use_dfl:
             losses["dfl_loss"] = dfl_loss_full
 

@@ -85,13 +85,11 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
         if not self._settings.collect_loss:
             return
 
-        # Get the inner model for checking the end2end attribute
         inner_model = model.model if hasattr(model.model, "model") else model
         is_end2end = getattr(inner_model.model[-1], "end2end", False) if hasattr(inner_model, "model") else False
 
         if is_end2end:
-            # End-to-end (YOLO26) models: mirror the one2one branch of ultralytics' `E2ELoss`, whose
-            # detached values are the loss items ultralytics itself reports for these models.
+            # Mirror the one2one branch of ultralytics' E2ELoss, whose loss items ultralytics reports for these models.
             self.loss_fn = v8UnreducedDetectionLoss(inner_model, tal_topk=7, tal_topk2=1, training=self._training)
         else:
             self.loss_fn = v8UnreducedDetectionLoss(inner_model, training=self._training)

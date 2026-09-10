@@ -301,8 +301,7 @@ def test_training(task: str) -> None:
         [m.to_pandas() for m in metrics_tables["default_stream"]],
         ignore_index=True,
     )
-    # Note: per-sample loss columns are checked in test_detect_yolo26_per_sample_loss and
-    # test_detect_training_with_yolo11_per_sample_loss; unsupported tasks disable collect_loss with a warning.
+    # Per-sample loss columns are covered by the dedicated per-sample loss tests.
     assert 0 in metrics_df[TRAINING_PHASE], "Expected metrics from during training"
     assert 1 in metrics_df[TRAINING_PHASE], "Expected metrics from after training"
 

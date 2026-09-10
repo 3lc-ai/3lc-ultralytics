@@ -8,7 +8,7 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Added
 
-- Support per-sample loss collection (`collect_loss=True`) for end-to-end (YOLO26) detection models. The collected loss mirrors the one2one branch of ultralytics' `E2ELoss`, which is the loss ultralytics itself reports for these models during training. DFL-free models (YOLO26) get no `dfl_loss` column, since they have no DFL loss component.
+- Support per-sample loss collection (`collect_loss=True`) for end-to-end (YOLO26) detection models. The collected loss mirrors the one2one branch of ultralytics' `E2ELoss`, which is the loss ultralytics reports for these models during training. DFL-free models (YOLO26) get no `dfl_loss` column.
 
 ### Changed
 
@@ -18,7 +18,7 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 - Only write per-class metrics tables when metrics collection is active, instead of unconditionally on every validation pass. Previously these tables were written even on non-collection training epochs and when `collection_disable` was set, needlessly growing the run's metrics list and leaking table objects in the object registry cache.
 
-- `collect_loss=True` now emits a warning and is disabled for the `segment` and `obb` tasks, instead of being silently ignored. Loss schemas are also no longer declared for runs where loss collection is disabled by such a gate.
+- `collect_loss=True` now warns and is disabled for the `segment` and `obb` tasks instead of being silently ignored, and loss schemas are no longer declared when loss collection is disabled.
 
 ## [0.4.0] - 2026-08-07
 

@@ -597,8 +597,7 @@ class TLCValidatorMixin(BaseValidator):
 
         In DDP mode, each rank prepares its own metrics writer.
         """
-        # Prepare the loss function before declaring schemas: tasks that don't support per-sample loss
-        # disable `collect_loss` here, and the loss columns must not be declared in that case.
+        # Must run before _get_metrics_schemas: tasks without per-sample loss support disable `collect_loss` here.
         self._prepare_loss_fn(model)
 
         column_schemas = {}
