@@ -2406,11 +2406,8 @@ def test_dataset_cache(task) -> None:
 
 @pytest.mark.parametrize("task", ["detect", "segment", "classify", "obb", "pose"])
 def test_dataset_does_not_pickle_table(task: str) -> None:
-    """No `tlc.Table` may cross the pickle boundary into a dataloader worker.
-
-    Tables hold all of their row data resident, so a single surviving reference costs one full copy of the
-    annotations per worker on `spawn` platforms. The worker only reads `labels`/`im_files`, and the Table is
-    restored lazily from its URL if anything does ask for it.
+    """No `tlc.Table` may cross the pickle boundary into a dataloader worker - a single surviving reference costs
+    one full copy of the annotations per worker on `spawn` platforms.
     """
     settings = Settings(project_name=f"test_dataset_pickle_{task}")
     trainer = TASK2TRAINER[task](
@@ -2421,8 +2418,7 @@ def test_dataset_does_not_pickle_table(task: str) -> None:
     table = trainer.data["train"]
     dataset = trainer.build_dataset(table, mode="val", batch=1)
 
-    # `reducer_override` runs for every object the pickler actually writes, so this catches a Table reached by
-    # any path, however indirect.
+    # `reducer_override` sees every object the pickler writes, so this catches a Table reached by any path.
     pickled_tables: list[tlc.Table] = []
 
     class TableDetectingPickler(pickle.Pickler):

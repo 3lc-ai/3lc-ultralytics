@@ -19,19 +19,12 @@ if TYPE_CHECKING:
 class TLCDatasetMixin:
     _warned_missing_image_dimensions = False
 
-    # Backing state for the `table` property. Class-level defaults so `hasattr(self, "table")` is answerable
-    # before any subclass has assigned a Table.
     _table: tlc.Table | None = None
     _table_url: tlc.Url | None = None
 
     @property
     def table(self) -> tlc.Table:
-        """The `tlc.Table` backing this dataset, restored from its URL if it was dropped when the dataset was
-        pickled to a dataloader worker. See `__getstate__` for why the Table does not cross that boundary.
-
-        :return: The Table this dataset was built from.
-        :raises AttributeError: If no Table has been assigned to this dataset.
-        """
+        """The `tlc.Table` backing this dataset, restored lazily from its URL after unpickling in a worker."""
         if self._table is None:
             if self._table_url is None:
                 msg = "TLCDatasetMixin requires an attribute `table` which is a tlc.Table."
@@ -45,14 +38,10 @@ class TLCDatasetMixin:
         self._table_url = table.url if isinstance(table, tlc.Table) else None
 
     def __getstate__(self) -> dict[str, Any]:
-        """Replace every reference to the `tlc.Table` with its `tlc.Url` before pickling to a dataloader worker.
+        """Replace Table references with their URLs when pickling to a dataloader worker.
 
         A Table keeps all of its row data resident in memory, and workers never read it - labels are built once at
-        construction. This only takes effect when the dataset is actually pickled, i.e. under `spawn`/`forkserver`
-        dataloader worker start methods (the default on macOS and Windows); under `fork`, workers inherit memory
-        without pickling and this method never runs.
-
-        :return: The dataset state to pickle, with Tables replaced by their URLs.
+        construction. Applies under the `spawn`/`forkserver` worker start methods; `fork` never pickles the dataset.
         """
         state = self.__dict__.copy()
         state["_table"] = None
@@ -273,8 +262,6 @@ class TLCDatasetMixin:
         :yield: Valid example IDs
         """
         corrupt_set = set(corrupt_example_ids)
-
-        # A table without a weights column has no zero-weight rows to exclude.
         weight_column_name = self.table.weights_column_name if self._exclude_zero else None
 
         excluded_count = 0

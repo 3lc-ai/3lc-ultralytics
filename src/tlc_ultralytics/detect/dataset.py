@@ -295,8 +295,7 @@ class TLCYOLOSegmentationDataset(BaseTLCYOLODataset):
         """
         column_name, _, _ = self._label_column_name.split(".")
 
-        # `row` is already the row view holding the raw, serialized segmentation dict - re-reading it from the
-        # Table would decode the same row a second time.
+        # The row view holds the raw, serialized segmentation dict.
         raw_segmentations = row[column_name]
 
         # Masks are RLE-encoded and the size is reconstructed solely from the stored dimensions,
