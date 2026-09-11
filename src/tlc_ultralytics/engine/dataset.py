@@ -19,12 +19,46 @@ if TYPE_CHECKING:
 class TLCDatasetMixin:
     _warned_missing_image_dimensions = False
 
-    def _post_init(self):
-        self.display_name = self.table.dataset_name
+    _table: tlc.Table | None = None
+    _table_url: tlc.Url | None = None
 
-        assert hasattr(self, "table") and isinstance(self.table, tlc.Table), (
-            "TLCDatasetMixin requires an attribute `table` which is a tlc.Table."
-        )
+    @property
+    def table(self) -> tlc.Table:
+        """The `tlc.Table` backing this dataset, restored lazily from its URL after unpickling in a worker."""
+        if self._table is None:
+            if self._table_url is None:
+                msg = "TLCDatasetMixin requires an attribute `table` which is a tlc.Table."
+                raise AttributeError(msg)
+            self._table = tlc.Table.from_url(self._table_url)
+        return self._table
+
+    @table.setter
+    def table(self, table: tlc.Table) -> None:
+        self._table = table
+        self._table_url = table.url if isinstance(table, tlc.Table) else None
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Replace Table references with their URLs when pickling to a dataloader worker.
+
+        A Table keeps all of its row data resident in memory, and workers never read it - labels are built once at
+        construction. Applies under the `spawn`/`forkserver` worker start methods; `fork` never pickles the dataset.
+        """
+        state = self.__dict__.copy()
+        state["_table"] = None
+
+        if isinstance(state.get("img_path"), tlc.Table) and self._table_url is not None:
+            state["img_path"] = self._table_url
+
+        data = state.get("data")
+        if isinstance(data, dict):
+            state["data"] = {key: value.url if isinstance(value, tlc.Table) else value for key, value in data.items()}
+
+        return state
+
+    def _post_init(self):
+        assert isinstance(self._table, tlc.Table), "TLCDatasetMixin requires an attribute `table` which is a tlc.Table."
+
+        self.display_name = self.table.dataset_name
 
         if len(self.table) == 0:
             msg = f"The Table with URL {self.table.url.to_str()} has no rows, provide a Table populated with data."
@@ -228,7 +262,7 @@ class TLCDatasetMixin:
         :yield: Valid example IDs
         """
         corrupt_set = set(corrupt_example_ids)
-        weight_column_name = self.table.weights_column_name
+        weight_column_name = self.table.weights_column_name if self._exclude_zero else None
 
         excluded_count = 0
 
@@ -238,7 +272,7 @@ class TLCDatasetMixin:
                 continue
 
             # Skip zero-weight images if exclusion is enabled
-            if self._exclude_zero and self.table.table_rows[example_id].get(weight_column_name, 1) == 0:
+            if weight_column_name is not None and self.table.table_rows[example_id].get(weight_column_name, 1) == 0:
                 excluded_count += 1
                 continue
 

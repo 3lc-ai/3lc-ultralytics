@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import io
 import json
 import logging
 import os
 import pathlib
+import pickle
 import random
 import sys
 from collections import defaultdict
@@ -2400,6 +2402,51 @@ def test_dataset_cache(task) -> None:
     cache_data = json.loads(cache_path.read_text())
     assert cache_data["version"] == 1, "Cache version should be 1"
     assert cache_data["corrupt_example_ids"] == []
+
+
+@pytest.mark.parametrize("task", ["detect", "segment", "classify", "obb", "pose"])
+def test_dataset_does_not_pickle_table(task: str) -> None:
+    """No `tlc.Table` may cross the pickle boundary into a dataloader worker - a single surviving reference costs
+    one full copy of the annotations per worker on `spawn` platforms.
+    """
+    settings = Settings(project_name=f"test_dataset_pickle_{task}")
+    trainer = TASK2TRAINER[task](
+        overrides={"data": TASK2DATASET[task], "model": TASK2MODEL[task], "settings": settings},
+    )
+    trainer.model = stub_model_with_stride()
+
+    table = trainer.data["train"]
+    dataset = trainer.build_dataset(table, mode="val", batch=1)
+
+    # `reducer_override` sees every object the pickler writes, so this catches a Table reached by any path.
+    pickled_tables: list[tlc.Table] = []
+
+    class TableDetectingPickler(pickle.Pickler):
+        def reducer_override(self, obj):
+            if isinstance(obj, tlc.Table):
+                pickled_tables.append(obj)
+            return NotImplemented
+
+    buffer = io.BytesIO()
+    TableDetectingPickler(buffer).dump(dataset)
+    assert not pickled_tables, f"Tables written into the worker payload: {[t.url.to_str() for t in pickled_tables]}"
+
+    # The main process is unaffected: the Table is still there and the shared data dict is not mutated
+    assert dataset.table is table, "The dataset should still hold the Table it was built from"
+    assert dataset.display_name == table.dataset_name, "display_name should survive"
+    assert dataset.table.url == table.url, "The validator reads dataset.table.url"
+    assert trainer.data["train"] is table, "__getstate__ must not mutate the shared data dict"
+
+    # A worker can produce samples without ever materializing the Table
+    worker_dataset = pickle.loads(buffer.getvalue())
+    assert worker_dataset.__dict__["_table"] is None, "The unpickled dataset should not carry a Table"
+    assert len(worker_dataset) == len(dataset), "The unpickled dataset should have the same length"
+    sample = worker_dataset[0]
+    assert "example_id" in sample, "The unpickled dataset should still produce example ids"
+    assert worker_dataset.__dict__["_table"] is None, "__getitem__ must not reload the Table"
+
+    # ...but it is restored on demand if anything asks for it
+    assert worker_dataset.table.url == table.url, "The Table should be restored lazily from its URL"
 
 
 def test_bad_arguments() -> None:

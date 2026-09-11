@@ -20,6 +20,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 - `collect_loss=True` now warns and is disabled for the `segment` and `obb` tasks instead of being silently ignored, and loss schemas are no longer declared when loss collection is disabled.
 
+- No longer carry full `tlc.Table`s into dataloader workers. The `tlc.Table` backing a dataset is always available through the now lazy attribute `dataset.table`.
+
 ## [0.4.0] - 2026-08-07
 
 ### Added

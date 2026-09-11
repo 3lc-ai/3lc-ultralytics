@@ -13,7 +13,8 @@ from tlc_ultralytics.utils.dataset import map_label
 
 class _DummyImageFolder:
     def __init__(self, root: tlc.Table, allow_empty: bool = False, samples: list[tuple[str, int]] | None = None):
-        self._root = root
+        # Store the URL, not the Table, so the Table's row data is not pickled into dataloader workers.
+        self._root_url = root.url
         self._samples = samples
 
     @property
@@ -22,7 +23,7 @@ class _DummyImageFolder:
 
     @property
     def root(self):
-        return self._root.url
+        return self._root_url
 
     @property
     def classes(self):
