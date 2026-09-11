@@ -12,15 +12,9 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Changed
 
-- Segmentation metrics collection now generates full-resolution masks only for the predictions that are written to 3LC. Previously every NMS survivor (up to `max_det=300` at `conf=0.001`) got a full-resolution mask before the predictions were filtered down to `conf_thres`/`max_det`, which cost gigabytes of transient memory per image and could fail outright on large images. The upsampling to the original image size is now also chunked, so it no longer allocates one multi-gigabyte tensor. The written masks are unchanged on GPU; on CPU they can differ by a boundary pixel, because Ultralytics' `crop_mask` crops to rounded integer box coordinates for fewer than 50 masks at a time and to exact float coordinates above that, and the mask generation now always runs below that threshold.
-
-- Predicted segmentation masks are built directly in `tlc.SegmentationMasks`' `(H, W, N)` storage layout instead of Ultralytics' `(N, H, W)`, so they are no longer transposed into a second full-size buffer on the way into the annotation. This halves the peak for the image being built — hundreds of megabytes on 4K originals — and is faster than the transpose it replaces.
+- Segmentation metrics collection now generates full-resolution masks only for the predictions that are written to 3LC, instead of for every NMS survivor before filtering. This cuts peak memory during collection by orders of magnitude on large images, where it could previously fail outright. **Behavior change:** the `Mask(P/R/mAP50/mAP50-95)` metrics Ultralytics reports now match a plain `ultralytics` run on the same data, where the integration previously made them differ slightly.
 
 - `save_txt` is now disabled with a warning, like `save_json` already was, because it makes Ultralytics produce full-resolution segmentation masks for every prediction.
-
-- **Behavior change:** the mask mAP that Ultralytics computes for segmentation is no longer forced to use native (full-resolution) mask processing, so it now matches vanilla Ultralytics. Previously the integration overrode Ultralytics' mask processing, which made the reported `Mask(P/R/mAP50/mAP50-95)` metrics differ slightly from a plain `ultralytics` run on the same data.
-
-- **Behavior change:** segmentation instance embeddings are pooled with quarter-resolution (prototype-resolution) masks, for both predictions and ground truth, where 0.4.0 used model-input-resolution masks. The masks are resized to the feature-map resolution before pooling either way, so the embeddings are only slightly different, but they are not identical to those collected with 0.4.0.
 
 - The supported `3lc` range is now `>=3.2.0,<4.0.0` (up from `>=3.0.0`). `3lc` 3.0 and 3.1 were only ever published to 3LC's public package index and are not available on PyPI, so they are no longer supported.
 
