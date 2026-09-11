@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import weakref
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import tlc
@@ -52,6 +52,8 @@ PREDICTION_INDEX = "_tlc_prediction_index"
 Lets a task validator index per-prediction data that lives outside the prediction dict — segmentation looks up the
 mask coefficients of the filtered instances with it.
 """
+if TYPE_CHECKING:
+    import pyarrow as pa
 
 
 def execute_when_collecting(method):
@@ -817,16 +819,21 @@ class TLCValidatorMixin(BaseValidator):
         configured fit sample size drawn across the raw tables (or reused from
         an earlier split of the same run via the per-run reducer registry), and
         every row/instance is projected into the fitted space with the
-        reducer's transform. Tables are processed one at a time and evicted
-        from the object caches when done, so peak memory is bounded by a single
-        table regardless of dataset size.
+        reducer's transform. One reduced table is written per raw table, one
+        table at a time and evicted from the object caches when done, so peak
+        memory is a small constant factor of a single raw table's arrow
+        footprint — O(``metrics_max_buffer_mb``), independent of image
+        resolution, instance count and dataset size.
 
         Returns the metrics infos of the rewritten tables, or None when no
-        rewrite was performed (no tables, or the image-embeddings fit failed
-        while instance embeddings are disabled — the raw tables are then kept).
-        Goes away when core 3LC reduces these columns server-side; the raw
-        columns are already tagged ``NUMBER_ROLE_NN_EMBEDDING`` for that future
-        flow.
+        rewrite was performed (no tables, no rows in any of them, the
+        image-embeddings fit failed while instance embeddings are disabled, or
+        the rewrite failed part way through). The caller keeps the raw tables
+        as they were written in that case, so "no rewrite" must be reported as
+        None: it reads any list, empty included, as licence to deregister and
+        delete the raw tables. Goes away when core 3LC reduces these columns
+        server-side; the raw columns are already tagged
+        ``NUMBER_ROLE_NN_EMBEDDING`` for that future flow.
         """
         if not raw_table_urls:
             return None
@@ -851,19 +858,40 @@ class TLCValidatorMixin(BaseValidator):
 
         LOGGER.info(f"{TLC_COLORSTR}Reducing embeddings across {len(raw_table_urls)} metrics table(s)...")
 
-        dst_writer = None
-        for table_number, url_str in enumerate(raw_table_urls, start=1):
-            LOGGER.debug(f"{TLC_COLORSTR}Reducing embeddings for metrics table {table_number}/{len(raw_table_urls)}.")
-            raw_table = tlc.Table.from_url(url_str)
-            if dst_writer is None:
-                dst_writer = self._reduced_table_writer(raw_table, image_reducer)
-            self._rewrite_raw_table(raw_table, instance_reducer, image_reducer, dst_writer)
-            # Evict the processed table so only one raw table is in RAM at a time.
-            ObjectRegistry._delete_object_from_caches(raw_table.url)
-            del raw_table
+        # All reduced tables share one column signature (and stream name), so the Dashboard joins them back
+        # together. The schema is derived once from the first raw table and deep-copied per writer.
+        dst_schema: dict[str, tlc.Schema] | None = None
+        reduced_metrics_infos: list = []
+        try:
+            for table_number, url_str in enumerate(raw_table_urls, start=1):
+                LOGGER.debug(
+                    f"{TLC_COLORSTR}Reducing embeddings for metrics table {table_number}/{len(raw_table_urls)}."
+                )
+                raw_table = tlc.Table.from_url(url_str)
+                if dst_schema is None:
+                    dst_schema = self._reduced_table_schema(raw_table, image_reducer)
+                reduced_metrics_infos.extend(
+                    self._rewrite_raw_table(raw_table, dst_schema, instance_reducer, image_reducer)
+                )
+                # Evict the processed table so only one raw table is in RAM at a time.
+                ObjectRegistry._delete_object_from_caches(raw_table.url)
+                del raw_table
+        except Exception as exc:
+            # Each finalized rewrite has already registered its table on the run, so a failure part way through
+            # leaves the run pointing at the raw tables *and* the reduced ones written so far. Undo the partial
+            # rewrite and keep the raw tables.
+            LOGGER.warning(f"{TLC_COLORSTR}Rewriting the metrics tables with reduced embeddings failed: {exc}.")
+            LOGGER.warning(f"{TLC_COLORSTR}Keeping the metrics tables with raw embedding columns.")
+            self._remove_metrics_infos_from_run(reduced_metrics_infos)
+            for info in reduced_metrics_infos:
+                self._delete_table_on_disk(tlc.Url(info["url"]).to_absolute(self._run.url))
+            return None
 
-        assert dst_writer is not None
-        _, reduced_metrics_infos = dst_writer.finalize()
+        if not reduced_metrics_infos:
+            # Every raw table turned out to be empty, so there is nothing to point the run at.
+            LOGGER.warning(f"{TLC_COLORSTR}No rows found in the flushed metrics tables; skipping the rewrite.")
+            return None
+
         LOGGER.info(f"{TLC_COLORSTR}Done reducing embeddings.")
         return reduced_metrics_infos
 
@@ -890,7 +918,9 @@ class TLCValidatorMixin(BaseValidator):
             raw_table_urls,
             pred_instance_counts,
             self._settings.instance_embeddings_fit_sample_size,
-            lambda table: _read_raw_embedding_column(table, PREDICTED_INSTANCE_EMBEDDING_RAW)[0],
+            lambda table: _read_raw_embedding_column(
+                table.get_column_as_pyarrow_array(PREDICTED_INSTANCE_EMBEDDING_RAW)
+            )[0],
         )
         if sample is None:
             msg = (
@@ -939,7 +969,7 @@ class TLCValidatorMixin(BaseValidator):
             raw_table_urls,
             row_counts,
             self._settings.image_embeddings_fit_sample_size,
-            lambda table: _read_image_embedding_column(table, "embeddings"),
+            lambda table: _read_image_embedding_column(table.get_column_as_pyarrow_array("embeddings")),
         )
         if sample is None:
             return None
@@ -1004,10 +1034,14 @@ class TLCValidatorMixin(BaseValidator):
             return None
         return np.concatenate(parts, axis=0)
 
-    def _reduced_table_writer(self, raw_table, image_reducer):
-        """TEMP(embeddings): build the rolling writer for the reduced tables —
-        the raw table's schema with the raw embedding columns replaced by
-        reduced ones."""
+    def _reduced_table_schema(self, raw_table, image_reducer):
+        """TEMP(embeddings): the column schemas of the reduced tables — the raw
+        table's schema with the raw embedding columns replaced by reduced ones.
+
+        The pass-through columns keep the raw table's own schemas, so the
+        arrow-level copy in ``_rewrite_raw_table`` writes them back under
+        exactly the schema they were written and read with.
+        """
         n = self._settings.instance_embeddings_dim
         schema_values = dict(raw_table.rows_schema.values)
         has_pred = schema_values.pop(PREDICTED_INSTANCE_EMBEDDING_RAW, None) is not None
@@ -1028,94 +1062,99 @@ class TLCValidatorMixin(BaseValidator):
                 self._settings.image_embeddings_dim, method
             )
 
-        return _RollingMetricsWriter(
-            run_url=self._run.url,
-            foreign_table_url=self.dataloader.dataset.table.url,
-            schema=schema_values,
-            max_buffer_bytes=self._settings.metrics_max_buffer_mb * 1024 * 1024,
+        return schema_values
+
+    def _rewrite_raw_table(self, raw_table, dst_schema, instance_reducer, image_reducer):
+        """TEMP(embeddings): write one raw table out again with the raw embedding
+        columns replaced by reduced ones, and return its metrics infos.
+
+        The pass-through columns are copied at the arrow level: the raw table's
+        row-form pyarrow table is reused as it is, so RLE-encoded heavy fields
+        (segmentation masks above all) are never decoded into dense masks and
+        re-encoded, they are simply carried across. Only the raw embedding
+        columns are read as values, and only to be transformed into the reduced
+        ones. Peak memory is one raw table's arrow data plus the reduced
+        columns, never a multiple of a decoded mask.
+
+        Returns an empty list for a raw table with no rows — the rolling writer
+        never flushes one, but there is no table worth writing if it did.
+        """
+        from tlc_ultralytics.utils._table_rewrite import (
+            _build_rewritten_arrow_table,
+            _write_rewritten_metrics_table,
         )
 
-    def _rewrite_raw_table(self, raw_table, instance_reducer, image_reducer, dst_writer):
-        """TEMP(embeddings): copy one raw table into *dst_writer* with the raw
-        embedding columns replaced by reduced ones.
+        # The rows as they sit in the parquet file: no sample-type decoding, columns ordered and typed by the
+        # table's rows_schema.
+        source = raw_table._to_pyarrow_table()
+        if source.num_rows == 0:
+            return []
 
-        Raw embeddings are read columnar (no per-row decode) and transformed in
-        chunks; the remaining columns are copied row by row (RLE-encoded heavy
-        fields decode to numpy and re-encode through ``add_batch``, one small
-        batch at a time). Memory is bounded by this one table plus the
-        destination writer's buffer.
-        """
-        reduced_columns, skip_columns = self._compute_reduced_columns(raw_table, instance_reducer, image_reducer)
+        reduced_columns, skip_columns = self._compute_reduced_columns(source, instance_reducer, image_reducer)
+        arrow_table = _build_rewritten_arrow_table(source, dst_schema, reduced_columns, skip_columns)
+        return _write_rewritten_metrics_table(
+            arrow_table=arrow_table,
+            schema=dst_schema,
+            run_url=self._run.url,
+            foreign_table_url=self.dataloader.dataset.table.url,
+        )
 
-        BATCH_SIZE = 32
-
-        chunk: dict[str, list] = {}
-        chunk_size = 0
-        offset = 0
-
-        def flush() -> None:
-            nonlocal chunk, chunk_size, offset
-            if chunk_size == 0:
-                return
-            for column_name, per_row_values in reduced_columns.items():
-                chunk[column_name] = per_row_values[offset : offset + chunk_size]
-            dst_writer.add_batch(chunk)
-            offset += chunk_size
-            chunk = {}
-            chunk_size = 0
-
-        for sample in raw_table:
-            for col, val in sample.items():
-                if col in skip_columns:
-                    continue
-                chunk.setdefault(col, []).append(val)
-            chunk_size += 1
-            if chunk_size >= BATCH_SIZE:
-                flush()
-        flush()
-
-    def _compute_reduced_columns(self, raw_table, instance_reducer, image_reducer):
+    def _compute_reduced_columns(self, source, instance_reducer, image_reducer):
         """TEMP(embeddings): compute one raw table's reduced embedding columns.
 
-        Returns (reduced_columns, skip_columns): the output column names mapped
-        to per-row lists of reduced values, and the raw source columns to drop
+        *source* is the raw table's row-form pyarrow table. Returns
+        (reduced_columns, skip_columns): the output column names mapped to
+        arrow arrays of reduced values, and the raw source columns to drop
         while copying the table's remaining columns.
+
+        The arrays are built straight from the reducers' numpy output rather
+        than via python lists, so a reduced column costs its own bytes and not
+        a multiple of them.
 
         Reduced embeddings are written back onto rows positionally, so row
         counts are asserted — a reorder would silently misalign embeddings.
         """
         from tlc_ultralytics.utils._instance_reduce import _read_image_embedding_column, _transform_embeddings
+        from tlc_ultralytics.utils._table_rewrite import _fixed_size_list_array, _nested_list_array
 
         progress_cb = getattr(self._settings, "_reduction_progress_callback", None)
         show_bar = self._should_show_reduction_bar()
-        num_rows = len(raw_table)
-        reduced_columns: dict[str, list] = {}
+        num_rows = source.num_rows
+        instance_dim = self._settings.instance_embeddings_dim
+        reduced_columns: dict[str, pa.Array] = {}
         skip_columns: set[str] = set()
 
-        if PREDICTED_INSTANCE_EMBEDDING_RAW in raw_table.rows_schema.values:
+        if PREDICTED_INSTANCE_EMBEDDING_RAW in source.column_names:
             pred_reduced = self._transform_raw_column(
-                raw_table, PREDICTED_INSTANCE_EMBEDDING_RAW, instance_reducer, progress_cb, show_bar, label="predicted"
+                source.column(PREDICTED_INSTANCE_EMBEDDING_RAW),
+                instance_reducer,
+                progress_cb,
+                show_bar,
+                label="predicted",
             )
             assert len(pred_reduced) == num_rows, (
                 f"Instance embedding row count mismatch: {len(pred_reduced)} reduced entries for {num_rows} rows."
             )
-            reduced_columns[PREDICTED_INSTANCE_EMBEDDING] = [arr.astype(np.float32).tolist() for arr in pred_reduced]
+            reduced_columns[PREDICTED_INSTANCE_EMBEDDING] = _nested_list_array(pred_reduced, instance_dim)
             skip_columns.add(PREDICTED_INSTANCE_EMBEDDING_RAW)
 
-        if GROUND_TRUTH_INSTANCE_EMBEDDING_RAW in raw_table.rows_schema.values:
+        if GROUND_TRUTH_INSTANCE_EMBEDDING_RAW in source.column_names:
             gt_reduced = self._transform_raw_column(
-                raw_table,
-                GROUND_TRUTH_INSTANCE_EMBEDDING_RAW,
+                source.column(GROUND_TRUTH_INSTANCE_EMBEDDING_RAW),
                 instance_reducer,
                 progress_cb,
                 show_bar,
                 label="ground-truth",
             )
-            reduced_columns[GROUND_TRUTH_INSTANCE_EMBEDDING] = [arr.astype(np.float32).tolist() for arr in gt_reduced]
+            assert len(gt_reduced) == num_rows, (
+                f"Ground-truth instance embedding row count mismatch: {len(gt_reduced)} reduced entries for "
+                f"{num_rows} rows."
+            )
+            reduced_columns[GROUND_TRUTH_INSTANCE_EMBEDDING] = _nested_list_array(gt_reduced, instance_dim)
             skip_columns.add(GROUND_TRUTH_INSTANCE_EMBEDDING_RAW)
 
-        if image_reducer is not None and "embeddings" in raw_table.rows_schema.values:
-            matrix = _read_image_embedding_column(raw_table, "embeddings")
+        if image_reducer is not None and "embeddings" in source.column_names:
+            matrix = _read_image_embedding_column(source.column("embeddings"))
             if matrix is not None:
                 image_reduced = _transform_embeddings(
                     [matrix],
@@ -1129,7 +1168,9 @@ class TLCValidatorMixin(BaseValidator):
                     f"Image embedding row count mismatch: {len(image_reduced)} reduced entries for {num_rows} rows."
                 )
                 reduced_image_column = f"embeddings_{self._settings.image_embeddings_reducer}"
-                reduced_columns[reduced_image_column] = [row.tolist() for row in image_reduced]
+                reduced_columns[reduced_image_column] = _fixed_size_list_array(
+                    image_reduced, self._settings.image_embeddings_dim
+                )
                 skip_columns.add("embeddings")
 
         return reduced_columns, skip_columns
@@ -1147,13 +1188,13 @@ class TLCValidatorMixin(BaseValidator):
             return False
         return RANK in {-1, 0} and sys.stdout.isatty()
 
-    def _transform_raw_column(self, raw_table, column_name, reducer, progress_callback, show_progress_bar, label):
-        """TEMP(instance-embeddings): read one raw instance embedding column and
-        project it into the reduced space, returning one [N_i, dim] array per
-        table row.
+    def _transform_raw_column(self, column, reducer, progress_callback, show_progress_bar, label):
+        """TEMP(instance-embeddings): project one raw instance embedding column
+        into the reduced space, returning one [N_i, dim] array per table row.
 
-        With no fitted reducer (no predicted instances anywhere in the split),
-        every row gets an empty array so the reduced column is still written.
+        *column* is the raw column's pyarrow data. With no fitted reducer (no
+        predicted instances anywhere in the split), every row gets an empty
+        array so the reduced column is still written.
         """
         from tlc_ultralytics.utils._instance_reduce import (
             _read_raw_embedding_column,
@@ -1161,7 +1202,7 @@ class TLCValidatorMixin(BaseValidator):
         )
 
         n = self._settings.instance_embeddings_dim
-        matrix, per_row_counts = _read_raw_embedding_column(raw_table, column_name)
+        matrix, per_row_counts = _read_raw_embedding_column(column)
 
         if matrix is None or reducer is None:
             return [np.empty((0, n), dtype=np.float32) for _ in range(len(per_row_counts))]

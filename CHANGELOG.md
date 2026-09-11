@@ -26,6 +26,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 - No longer carry full `tlc.Table`s into dataloader workers. The `tlc.Table` backing a dataset is always available through the now lazy attribute `dataset.table`.
 
+- Reduce memory usage when entering reduced embeddings into metrics tables, avoiding redundant copies of metrics.
+
 ## [0.4.0] - 2026-08-07
 
 ### Added
