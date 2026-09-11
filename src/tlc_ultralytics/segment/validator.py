@@ -109,17 +109,23 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         bboxes: torch.Tensor,
         pbatch: dict[str, Any],
     ) -> torch.Tensor:
-        """Build binary masks for one image's filtered instances at its original resolution.
+        """Build binary masks for one image's filtered instances at its original resolution, as `(H, W, N)`.
 
         Upsampling is chunked (see `_mask_chunk_pixels`) and each chunk is written straight into the uint8 result,
         so the float32 transient is one chunk rather than the whole set. The intermediate
         `ops.process_mask_native` builds at `_mask_imgsz`, which is smaller than `ori_shape` whenever the image was
         downscaled to the model input, so sizing the chunk from `ori_shape` bounds both steps. The result is built
         on CPU, where it is headed anyway.
+
+        The instance axis goes last, which is `tlc.SegmentationMasks`' own storage layout, so `_build_annotation`
+        can hand the array over as `"hwn"`. Passing Ultralytics-native `(N, H, W)` instead would make
+        `SegmentationMasks.__post_init__` transpose it into a second full-size buffer, doubling the peak for the
+        image being built; permuting each chunk on the way in costs nothing extra and is measurably faster than
+        the one big transpose it replaces.
         """
         h, w = pbatch["ori_shape"]
         num_instances = coefficients.shape[0]
-        masks = torch.empty((num_instances, int(h), int(w)), dtype=torch.uint8, device="cpu")
+        masks = torch.empty((int(h), int(w), num_instances), dtype=torch.uint8, device="cpu")
 
         chunk_size = max(1, min(self._mask_chunk_instances, self._mask_chunk_pixels // max(1, int(h) * int(w))))
         for start in range(0, num_instances, chunk_size):
@@ -127,8 +133,9 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
             native = ops.process_mask_native(
                 proto, coefficients[start:stop], bboxes[start:stop], shape=self._mask_imgsz
             )
-            masks[start:stop] = ops.scale_masks(native[None], (h, w), ratio_pad=pbatch["ratio_pad"])[0].byte().cpu()
-            del native
+            scaled = ops.scale_masks(native[None], (h, w), ratio_pad=pbatch["ratio_pad"])[0]
+            masks[:, :, start:stop] = scaled.byte().cpu().permute(1, 2, 0)
+            del native, scaled
 
         return masks
 
@@ -168,8 +175,8 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         return tlc.data_types.SegmentationMasks(
             image_height=h,
             image_width=w,
-            masks=scaled["masks"].cpu().numpy(),  # PyTorch-native (N, H, W); transposed by mask_format below
-            mask_format="nhw",
+            masks=scaled["masks"].numpy(),  # already (H, W, N) uint8 on CPU: SegmentationMasks' own layout
+            mask_format="hwn",
             labels=mapped_classes,
             confidences=scaled["conf"].tolist(),
         )

@@ -2170,11 +2170,15 @@ def test_segment_masks_built_only_for_filtered_predictions(monkeypatch) -> None:
     assert len(kept) == 4, "Expected the confidence threshold and max_det to leave four predictions"
 
     # Reference: the same masks, generated in one go for the same instances.
-    reference = ops.scale_masks(
-        ops.process_mask_native(proto, coefficients[kept], bboxes[kept], shape=imgsz)[None],
-        ori_shape,
-        ratio_pad=None,
-    )[0].byte()
+    reference = (
+        ops.scale_masks(
+            ops.process_mask_native(proto, coefficients[kept], bboxes[kept], shape=imgsz)[None],
+            ori_shape,
+            ratio_pad=None,
+        )[0]
+        .byte()
+        .permute(1, 2, 0)
+    )  # (H, W, N), the layout the mask builder produces
 
     processed_instances = []
     real_process_mask_native = ops.process_mask_native
@@ -2191,17 +2195,19 @@ def test_segment_masks_built_only_for_filtered_predictions(monkeypatch) -> None:
     assert sum(processed_instances) == 4, f"Expected masks for the four filtered predictions, got {processed_instances}"
     assert max(processed_instances) <= validator._mask_chunk_instances, "Mask generation was not chunked"
 
-    assert scaled["masks"].shape == (4, *ori_shape), "Masks must be at the original image resolution"
+    # `(H, W, N)`: the instance axis goes last, so `SegmentationMasks` stores the array without transposing it.
+    assert scaled["masks"].shape == (*ori_shape, 4), "Masks must be (H, W, N) at the original image resolution"
     assert scaled["masks"].dtype == torch.uint8
+    assert scaled["masks"].is_contiguous(), "A non-contiguous array would be copied again on the way into 3LC"
     assert torch.equal(scaled["masks"], reference), "Chunked masks differ from the unchunked reference"
 
     # Per-instance columns stay aligned: one mask per confidence/class, in the same order.
-    assert len(scaled["conf"]) == len(scaled["cls"]) == scaled["masks"].shape[0]
+    assert len(scaled["conf"]) == len(scaled["cls"]) == scaled["masks"].shape[2]
     assert torch.equal(scaled["conf"], conf[kept])
 
     # Every mask survives the crop to its own box, which by construction (see the stripes above) only happens if
     # the coefficients PREDICTION_INDEX selected belong to the same instances as the boxes they were cropped with.
-    for mask, box in zip(scaled["masks"], scaled["bboxes"], strict=True):
+    for mask, box in zip(scaled["masks"].permute(2, 0, 1), scaled["bboxes"], strict=True):
         rows, cols = torch.nonzero(mask, as_tuple=True)
         assert rows.numel() > 0, "Mask is empty, so its coefficients do not belong to the box it was cropped with"
         x0, y0, x1, y1 = box.tolist()
@@ -2295,7 +2301,15 @@ def test_segment_annotation_masks_at_original_resolution(monkeypatch) -> None:
     def recording_build_annotation(self, scaled, mapped_classes, h, w):
         assert PREDICTION_INDEX not in scaled, "The prediction index is bookkeeping and must not reach annotations"
         recorded.append((tuple(scaled["masks"].shape), (int(h), int(w)), scaled["conf"].tolist(), mapped_classes))
-        return build_annotation(self, scaled, mapped_classes, h, w)
+        annotation = build_annotation(self, scaled, mapped_classes, h, w)
+
+        # The masks are built in SegmentationMasks' own (H, W, N) layout, so it stores the array as it arrives.
+        # Handing it Ultralytics-native (N, H, W) would transpose into a second full-size buffer instead, which
+        # doubles the peak of the image being built — at original resolution that is hundreds of MB on 4K inputs.
+        assert np.shares_memory(annotation.masks, scaled["masks"].numpy()), (
+            "SegmentationMasks copied the mask array; it should store the (H, W, N) buffer as given"
+        )
+        return annotation
 
     monkeypatch.setattr(TLCSegmentationValidator, "_build_annotation", recording_build_annotation)
 
@@ -2309,7 +2323,7 @@ def test_segment_annotation_masks_at_original_resolution(monkeypatch) -> None:
 
     assert recorded, "Expected at least one image with predictions above the confidence threshold"
     for mask_shape, ori_shape, confidences, labels in recorded:
-        num_masks, mask_h, mask_w = mask_shape
+        mask_h, mask_w, num_masks = mask_shape  # (H, W, N), handed to SegmentationMasks as "hwn"
         assert (mask_h, mask_w) == ori_shape, f"Masks at {(mask_h, mask_w)}, expected original shape {ori_shape}"
         assert num_masks == len(confidences) == len(labels), "One mask per written instance"
         assert num_masks <= settings.max_det
