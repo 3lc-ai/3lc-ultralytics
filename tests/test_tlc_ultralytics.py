@@ -2127,6 +2127,247 @@ def test_absolute_segmentation_polygons() -> None:
     assert results, "Training should succeed"
 
 
+def test_segment_masks_built_only_for_filtered_predictions(monkeypatch) -> None:
+    # Masks must be generated for the filtered predictions only, at the original image resolution, and stay
+    # index-aligned with the other per-instance columns.
+    import torch
+    from ultralytics.utils import ops
+
+    from tlc_ultralytics.engine.validator import PREDICTION_INDEX
+    from tlc_ultralytics.segment.validator import TLCSegmentationValidator
+
+    imgsz = [64, 64]  # model input size, four times the prototype resolution below
+    ori_shape = (50, 80)
+    num_predictions = 8
+
+    # Each prediction gets its own vertical stripe: prototype channel j is positive only in the columns its own
+    # box covers, and coefficient j selects channel j. A mask is therefore non-empty only if it was built from the
+    # coefficients that belong to the box it was cropped with — pairing prediction j's box with any other
+    # prediction's coefficients crops the stripe away entirely.
+    proto = torch.full((num_predictions, 16, 16), -1.0)
+    for j in range(num_predictions):
+        proto[j, :, 2 * j : 2 * j + 2] = 1.0
+    coefficients = torch.eye(num_predictions)
+    bboxes = torch.tensor([[8.0 * j, 14.0, 8.0 * j + 8.0, 44.0] for j in range(num_predictions)])
+    conf = torch.tensor([0.10, 0.20, 0.30, 0.55, 0.60, 0.70, 0.80, 0.90])
+    pred = {
+        "bboxes": bboxes,
+        "conf": conf,
+        "cls": torch.zeros(num_predictions),
+        # Ultralytics' own masks, at the prototype resolution — not what is written to 3LC.
+        "masks": torch.zeros(num_predictions, 16, 16, dtype=torch.uint8),
+    }
+    pbatch = {"imgsz": imgsz, "ori_shape": ori_shape, "ratio_pad": None}
+
+    validator = TLCSegmentationValidator.__new__(TLCSegmentationValidator)
+    validator._settings = Settings(conf_thres=0.5, max_det=4)
+    validator._mask_sources = [(proto, coefficients)]
+    validator._mask_imgsz = imgsz
+    validator._mask_chunk_instances = 2  # force several chunks for the four surviving predictions
+
+    filtered = validator._filter_top_predictions(pred)
+    kept = filtered[PREDICTION_INDEX]
+    assert len(kept) == 4, "Expected the confidence threshold and max_det to leave four predictions"
+
+    # Reference: the same masks, generated in one go for the same instances.
+    reference = (
+        ops.scale_masks(
+            ops.process_mask_native(proto, coefficients[kept], bboxes[kept], shape=imgsz)[None],
+            ori_shape,
+            ratio_pad=None,
+        )[0]
+        .byte()
+        .permute(1, 2, 0)
+    )  # (H, W, N), the layout the mask builder produces
+
+    processed_instances = []
+    real_process_mask_native = ops.process_mask_native
+
+    def counting_process_mask_native(protos, masks_in, boxes, shape):
+        processed_instances.append(masks_in.shape[0])
+        return real_process_mask_native(protos, masks_in, boxes, shape)
+
+    monkeypatch.setattr(ops, "process_mask_native", counting_process_mask_native)
+
+    scaled = validator._scale_filtered_pred(0, filtered, pbatch)
+
+    # Only the filtered instances are turned into full-resolution masks, and never more than a chunk at a time.
+    assert sum(processed_instances) == 4, f"Expected masks for the four filtered predictions, got {processed_instances}"
+    assert max(processed_instances) <= validator._mask_chunk_instances, "Mask generation was not chunked"
+
+    # `(H, W, N)`: the instance axis goes last, so `SegmentationMasks` stores the array without transposing it.
+    assert scaled["masks"].shape == (*ori_shape, 4), "Masks must be (H, W, N) at the original image resolution"
+    assert scaled["masks"].dtype == torch.uint8
+    assert scaled["masks"].is_contiguous(), "A non-contiguous array would be copied again on the way into 3LC"
+    assert torch.equal(scaled["masks"], reference), "Chunked masks differ from the unchunked reference"
+
+    # Per-instance columns stay aligned: one mask per confidence/class, in the same order.
+    assert len(scaled["conf"]) == len(scaled["cls"]) == scaled["masks"].shape[2]
+    assert torch.equal(scaled["conf"], conf[kept])
+
+    # Every mask survives the crop to its own box, which by construction (see the stripes above) only happens if
+    # the coefficients PREDICTION_INDEX selected belong to the same instances as the boxes they were cropped with.
+    for mask, box in zip(scaled["masks"].permute(2, 0, 1), scaled["bboxes"], strict=True):
+        rows, cols = torch.nonzero(mask, as_tuple=True)
+        assert rows.numel() > 0, "Mask is empty, so its coefficients do not belong to the box it was cropped with"
+        x0, y0, x1, y1 = box.tolist()
+        assert rows.min() >= y0 - 1 and rows.max() <= y1 + 1, "Mask extends outside its bounding box vertically"
+        assert cols.min() >= x0 - 1 and cols.max() <= x1 + 1, "Mask extends outside its bounding box horizontally"
+
+    # On large images the pixel budget sizes the chunks instead of `_mask_chunk_instances`. A budget of two image
+    # areas stands in for a large image here, and must give chunks of two regardless of the instance cap.
+    processed_instances.clear()
+    validator._mask_chunk_instances = 32
+    validator._mask_chunk_pixels = 2 * ori_shape[0] * ori_shape[1]
+
+    rescaled = validator._scale_filtered_pred(0, filtered, pbatch)
+
+    assert processed_instances == [2, 2], f"Expected chunks sized by the pixel budget, got {processed_instances}"
+    assert torch.equal(rescaled["masks"], reference), "Pixel-budget chunks differ from the unchunked reference"
+
+
+def test_segment_postprocess_stashes_mask_sources(monkeypatch) -> None:
+    # postprocess must stash one (prototypes, coefficients) pair per image, in order, and start over on the next
+    # batch - a stale or misaligned stash would silently hand an image another image's masks.
+    import torch
+    from ultralytics.models.yolo.detect import DetectionValidator
+    from ultralytics.utils import ops
+
+    from tlc_ultralytics.segment.validator import TLCSegmentationValidator
+
+    mask_dim = 4
+    nms_outputs = []
+
+    def fake_nms_postprocess(self, preds):
+        return nms_outputs.pop(0)
+
+    monkeypatch.setattr(DetectionValidator, "postprocess", fake_nms_postprocess)
+
+    def queue_batch(proto_values, instance_counts):
+        """Queue one batch: distinguishable prototypes, and coefficients distinguishable per image."""
+        proto = torch.stack([torch.full((mask_dim, 8, 8), value) for value in proto_values])
+        coefficients = [torch.full((n, mask_dim), float(i + 1)) for i, n in enumerate(instance_counts)]
+        nms_outputs.append(
+            [
+                {
+                    "bboxes": torch.tensor([[1.0, 1.0, 20.0, 20.0]] * n).reshape(n, 4),
+                    "conf": torch.full((n,), 0.9),
+                    "cls": torch.zeros(n),
+                    "extra": coefficients[i],
+                }
+                for i, n in enumerate(instance_counts)
+            ]
+        )
+        return [torch.zeros(len(proto_values), 1), proto], proto, coefficients
+
+    validator = TLCSegmentationValidator.__new__(TLCSegmentationValidator)
+    validator._settings = Settings(collect_loss=True)
+    validator.process = ops.process_mask  # Ultralytics' default: masks at the prototype resolution
+
+    # One image with instances and one without, so the empty-coefficient branch cannot shift the stash.
+    preds, proto, coefficients = queue_batch([1.0, 2.0], [3, 0])
+    outputs = validator.postprocess(preds)
+
+    assert validator._curr_raw_preds is preds, "The raw predictions must still be stashed for loss collection"
+    assert validator._mask_imgsz == [32, 32], "Model input size is four times the prototype resolution"
+    assert len(validator._mask_sources) == 2, "One stash entry per image in the batch"
+    for i, (stashed_proto, stashed_coefficients) in enumerate(validator._mask_sources):
+        assert torch.equal(stashed_proto, proto[i]), f"Image {i} stashed another image's prototypes"
+        assert torch.equal(stashed_coefficients, coefficients[i]), f"Image {i} stashed another image's coefficients"
+
+    # The coefficients are consumed from the predictions, and Ultralytics' masks stay at prototype resolution.
+    assert all("extra" not in pred for pred in outputs)
+    assert outputs[0]["masks"].shape == (3, 8, 8)
+    assert outputs[1]["masks"].shape == (0, 8, 8)
+
+    # A second batch replaces the stash rather than appending to it.
+    preds, proto, coefficients = queue_batch([7.0], [2])
+    validator.postprocess(preds)
+
+    assert len(validator._mask_sources) == 1, "The stash must be reset for each batch"
+    assert torch.equal(validator._mask_sources[0][0], proto[0])
+    assert torch.equal(validator._mask_sources[0][1], coefficients[0])
+
+
+def test_segment_annotation_masks_at_original_resolution(monkeypatch) -> None:
+    # End-to-end counterpart of the unit test above: every segmentation annotation written during a real
+    # collection pass carries one mask per written instance, at the original image resolution.
+    from tlc_ultralytics.engine.validator import PREDICTION_INDEX
+    from tlc_ultralytics.segment.validator import TLCSegmentationValidator
+
+    recorded = []
+    build_annotation = TLCSegmentationValidator._build_annotation
+
+    def recording_build_annotation(self, scaled, mapped_classes, h, w):
+        assert PREDICTION_INDEX not in scaled, "The prediction index is bookkeeping and must not reach annotations"
+        recorded.append((tuple(scaled["masks"].shape), (int(h), int(w)), scaled["conf"].tolist(), mapped_classes))
+        annotation = build_annotation(self, scaled, mapped_classes, h, w)
+
+        # The masks are built in SegmentationMasks' own (H, W, N) layout, so it stores the array as it arrives.
+        # Handing it Ultralytics-native (N, H, W) would transpose into a second full-size buffer instead, which
+        # doubles the peak of the image being built — at original resolution that is hundreds of MB on 4K inputs.
+        assert np.shares_memory(annotation.masks, scaled["masks"].numpy()), (
+            "SegmentationMasks copied the mask array; it should store the (H, W, N) buffer as given"
+        )
+        return annotation
+
+    monkeypatch.setattr(TLCSegmentationValidator, "_build_annotation", recording_build_annotation)
+
+    settings = Settings(
+        project_name="test_segment_mask_resolution",
+        run_name="test_segment_mask_resolution",
+        conf_thres=0.25,
+    )
+    model = TLCYOLO(TASK2MODEL["segment"])
+    model.collect(data=TASK2DATASET["segment"], splits=("val",), settings=settings, device="cpu", workers=0)
+
+    assert recorded, "Expected at least one image with predictions above the confidence threshold"
+    for mask_shape, ori_shape, confidences, labels in recorded:
+        mask_h, mask_w, num_masks = mask_shape  # (H, W, N), handed to SegmentationMasks as "hwn"
+        assert (mask_h, mask_w) == ori_shape, f"Masks at {(mask_h, mask_w)}, expected original shape {ori_shape}"
+        assert num_masks == len(confidences) == len(labels), "One mask per written instance"
+        assert num_masks <= settings.max_det
+        assert all(confidence >= settings.conf_thres for confidence in confidences)
+
+
+@pytest.mark.parametrize("task", ["detect", "pose"])
+def test_prediction_index_does_not_reach_annotations(task, monkeypatch) -> None:
+    # PREDICTION_INDEX is bookkeeping for the scaling step, so it must be gone from the scaled predictions the
+    # task validators turn into annotations.
+    import torch
+
+    from tlc_ultralytics.detect.validator import TLCDetectionValidator
+    from tlc_ultralytics.engine.validator import PREDICTION_INDEX
+    from tlc_ultralytics.pose.validator import TLCPoseValidator
+
+    validator_class = {"detect": TLCDetectionValidator, "pose": TLCPoseValidator}[task]
+    pbatch = {"imgsz": [64, 64], "ori_shape": (50, 80), "ratio_pad": None}
+    pred = {
+        "bboxes": torch.tensor([[4.0, 4.0, 20.0, 20.0], [8.0, 8.0, 24.0, 24.0]]),
+        "conf": torch.tensor([0.9, 0.1]),  # the second prediction is filtered out
+        "cls": torch.zeros(2),
+        "keypoints": torch.zeros(2, 1, 3),
+    }
+
+    scaled_preds = []
+    monkeypatch.setattr(validator_class, "_prepare_batch", lambda self, i, batch: pbatch)
+    monkeypatch.setattr(
+        validator_class, "_build_annotation", lambda self, scaled, mapped_classes, h, w: scaled_preds.append(scaled)
+    )
+
+    validator = validator_class.__new__(validator_class)
+    validator._settings = Settings(conf_thres=0.5)
+    validator._cur_pbatches = {}
+    validator._cur_filtered_preds = {}
+    validator.data = {"range_to_3lc_class": {0: 0}}
+
+    validator._process_predictions([pred], {})
+
+    assert len(scaled_preds) == 1
+    assert PREDICTION_INDEX not in scaled_preds[0], "The prediction index must not reach annotation building"
+    assert len(scaled_preds[0]["conf"]) == 1, "Expected only the prediction above the confidence threshold"
+
+
 def test_absolutize_image_url() -> None:
     # Unexpanded aliases should fail
     url = tlc.Url("<UNEXPANDED_ALIAS>/in/my/url.png")

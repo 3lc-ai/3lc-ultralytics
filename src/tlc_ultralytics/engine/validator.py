@@ -46,6 +46,13 @@ from tlc_ultralytics.utils.schemas import (
     _reduced_image_embeddings_schema,
 )
 
+PREDICTION_INDEX = "_tlc_prediction_index"
+"""Key added by `_filter_top_predictions` holding each surviving instance's index into the unfiltered prediction.
+
+Lets a task validator index per-prediction data that lives outside the prediction dict — segmentation looks up the
+mask coefficients of the filtered instances with it.
+"""
+
 
 def execute_when_collecting(method):
     def wrapper(self, *args, **kwargs):
@@ -178,6 +185,17 @@ class TLCValidatorMixin(BaseValidator):
                 )
             self.args.save_json = False
 
+        # save_txt makes Ultralytics switch segmentation to native (full-resolution) mask processing for every NMS
+        # survivor, which is the memory cost the 3LC mask path exists to avoid. Disable with warning.
+        if self.args.save_txt:
+            if RANK in {-1, 0}:
+                LOGGER.warning(
+                    f"{TLC_COLORSTR}save_txt is not supported with 3LC datasets. It makes Ultralytics produce "
+                    "full-resolution masks for every prediction, which is prohibitively memory hungry on large "
+                    "images. Disabling it for this run, metrics are collected into your 3LC Run instead."
+                )
+            self.args.save_txt = False
+
         self._epoch = trainer.epoch if trainer is not None else self._epoch
 
         if trainer:
@@ -250,18 +268,27 @@ class TLCValidatorMixin(BaseValidator):
         """Compute 3LC metrics for a batch of predictions and targets"""
         raise NotImplementedError("Subclasses must implement this method.")
 
+    def _stash_raw_preds(self, preds):
+        """Keep the raw model output of the current batch for per-sample loss collection."""
+        self._curr_raw_preds = preds if self._settings.collect_loss else None
+
     def _filter_top_predictions(self, pred):
         """Filter a single image's predictions by confidence threshold, keeping the
         top max_det by confidence.
 
         Returns None if no predictions pass the threshold. All per-instance metrics
-        columns must be filtered through this method so they stay index-aligned.
+        columns must be filtered through this method so they stay index-aligned. The
+        returned dict carries a `PREDICTION_INDEX` entry with the surviving instances'
+        indices into `pred`, filtered alongside everything else, so callers can select
+        the same instances from per-prediction data held outside the prediction dict.
         """
         mask = pred["conf"] >= self._settings.conf_thres
         if not mask.any():
             return None
 
+        indices = torch.arange(len(pred["conf"]), device=mask.device)
         filtered = {k: v[mask] for k, v in pred.items()}
+        filtered[PREDICTION_INDEX] = indices[mask]
 
         # Keep only top max_det predictions by confidence
         max_det = self._settings.max_det
@@ -288,7 +315,11 @@ class TLCValidatorMixin(BaseValidator):
         return self._cur_filtered_preds[i]
 
     def _process_predictions(self, preds, batch):
-        """Filter, scale, and build 3LC annotations for a batch of predictions."""
+        """Filter, scale, and build 3LC annotations for a batch of predictions.
+
+        Filtering comes first so that all per-instance work below — scaling, and for segmentation the
+        full-resolution mask generation — only runs for the instances that are actually written.
+        """
         results = []
         for i, pred in enumerate(preds):
             pbatch = self._prepared_batch(i, batch)
@@ -299,11 +330,21 @@ class TLCValidatorMixin(BaseValidator):
                 results.append(self._empty_annotation(h, w))
                 continue
 
-            scaled = self.scale_preds(filtered, pbatch)
+            scaled = self._scale_filtered_pred(i, filtered, pbatch)
+            scaled.pop(PREDICTION_INDEX, None)  # bookkeeping for the scaling step; not annotation input
             mapped_classes = [self.data["range_to_3lc_class"][int(c)] for c in scaled["cls"].tolist()]
             results.append(self._build_annotation(scaled, mapped_classes, h, w))
 
         return results
+
+    def _scale_filtered_pred(self, i, filtered, pbatch):
+        """Scale image `i`'s filtered predictions to its original size, ready for annotation building.
+
+        Defaults to Ultralytics' `scale_preds`, which is cheap for the geometry the detection-style tasks write
+        (boxes, keypoints). Tasks whose per-instance geometry is expensive enough that it must be produced for the
+        filtered instances only override this — segmentation generates its full-resolution masks here.
+        """
+        return self.scale_preds(filtered, pbatch)
 
     def _add_embeddings_hook(self, model) -> int:
         """Add a hook to extract embeddings from the model, and infer the activation size"""
@@ -449,11 +490,10 @@ class TLCValidatorMixin(BaseValidator):
     def _instance_regions(self, source, h: int, w: int, device) -> torch.Tensor:
         """Return one image's instance geometry, aligned with the feature map.
 
-        ``source`` is either a filtered prediction dict or a prepared GT batch
-        (both keyed the same way), or None when there are no instances. Both are
-        in model-input (letterboxed) coords — the same spatial domain as the
-        feature map. Returns [N, 4] xyxy bboxes (or [N, H, W] masks for
-        subclasses with _instance_geometry_kind = "mask").
+        `source` is either a filtered prediction dict or a prepared GT batch (both keyed the same way), or None when
+        there are no instances. This default returns [N, 4] xyxy boxes in model-input (letterboxed) coords, whose
+        `h`/`w` argument is the model-input size the boxes are scaled against. Subclasses with
+        `_instance_geometry_kind = "mask"` return [N, H, W] masks instead.
         """
         bboxes = source.get("bboxes") if source is not None else None
         if bboxes is None or bboxes.numel() == 0:

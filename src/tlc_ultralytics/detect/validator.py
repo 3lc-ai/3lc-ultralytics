@@ -43,7 +43,7 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
         )
 
     def postprocess(self, preds):
-        self._curr_raw_preds = preds if self._settings.collect_loss else None
+        self._stash_raw_preds(preds)
         return super().postprocess(preds)
 
     def _get_metrics_schemas(self):
