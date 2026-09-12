@@ -12,9 +12,8 @@ from tlc_ultralytics.utils.dataset import map_label
 
 
 class _DummyImageFolder:
-    def __init__(self, root: tlc.Table, allow_empty: bool = False, samples: list[tuple[str, int]] | None = None):
-        # Store the URL, not the Table, so the Table's row data is not pickled into dataloader workers.
-        self._root_url = root.url
+    def __init__(self, root: str, allow_empty: bool = False, samples: list[tuple[str, int]] | None = None):
+        self._root = root
         self._samples = samples
 
     @property
@@ -23,7 +22,7 @@ class _DummyImageFolder:
 
     @property
     def root(self):
-        return self._root_url
+        return self._root
 
     @property
     def classes(self):
@@ -57,7 +56,6 @@ class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
         # Each is a tuple of (image_path, label)
         assert isinstance(table, tlc.Table)
         self.table = table
-        self.root = table.url
         self.prefix = prefix
         self._image_column_name = image_column_name
         self._label_column_name = label_column_name
@@ -76,7 +74,9 @@ class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
         OriginalImageFolder = torchvision.datasets.ImageFolder
         torchvision.datasets.ImageFolder = partial(_DummyImageFolder, samples=self.samples)
 
-        ClassificationDataset.__init__(self, table, args, augment=augment, prefix=prefix)
+        # The parent treats `root` as a filesystem path, so pass the Table's URL instead of the Table itself.
+        # That also keeps the Table's row data out of the dataset pickled into dataloader workers.
+        ClassificationDataset.__init__(self, table.url.to_str(), args, augment=augment, prefix=prefix)
 
         # Restore torchvision ImageFolder
         torchvision.datasets.ImageFolder = OriginalImageFolder
@@ -88,13 +88,14 @@ class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
         """Verify that the provided Table has the desired entries"""
 
         # Check for data in columns
-        assert len(self.table) > 0, f"Table {self.root.to_str()} has no rows."
+        table_url = self.table.url.to_str()
+        assert len(self.table) > 0, f"Table {table_url} has no rows."
         first_row = self.table.table_rows[0]
         assert isinstance(first_row[self._image_column_name], str), (
-            f"First value in image column '{self._image_column_name}' in table {self.root.to_str()} is not a string."
+            f"First value in image column '{self._image_column_name}' in table {table_url} is not a string."
         )
         assert isinstance(first_row[self._label_column_name], int), (
-            f"First value in label column '{self._label_column_name}' in table {self.root.to_str()} is not an integer."
+            f"First value in label column '{self._label_column_name}' in table {table_url} is not an integer."
         )
 
     def verify_images(self):

@@ -21,7 +21,6 @@ class TLCDetectionTrainer(TLCTrainerMixin, DetectionTrainer):
 
     _default_image_column_name = IMAGE_COLUMN_NAME
     _validator_class = TLCDetectionValidator
-    _loss_names = ("box_loss", "cls_loss", "dfl_loss")
     _metric_replacements: ClassVar[list[tuple[str, str]]] = [("(B)", ""), ("metrics", "val"), ("/", "_")]
     _build_dataloader_module = ultralytics.models.yolo.detect.train
 

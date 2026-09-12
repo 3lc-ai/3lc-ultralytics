@@ -86,7 +86,12 @@ class TLCDetectionValidator(TLCValidatorMixin, DetectionValidator):
             return
 
         inner_model = model.model if hasattr(model.model, "model") else model
-        is_end2end = getattr(inner_model.model[-1], "end2end", False) if hasattr(inner_model, "model") else False
+        # A head with a one-to-one branch is the signal ultralytics uses to wrap the criterion in `E2ELoss`, and it
+        # is also what decides whether the raw predictions carry a "one2one" entry for the unreduced loss to read.
+        # The head's own `end2end` is not usable here: it is off during training and only turns on once fusion has
+        # dropped the one-to-many branch.
+        head = inner_model.model[-1] if hasattr(inner_model, "model") else None
+        is_end2end = getattr(head, "one2one_cv2", None) is not None
 
         if is_end2end:
             # Mirror the one2one branch of ultralytics' E2ELoss, whose loss items ultralytics reports for these models.

@@ -16,9 +16,13 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 - `save_txt` is now disabled with a warning, like `save_json` already was, because it makes Ultralytics produce full-resolution segmentation masks for every prediction.
 
+- The supported `ultralytics` range is now `>=8.4.104,<8.4.149` (up from `>=8.4.0,<8.4.67`), i.e. `ultralytics` 8.4.148 is the newest tested version. The lower bound rises because `ultralytics` 8.4.91 renamed the scaled keypoints that pose metrics collection reads, and 8.4.104 moved loss names from the trainer onto the criterion. Note that `ultralytics` 8.4.124 and newer cannot be installed on macOS with Python 3.10, since they require a `numpy` version that needs Python 3.11 or newer; that combination resolves to 8.4.123 instead.
+
 - The supported `3lc` range is now `>=3.2.0,<4.0.0` (up from `>=3.0.0`). `3lc` 3.0 and 3.1 were only ever published to 3LC's public package index and are not available on PyPI, so they are no longer supported.
 
 ### Fixed
+
+- Per-epoch losses logged to the 3LC run are now named after the losses the model actually computes, instead of a hardcoded list per task. For `obb` this corrects names that were shifted by one, where `seg_loss` held the classification loss and `dfl_loss` the angle loss, and for `segment` it adds the `sem_loss` that was previously dropped.
 
 - Only write per-class metrics tables when metrics collection is active, instead of unconditionally on every validation pass. Previously these tables were written even on non-collection training epochs and when `collection_disable` was set, needlessly growing the run's metrics list and leaking table objects in the object registry cache.
 

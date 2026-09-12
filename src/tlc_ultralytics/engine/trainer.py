@@ -228,7 +228,6 @@ class TLCTrainerMixin(BaseTrainer):
         raise NotImplementedError("Subclasses must implement this method.")
 
     def get_validator(self, dataloader=None):
-        self.loss_names = self._loss_names
         if not dataloader:
             dataloader = self.test_loader
         return self._validator_class(
