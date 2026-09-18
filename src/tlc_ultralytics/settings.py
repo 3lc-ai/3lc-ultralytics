@@ -68,7 +68,8 @@ class Settings:
     Default: 10000"""
 
     instance_embeddings_dim: int = field(default=0)
-    """Per-instance embeddings dimension. 0 means disabled, 2 means 2D, 3 means 3D. Default: 0"""
+    """Per-instance embeddings dimension. 0 means disabled, 2 means 2D, 3 means 3D. Not supported for the
+    'classify' task, where it is disabled with a warning. Default: 0"""
 
     instance_embeddings_layer: int | None = field(default=None)
     """Model layer index for instance embeddings feature extraction.
