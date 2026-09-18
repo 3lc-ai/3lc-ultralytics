@@ -5,10 +5,12 @@ import weakref
 import tlc
 import torch
 from ultralytics.models import yolo
+from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.classify.dataset import TLCClassificationDataset
 from tlc_ultralytics.constants import (
     IMAGE_COLUMN_NAME,
+    TLC_COLORSTR,
 )
 from tlc_ultralytics.engine.validator import TLCValidatorMixin
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
@@ -16,6 +18,17 @@ from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 class TLCClassificationValidator(TLCValidatorMixin, yolo.classify.ClassificationValidator):
     _default_image_column_name = IMAGE_COLUMN_NAME
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if self._settings.instance_embeddings_dim > 0:
+            LOGGER.warning(
+                f"{TLC_COLORSTR}Instance embeddings are not supported for the 'classify' task. "
+                "Disabling instance embeddings for this run."
+            )
+            self._settings.instance_embeddings_dim = 0
+            self._settings.ground_truth_instance_embeddings = False
 
     def check_dataset(self, *args, **kwargs):
         return check_tlc_dataset(*args, task="classify", settings=self._settings, **kwargs)

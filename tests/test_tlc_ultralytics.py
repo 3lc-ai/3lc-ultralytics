@@ -548,6 +548,53 @@ def test_pose_yolo26_disables_per_sample_loss() -> None:
     assert "loss" not in metrics_df.columns, "Expected no 'loss' column for YOLO26 pose"
 
 
+def test_classify_instance_embeddings_unsupported_warns() -> None:
+    """Test that instance_embeddings_dim > 0 warns and is disabled for the 'classify' task."""
+    # yolo26n-cls.pt is pretrained on 1000 imagenet classes, incompatible with the ten-class imagenet10 dataset used
+    # in tests, so a model matching the dataset's class count is trained first (mirrors test_classify_training).
+    train_model = TLCYOLO(TASK2MODEL["classify"])
+    train_results = train_model.train(
+        data=TASK2DATASET["classify"],
+        device="cpu",
+        epochs=1,
+        batch=4,
+        imgsz=32,
+        workers=0,
+    )
+    best = train_results.save_dir / "weights" / "best.pt"
+
+    settings = Settings(
+        project_name="test_classify_no_instance_embeddings",
+        run_name="test_classify_no_instance_embeddings",
+        instance_embeddings_dim=2,
+        instance_embeddings_reducer="pca",
+    )
+
+    model_3lc = TLCYOLO(best)
+    with capture_logs() as log_messages:
+        model_3lc.val(
+            data=TASK2DATASET["classify"],
+            device="cpu",
+            imgsz=320,
+            batch=4,
+            workers=0,
+            settings=settings,
+        )
+
+    embeddings_warning_found = any(
+        "Instance embeddings are not supported for the 'classify' task" in msg for msg in log_messages
+    )
+    assert embeddings_warning_found, "Expected warning about instance embeddings not being supported for classify"
+
+    run = _get_run_from_settings(settings)
+    metrics_tables = get_metrics_tables_from_run(run)
+    metrics_df = pd.concat(
+        [m.to_pandas() for m in metrics_tables["default_stream"]],
+        ignore_index=True,
+    )
+    assert not any("embedding" in col for col in metrics_df.columns), "Expected no instance-embedding columns"
+
+
 def test_classify_training() -> None:
     model = TASK2MODEL["classify"]
     data = TASK2DATASET["classify"]
