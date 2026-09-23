@@ -2286,6 +2286,72 @@ def test_segment_masks_built_only_for_filtered_predictions(monkeypatch) -> None:
     )
 
 
+def _edge_case_masks(height, width):
+    """Binary `(H, W, N)` masks covering the RLE edge cases, plus random ones."""
+    masks = [np.zeros((height, width), np.uint8), np.ones((height, width), np.uint8)]
+    for y, x in ((0, 0), (height - 1, width - 1), (height // 2, width // 2)):
+        single = np.zeros((height, width), np.uint8)
+        single[y, x] = 1
+        masks.append(single)
+    border = np.zeros((height, width), np.uint8)
+    border[:, 0] = border[-1, :] = 1
+    masks.append(border)
+    rng = np.random.default_rng(0)
+    masks.extend((rng.random((height, width)) > p).astype(np.uint8) for p in (0.1, 0.5, 0.97))
+    return np.stack(masks, axis=-1)
+
+
+@pytest.mark.parametrize("shape", [(7, 5), (1, 9), (9, 1), (1, 1), (64, 48)])
+def test_rles_from_column_major_masks_match_pycocotools(shape) -> None:
+    # The run-boundary encoder must produce exactly the RLEs pycocotools encodes from the same dense masks.
+    import pycocotools.mask as mask_utils
+    import torch
+
+    from tlc_ultralytics.segment.utils import rles_from_column_major_masks
+
+    height, width = shape
+    dense = _edge_case_masks(height, width)  # (H, W, N)
+    expected = mask_utils.encode(np.asfortranarray(dense))
+    column_major = torch.from_numpy(np.ascontiguousarray(dense.transpose(2, 1, 0)))  # (N, W, H)
+
+    rles = rles_from_column_major_masks(column_major, height, width)
+
+    assert [r["size"] for r in rles] == [r["size"] for r in expected]
+    assert [r["counts"] for r in rles] == [r["counts"] for r in expected]
+    assert rles_from_column_major_masks(column_major[:0], height, width) == []
+
+
+@pytest.mark.skipif(not __import__("torch").cuda.is_available(), reason="needs a CUDA device")
+def test_segment_rles_on_cuda_match_pycocotools() -> None:
+    # On CUDA the validator finds mask runs on the GPU, a chunk at a time. Its RLEs must be exactly what pycocotools
+    # encodes from the same masks built in one go on the same device. (CUDA and CPU masks themselves differ by a few
+    # boundary pixels, from Ultralytics' device-dependent `crop_mask`, so the reference must come from CUDA too.)
+    import pycocotools.mask as mask_utils
+    import torch
+    from ultralytics.utils import ops
+
+    from tlc_ultralytics.segment.validator import TLCSegmentationValidator
+
+    torch.manual_seed(0)
+    num_instances, imgsz, ori_shape = 40, [64, 96], (150, 230)
+    proto = torch.randn(32, 16, 24, device="cuda")
+    coefficients = torch.randn(num_instances, 32, device="cuda")
+    xy = torch.rand(num_instances, 2, device="cuda") * torch.tensor([80.0, 50.0], device="cuda")
+    bboxes = torch.cat([xy, xy + 4 + torch.rand(num_instances, 2, device="cuda") * 30], dim=1)
+
+    validator = TLCSegmentationValidator.__new__(TLCSegmentationValidator)
+    validator._mask_imgsz = imgsz
+    validator._mask_chunk_instances = 16  # several chunks
+    rles = validator._rles_at_original_resolution(
+        proto, coefficients, bboxes, {"ori_shape": ori_shape, "ratio_pad": None}
+    )
+
+    dense = ops.scale_masks(ops.process_mask_native(proto, coefficients, bboxes, shape=imgsz)[None], ori_shape)[0]
+    expected = mask_utils.encode(np.asfortranarray(dense.byte().cpu().numpy().transpose(1, 2, 0)))
+    assert len(rles) == num_instances
+    assert [r["counts"] for r in rles] == [r["counts"] for r in expected]
+
+
 def test_segment_postprocess_stashes_mask_sources(monkeypatch) -> None:
     # postprocess must stash one (prototypes, coefficients) pair per image, in order, and start over on the next
     # batch - a stale or misaligned stash would silently hand an image another image's masks.

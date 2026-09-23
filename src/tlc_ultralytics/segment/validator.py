@@ -19,6 +19,7 @@ from tlc_ultralytics.constants import (
 )
 from tlc_ultralytics.detect.validator import TLCDetectionValidator
 from tlc_ultralytics.engine.validator import PREDICTION_INDEX
+from tlc_ultralytics.segment.utils import rles_from_column_major_masks
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 
@@ -119,9 +120,10 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         smaller than `ori_shape` whenever the image was downscaled to the model input, so sizing the chunk from
         `ori_shape` bounds both steps.
 
-        Each chunk is transposed on the device to `(n, W, H)`, whose `(H, W, n)` view is the Fortran-ordered layout
-        pycocotools encodes from, so the encoder reads it without a copy. From a CUDA device it is copied into
-        pinned memory, which transfers an order of magnitude faster than pageable memory.
+        Each chunk is transposed on the device to `(n, W, H)`, column-major per mask, the order RLE counts runs in.
+        On CUDA the runs are found on the GPU (`rles_from_column_major_masks`), so only run boundaries leave the
+        device. On CPU the chunk's `(H, W, n)` view is the Fortran-ordered layout pycocotools encodes from, so
+        `SegmentationHelper.rles_from_masks` reads it without a copy. Both give the same RLEs.
         """
         h, w = (int(x) for x in pbatch["ori_shape"])
         num_instances = coefficients.shape[0]
@@ -137,10 +139,9 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
             chunk = scaled.byte().transpose(1, 2).contiguous()  # (n, W, H)
             del native, scaled
             if chunk.is_cuda:
-                host = torch.empty(chunk.shape, dtype=torch.uint8, pin_memory=True)
-                host.copy_(chunk)
-                chunk = host
-            rles.extend(SegmentationHelper.rles_from_masks(chunk.numpy().transpose(2, 1, 0)))
+                rles.extend(rles_from_column_major_masks(chunk, h, w))
+            else:
+                rles.extend(SegmentationHelper.rles_from_masks(chunk.numpy().transpose(2, 1, 0)))
             del chunk
 
         return rles
