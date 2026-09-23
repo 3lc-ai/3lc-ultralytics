@@ -4,14 +4,15 @@ from typing import Any
 
 import tlc
 import torch
+from tlc.constants import CONFIDENCE, IMAGE_HEIGHT, IMAGE_WIDTH, INSTANCE_PROPERTIES, LABEL, RLES
 from tlc.data_types import SegmentationMasks
+from tlc.helpers import SegmentationHelper
 from tlc.schemas import ConfidenceSchema
 from ultralytics.models.yolo.detect import DetectionValidator
 from ultralytics.models.yolo.segment.val import SegmentationValidator
 from ultralytics.utils import LOGGER, ops
 
 from tlc_ultralytics.constants import (
-    CONFIDENCE,
     IMAGE_COLUMN_NAME,
     PREDICTED_SEGMENTATIONS,
     TLC_COLORSTR,
@@ -25,7 +26,7 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
     _default_image_column_name = IMAGE_COLUMN_NAME
 
     _mask_chunk_instances = 32
-    """Upper bound on how many instances have their masks upsampled at a time in `_masks_at_original_resolution`.
+    """Upper bound on how many instances have their masks upsampled at a time in `_rles_at_original_resolution`.
 
     Keep this below 50: on CPU, `ops.crop_mask` switches at `n < 50` from exact float box comparisons to a loop over
     rounded integer box coordinates, so a chunk size at or above 50 would make chunked and unchunked mask generation
@@ -37,7 +38,8 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
     """Pixel budget per mask chunk, bounding the float32 transient of the upsampling to ~256 MB.
 
     Chunks are sized from the original image area, so a chunk stays within this budget on large images (a 4K image
-    gives 8 instances per chunk) and is capped by `_mask_chunk_instances` on small ones.
+    gives 8 instances per chunk) and is capped by `_mask_chunk_instances` on small ones. Each chunk is RLE-encoded
+    as soon as it is built, so this also bounds the dense masks held in host memory to one chunk.
     """
 
     _mask_sources: list[tuple[torch.Tensor, torch.Tensor]] | None = None
@@ -88,13 +90,13 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         return outputs
 
     def _scale_filtered_pred(self, i, filtered, pbatch):
-        """Scale image `i`'s filtered predictions and build their masks at the original image resolution."""
+        """Scale image `i`'s filtered predictions and RLE-encode their masks at the original image resolution."""
         proto, coefficients = self._mask_sources[i]
 
         # `DetectionValidator.scale_preds` scales the boxes only; `SegmentationValidator`'s would scale the
         # quarter-resolution masks being replaced here.
         scaled = DetectionValidator.scale_preds(self, filtered, pbatch)
-        scaled["masks"] = self._masks_at_original_resolution(
+        scaled["rles"] = self._rles_at_original_resolution(
             proto,
             coefficients[filtered[PREDICTION_INDEX]],
             filtered["bboxes"],  # model-input coords, as `crop_mask` expects; `scaled["bboxes"]` are not
@@ -102,42 +104,46 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         )
         return scaled
 
-    def _masks_at_original_resolution(
+    def _rles_at_original_resolution(
         self,
         proto: torch.Tensor,
         coefficients: torch.Tensor,
         bboxes: torch.Tensor,
         pbatch: dict[str, Any],
-    ) -> torch.Tensor:
-        """Build binary masks for one image's filtered instances at its original resolution, as `(H, W, N)`.
+    ) -> list[dict[str, Any]]:
+        """RLE-encode one image's filtered instance masks at its original resolution, one COCO RLE per instance.
 
-        Upsampling is chunked (see `_mask_chunk_pixels`) and each chunk is written straight into the uint8 result,
-        so the float32 transient is one chunk rather than the whole set. The intermediate
-        `ops.process_mask_native` builds at `_mask_imgsz`, which is smaller than `ori_shape` whenever the image was
-        downscaled to the model input, so sizing the chunk from `ori_shape` bounds both steps. The result is built
-        on CPU, where it is headed anyway.
+        Masks are built and encoded a chunk at a time (see `_mask_chunk_pixels`), so neither the float32 upsampling
+        transient nor the dense uint8 masks ever exceed one chunk: no full-resolution mask stack exists for the
+        image, let alone the batch. The intermediate `ops.process_mask_native` builds at `_mask_imgsz`, which is
+        smaller than `ori_shape` whenever the image was downscaled to the model input, so sizing the chunk from
+        `ori_shape` bounds both steps.
 
-        The instance axis goes last, which is `tlc.SegmentationMasks`' own storage layout, so `_build_annotation`
-        can hand the array over as `"hwn"`. Passing Ultralytics-native `(N, H, W)` instead would make
-        `SegmentationMasks.__post_init__` transpose it into a second full-size buffer, doubling the peak for the
-        image being built; permuting each chunk on the way in costs nothing extra and is measurably faster than
-        the one big transpose it replaces.
+        Each chunk is transposed on the device to `(n, W, H)`, whose `(H, W, n)` view is the Fortran-ordered layout
+        pycocotools encodes from, so the encoder reads it without a copy. From a CUDA device it is copied into
+        pinned memory, which transfers an order of magnitude faster than pageable memory.
         """
-        h, w = pbatch["ori_shape"]
+        h, w = (int(x) for x in pbatch["ori_shape"])
         num_instances = coefficients.shape[0]
-        masks = torch.empty((int(h), int(w), num_instances), dtype=torch.uint8, device="cpu")
+        rles: list[dict[str, Any]] = []
 
-        chunk_size = max(1, min(self._mask_chunk_instances, self._mask_chunk_pixels // max(1, int(h) * int(w))))
+        chunk_size = max(1, min(self._mask_chunk_instances, self._mask_chunk_pixels // max(1, h * w)))
         for start in range(0, num_instances, chunk_size):
             stop = min(start + chunk_size, num_instances)
             native = ops.process_mask_native(
                 proto, coefficients[start:stop], bboxes[start:stop], shape=self._mask_imgsz
             )
             scaled = ops.scale_masks(native[None], (h, w), ratio_pad=pbatch["ratio_pad"])[0]
-            masks[:, :, start:stop] = scaled.byte().cpu().permute(1, 2, 0)
+            chunk = scaled.byte().transpose(1, 2).contiguous()  # (n, W, H)
             del native, scaled
+            if chunk.is_cuda:
+                host = torch.empty(chunk.shape, dtype=torch.uint8, pin_memory=True)
+                host.copy_(chunk)
+                chunk = host
+            rles.extend(SegmentationHelper.rles_from_masks(chunk.numpy().transpose(2, 1, 0)))
+            del chunk
 
-        return masks
+        return rles
 
     def _get_metrics_schemas(self) -> dict[str, tlc.Schema]:
         instance_properties_structure = {
@@ -172,14 +178,19 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
             self._settings.collect_loss = False
 
     def _build_annotation(self, scaled, mapped_classes, h, w):
-        return tlc.data_types.SegmentationMasks(
-            image_height=h,
-            image_width=w,
-            masks=scaled["masks"].numpy(),  # already (H, W, N) uint8 on CPU: SegmentationMasks' own layout
-            mask_format="hwn",
-            labels=mapped_classes,
-            confidences=scaled["conf"].tolist(),
-        )
+        """Return the annotation in the metrics column's row form, with the masks already RLE-encoded.
+
+        This is exactly what the column's `SegmentationMasks` sample type turns a `SegmentationMasks` into when the
+        metrics writer stores it. The writer passes values its sample type does not claim through unchanged, so
+        handing it the row form lets `_rles_at_original_resolution` encode masks as they are built, instead of
+        every image of the batch holding its dense masks until the batch is written.
+        """
+        return {
+            IMAGE_HEIGHT: h,
+            IMAGE_WIDTH: w,
+            INSTANCE_PROPERTIES: {LABEL: list(mapped_classes), CONFIDENCE: scaled["conf"].tolist()},
+            RLES: [rle["counts"] for rle in scaled["rles"]],
+        }
 
     def _empty_annotation(self, h, w):
         return tlc.data_types.SegmentationMasks.create_empty(image_height=h, image_width=w)
