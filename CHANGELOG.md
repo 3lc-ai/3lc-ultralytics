@@ -28,6 +28,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 - Reduce memory usage when entering reduced embeddings into metrics tables, avoiding redundant copies of metrics.
 
+- Images that were missing when a Table was first used, for example because an image URL alias pointed at an unavailable location, are now checked again once they exist. Previously they were cached as corrupt, and the Table stayed unusable at the same image paths until the `yolo_*.json` cache file next to it was deleted. Missing images are now also reported separately from corrupt ones, with a dedicated error when all of a Table's images are missing.
+
 ## [0.4.0] - 2026-08-07
 
 ### Added

@@ -2499,6 +2499,161 @@ def test_cache_write_failure_degrades_gracefully() -> None:
     assert any("Could not write the images cache" in msg for msg in warnings)
 
 
+def test_dataset_cache_rechecks_missing_images_when_they_appear() -> None:
+    """A cached missing image must not make a Table permanently unusable.
+
+    This is the same failure mode as an alias that initially points at an unavailable mount and is later fixed
+    without changing the Table's image URL. Only the images the cache recorded as missing are verified again.
+    """
+    from tlc.data_types import BoundingBoxes2D
+
+    from tlc_ultralytics.engine import dataset as dataset_module
+
+    alias = "<CACHE_RECOVERY_IMAGES>"
+    image_root = TMP / "cache_recovery_images"
+    image_root.mkdir(parents=True, exist_ok=True)
+    image_paths = [image_root / "image_0.png", image_root / "image_1.png"]
+    for image_path in image_paths:
+        image_path.unlink(missing_ok=True)
+    tlc.url.register_url_alias(alias, str(image_root), force=True)
+
+    def make_dataset() -> TLCYOLODataset:
+        return TLCYOLODataset(
+            table,
+            task="detect",
+            data={"channels": 3},
+            image_column_name="image",
+            label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
+        )
+
+    def read_cache() -> dict:
+        cache_paths = list(Path(table.url.to_str()).glob("yolo_*.json"))
+        assert len(cache_paths) == 1
+        return json.loads(cache_paths[0].read_text())
+
+    try:
+        writer = tlc.TableWriter(
+            table_name="initial",
+            dataset_name="cache recovery",
+            project_name="test_dataset_cache_recovery",
+            schema={"image": tlc.schemas.ImageSchema(), "bbs": BoundingBoxes2D.schema(classes={0: "cat"})},
+        )
+        for image_path in image_paths:
+            writer.add_row(
+                {
+                    "image": f"{alias}/{image_path.name}",
+                    "bbs": BoundingBoxes2D(
+                        bounding_boxes=[[10.0, 10.0, 50.0, 50.0]],
+                        bounding_box_format="xyxy",
+                        image_width=100,
+                        image_height=100,
+                        labels=[0],
+                    ).to_row(),
+                }
+            )
+        table = writer.finalize()
+
+        with pytest.raises(ValueError, match="are missing"):
+            make_dataset()
+
+        cache_data = read_cache()
+        assert cache_data["version"] == 2
+        assert cache_data["corrupt_example_ids"] == []
+        assert cache_data["missing_example_ids"] == [0, 1]
+
+        # One image appears: only it is verified, and the cache is updated in place
+        image_paths[0].write_bytes(DUMMY_IMAGE_FILE.read_bytes())
+        with patch.object(dataset_module, "verify_image", wraps=dataset_module.verify_image) as verify_image_mock:
+            dataset = make_dataset()
+
+        assert len(dataset.labels) == 1
+        verify_image_mock.assert_called_once()
+        assert read_cache()["missing_example_ids"] == [1]
+
+        # The other image appears
+        image_paths[1].write_bytes(DUMMY_IMAGE_FILE.read_bytes())
+        with patch.object(dataset_module, "verify_image", wraps=dataset_module.verify_image) as verify_image_mock:
+            dataset = make_dataset()
+
+        assert len(dataset.labels) == 2
+        verify_image_mock.assert_called_once()
+        assert read_cache()["missing_example_ids"] == []
+
+        # Nothing is missing anymore, so a warm cache verifies no images
+        with patch.object(dataset_module, "verify_image", wraps=dataset_module.verify_image) as verify_image_mock:
+            dataset = make_dataset()
+
+        assert len(dataset.labels) == 2
+        verify_image_mock.assert_not_called()
+    finally:
+        tlc.url.unregister_url_alias(alias)
+
+
+def test_dataset_cache_from_older_version_is_regenerated() -> None:
+    """A cache written by an older version is discarded and all images are verified again.
+
+    Version 1 caches recorded missing images as corrupt, so upgrading must not reuse their verdicts. The cache key
+    did not change between versions, so the old cache sits at exactly the path the new version reads.
+    """
+    from tlc.data_types import BoundingBoxes2D
+
+    from tlc_ultralytics.engine import dataset as dataset_module
+
+    image_root = TMP / "cache_version_upgrade_images"
+    image_root.mkdir(parents=True, exist_ok=True)
+    image_paths = [image_root / "image_0.png", image_root / "image_1.png"]
+    for image_path in image_paths:
+        image_path.write_bytes(DUMMY_IMAGE_FILE.read_bytes())
+
+    writer = tlc.TableWriter(
+        table_name="initial",
+        dataset_name="cache version upgrade",
+        project_name="test_dataset_cache_version_upgrade",
+        schema={"image": tlc.schemas.ImageSchema(), "bbs": BoundingBoxes2D.schema(classes={0: "cat"})},
+    )
+    for image_path in image_paths:
+        writer.add_row(
+            {
+                "image": str(image_path),
+                "bbs": BoundingBoxes2D(
+                    bounding_boxes=[[10.0, 10.0, 50.0, 50.0]],
+                    bounding_box_format="xyxy",
+                    image_width=100,
+                    image_height=100,
+                    labels=[0],
+                ).to_row(),
+            }
+        )
+    table = writer.finalize()
+
+    def make_dataset() -> TLCYOLODataset:
+        return TLCYOLODataset(
+            table,
+            task="detect",
+            data={"channels": 3},
+            image_column_name="image",
+            label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
+        )
+
+    make_dataset()
+    cache_paths = list(Path(table.url.to_str()).glob("yolo_*.json"))
+    assert len(cache_paths) == 1
+    cache_path = cache_paths[0]
+
+    # Replace it with a version 1 cache that, like one written while the images were unavailable, marks them corrupt
+    cache_path.write_text(json.dumps({"version": 1, "corrupt_example_ids": [0, 1]}))
+
+    with patch.object(dataset_module, "verify_image", wraps=dataset_module.verify_image) as verify_image_mock:
+        dataset = make_dataset()
+
+    assert len(dataset.labels) == 2
+    assert verify_image_mock.call_count == len(image_paths)
+
+    assert list(Path(table.url.to_str()).glob("yolo_*.json")) == [cache_path]
+    cache_data = json.loads(cache_path.read_text())
+    assert cache_data == {"version": 2, "corrupt_example_ids": [], "missing_example_ids": []}
+
+
 def test_extra_metrics() -> None:
     """Test providing extra metrics callback and schemas work as expected"""
 
@@ -2690,8 +2845,9 @@ def test_dataset_cache(task) -> None:
 
     cache_path = cache_paths[0]
     cache_data = json.loads(cache_path.read_text())
-    assert cache_data["version"] == 1, "Cache version should be 1"
+    assert cache_data["version"] == 2, "Cache version should be 2"
     assert cache_data["corrupt_example_ids"] == []
+    assert cache_data["missing_example_ids"] == []
 
 
 @pytest.mark.parametrize("task", ["detect", "segment", "classify", "obb", "pose"])
