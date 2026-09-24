@@ -4465,7 +4465,11 @@ def test_semantic_collect() -> None:
         image = input_table.table_rows[row["example_id"]]["image"]
         expected = predictor.predict(image, imgsz=SEMANTIC_OVERRIDES["imgsz"], device="cpu", verbose=False)[0]
         agreement = (prediction == expected.semantic_mask.data.cpu().numpy()).mean()
-        assert agreement == 1.0 if exact else agreement > 0.98, f"Prediction differs from predict(): {agreement:.4f}"
+        # Bilinear interpolation rounds differently across CPU architectures (e.g. macOS arm64 vs. Linux x86_64),
+        # occasionally flipping the argmax of a near-tie pixel score. That shows up as a handful of pixels out of a
+        # few million, nowhere near the ~1-2% a geometry bug (e.g. a one-row letterbox shift) would produce, so this
+        # threshold stays far tighter than the pre-8.4.57 tolerance below.
+        assert agreement > 0.999 if exact else agreement > 0.98, f"Prediction differs from predict(): {agreement:.4f}"
         assert row["loss"] == pytest.approx(row["ce_loss"] + row["dice_loss"], rel=1e-5)
 
     (per_class_table,) = metrics_tables[PER_CLASS_METRICS_STREAM_NAME]
