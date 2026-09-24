@@ -2286,6 +2286,49 @@ def test_segment_masks_built_only_for_filtered_predictions(monkeypatch) -> None:
     )
 
 
+def test_segment_rles_on_mps_match_pycocotools() -> None:
+    # `_rles_at_original_resolution` must copy each chunk to host memory before handing it to pycocotools on any
+    # non-CUDA accelerator, not just CPU: an MPS tensor raises on `.numpy()` without an explicit `.cpu()` first.
+    import torch
+
+    if not torch.backends.mps.is_available():
+        pytest.skip("Requires an MPS device")
+
+    from tlc.helpers import SegmentationHelper
+    from ultralytics.utils import ops
+
+    from tlc_ultralytics.segment.validator import TLCSegmentationValidator
+
+    device = torch.device("mps")
+    generator = torch.Generator(device=device).manual_seed(0)
+
+    imgsz = [64, 64]  # model input size, four times the prototype resolution below
+    ori_shape = (50, 80)
+    num_instances = 6
+
+    proto = torch.rand((32, 16, 16), generator=generator, device=device)
+    coefficients = torch.rand((num_instances, 32), generator=generator, device=device)
+    bboxes = torch.tensor([[8.0 * j, 14.0, 8.0 * j + 8.0, 44.0] for j in range(num_instances)], device=device)
+    pbatch = {"ori_shape": ori_shape, "ratio_pad": None}
+
+    validator = TLCSegmentationValidator.__new__(TLCSegmentationValidator)
+    validator._mask_imgsz = imgsz
+    validator._mask_chunk_instances = 2  # force several chunks
+
+    rles = validator._rles_at_original_resolution(proto, coefficients, bboxes, pbatch)
+    assert len(rles) == num_instances
+
+    # Reference: the same masks, built in one go and encoded from MPS too - masks built from identical inputs
+    # differ slightly across devices, so a CPU-built reference would not be a fair comparison.
+    reference_native = ops.process_mask_native(proto, coefficients, bboxes, shape=imgsz)
+    reference_scaled = ops.scale_masks(reference_native[None], ori_shape, ratio_pad=None)[0]
+    reference = reference_scaled.byte().permute(1, 2, 0).cpu().numpy()  # (H, W, N)
+    reference_rles = SegmentationHelper.rles_from_masks(reference)
+
+    for rle, reference_rle in zip(rles, reference_rles, strict=True):
+        assert rle["counts"] == reference_rle["counts"], "Chunked MPS encoding differs from the unchunked reference"
+
+
 def test_segment_postprocess_stashes_mask_sources(monkeypatch) -> None:
     # postprocess must stash one (prototypes, coefficients) pair per image, in order, and start over on the next
     # batch - a stale or misaligned stash would silently hand an image another image's masks.

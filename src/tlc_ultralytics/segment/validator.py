@@ -121,7 +121,8 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
 
         Each chunk is transposed on the device to `(n, W, H)`, whose `(H, W, n)` view is the Fortran-ordered layout
         pycocotools encodes from, so the encoder reads it without a copy. From a CUDA device it is copied into
-        pinned memory, which transfers an order of magnitude faster than pageable memory.
+        pinned memory, which transfers an order of magnitude faster than pageable memory; from any other non-CPU
+        device it is copied to host memory directly, since pycocotools needs the array in host memory to encode it.
         """
         h, w = (int(x) for x in pbatch["ori_shape"])
         num_instances = coefficients.shape[0]
@@ -140,7 +141,7 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
                 host = torch.empty(chunk.shape, dtype=torch.uint8, pin_memory=True)
                 host.copy_(chunk)
                 chunk = host
-            rles.extend(SegmentationHelper.rles_from_masks(chunk.numpy().transpose(2, 1, 0)))
+            rles.extend(SegmentationHelper.rles_from_masks(chunk.cpu().numpy().transpose(2, 1, 0)))
             del chunk
 
         return rles
