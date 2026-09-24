@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-<a href="https://docs.ultralytics.com/">Ultralytics YOLO</a> classification, object detection, instance segmentation, pose estimation and OBB with 3LC integrated.
+<a href="https://docs.ultralytics.com/">Ultralytics YOLO</a> classification, object detection, instance segmentation, semantic segmentation, pose estimation and OBB with 3LC integrated.
 </p>
 
 ## About 3LC
@@ -70,6 +70,7 @@ See the [examples directory](examples/) for runnable samples. Each task folder c
 | Segmentation | `examples/segment/` | [create_tables.py](examples/segment/create_tables.py), [train.py](examples/segment/train.py), [collect.py](examples/segment/collect.py) |
 | Pose Estimation | `examples/pose/` | [create_tables.py](examples/pose/create_tables.py), [train.py](examples/pose/train.py), [collect.py](examples/pose/collect.py) |
 | Oriented Bounding Boxes | `examples/obb/` | [create_tables.py](examples/obb/create_tables.py), [train.py](examples/obb/train.py), [collect.py](examples/obb/collect.py) |
+| Semantic Segmentation | `examples/semantic/` | [create_tables.py](examples/semantic/create_tables.py), [train.py](examples/semantic/train.py), [collect.py](examples/semantic/collect.py) |
 
 ## Working with Datasets
 
@@ -172,6 +173,12 @@ Working with instance segmentation in the 3LC integration is similar to object d
 
 For instance segmentation, the segmentation column is auto-detected the same way as for detection (see [Column names](#column-names)), so a custom table whose column is not named `segmentations` works without configuration. If you do set `label_column_name` explicitly, the default is `"segmentations.instance_properties.label"`, which points to the category labels for each segmentation instance.
 
+### Semantic Segmentation
+
+Semantic segmentation (`task="semantic"`, requires `ultralytics>=8.4.53`) trains on tables with an RLE-backed semantic segmentation column, as written by `tlc.Table.from_semantic_segmentation()` or declared with `tlc.schemas.SemanticSegmentationRleSchema`. The column is named `mask` by default, and auto-detected otherwise. Tables that store masks as PNG files (the deprecated `tlc.schemas.SemanticSegmentationSchema`) are not supported. When you provide an Ultralytics semantic segmentation dataset YAML (such as `cityscapes8.yaml`, or an instance segmentation YAML such as `coco8-seg.yaml`, whose polygons Ultralytics rasterizes onto a background class), the tables are created from it with the masks Ultralytics would train on, and its ignore label (255) as the void class. Their default dataset names are `<yaml stem>-semantic-<split>`, so they never collide with the tables other tasks create from the same YAML.
+
+The classes trained on are the column's classes other than void, plus the background if the column declares one (it is trained as a class of its own, named `background`). Void pixels are ignored, like Ultralytics' ignore label. A table needs at least two and at most 255 such classes. Ultralytics' binary mode (`nc: 1`, a single output channel) is therefore never used: a column with one class on a background trains a two-class model, and a binary model trained with plain Ultralytics cannot be used to collect metrics on a 3LC table. Metrics collection writes a `predicted_segmentation` column at the original image resolution, optionally per-sample `ce_loss`, `dice_loss` and `loss` (`collect_loss=True`), and a per-class metrics table with each class' IoU, pixel accuracy and pixel count. Per-sample IoU and pixel accuracy are left to the 3LC Dashboard, which derives them from the ground truth and `predicted_segmentation` columns.
+
 ### Pose Estimation
 
 When working with tables created with `tlc.Table.from_yolo_url()`, set `task="pose"`, to get the correct formats for pose estimation. If you are working with a custom table, some care must be taken to ensure the required data is present in the table, such as `kpt_shape`, `kpt_names`, `names`, `flip_idx` and information about keypoint connectivity, if any. A detailed example of using a custom table for pose estimation can be found in the [3lc-examples](https://github.com/3lc-ai/3lc-examples/blob/main/tutorials/1-create-tables/create-custom-keypoints-table.ipynb) repository.
@@ -233,7 +240,7 @@ Image embeddings can be collected by setting `image_embeddings_dim` to 2 or 3. S
 The way in which embeddings are collected is different for the different tasks:
 
 - **Classification**: The integration scans your model for the first occurrence of a `torch.nn.Linear` layer. The inputs to this layer are used to extract image embeddings.
-- **Object Detection and Instance Segmentation**: The output of the spatial pooling function is used to extract embeddings.
+- **Object Detection, Instance Segmentation and Semantic Segmentation**: The output of the spatial pooling function is used to extract embeddings.
 
 Choose the reduction algorithm with `image_embeddings_reducer` (`pacmap`, `umap` or `pca`; `pacmap` is the default) and pass arguments to its constructor via `image_embeddings_reducer_args`. The reducer is fitted on a uniform random sample of at most `image_embeddings_fit_sample_size` images (default 10000) and all images are projected into the fitted space, so memory and fit time stay bounded on large datasets.
 

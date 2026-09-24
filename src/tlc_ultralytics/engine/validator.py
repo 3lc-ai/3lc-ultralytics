@@ -176,9 +176,10 @@ class TLCValidatorMixin(BaseValidator):
 
     def __call__(self, trainer=None, model=None):
         # COCO/LVIS JSON evaluation assumes on-disk annotation JSON files, which is incompatible with
-        # current 3LC Tables. Disable with warning.
+        # current 3LC Tables. Disable with warning. Semantic segmentation's save_json only writes the predicted
+        # masks as PNGs, which works the same with 3LC Tables.
         # TODO: Consider override where evaluation is called from 3LC Table annotations
-        if self.args.save_json:
+        if self.args.save_json and self.args.task != "semantic":
             if RANK in {-1, 0}:
                 LOGGER.warning(
                     f"{TLC_COLORSTR}save_json is not supported with 3LC datasets. COCO/LVIS JSON evaluation reads "
@@ -1247,8 +1248,8 @@ class TLCValidatorMixin(BaseValidator):
 
     @execute_when_collecting
     def _write_per_class_metrics_tables(self) -> None:
-        if self.args.task not in ("detect", "segment", "obb"):
-            # Per-class metrics currently only supported for detection, segmentation, and obb tasks
+        if self.args.task not in ("detect", "segment", "obb", "semantic"):
+            # Per-class metrics currently only supported for detection, segmentation, obb and semantic tasks
             return
 
         metrics_writer = tlc.MetricsTableWriter(
@@ -1274,8 +1275,7 @@ class TLCValidatorMixin(BaseValidator):
             {
                 FOREIGN_TABLE_ID: [0] * num_classes,
                 LABEL: list(range(num_classes)),
-                NUM_INSTANCES: np.append(self.metrics.nt_per_class, self.metrics.nt_per_class.sum()),
-                NUM_IMAGES: np.append(self.metrics.nt_per_image, np.int64(self.seen)),
+                **self._per_class_counts(),
                 **self._generate_per_class_metrics(),
             }
         )
@@ -1286,8 +1286,16 @@ class TLCValidatorMixin(BaseValidator):
         # Improve memory usage - don't cache the written table
         ObjectRegistry._delete_object_from_caches(table.url)
 
-    def _per_class_metrics_schemas(self):
-        metrics_schemas = {
+    def _per_class_counts(self) -> dict[str, np.ndarray]:
+        """The per-class count columns of the per-class metrics table, with the totals for "all" last."""
+        return {
+            NUM_INSTANCES: np.append(self.metrics.nt_per_class, self.metrics.nt_per_class.sum()),
+            NUM_IMAGES: np.append(self.metrics.nt_per_image, np.int64(self.seen)),
+        }
+
+    def _per_class_base_schemas(self) -> dict[str, tlc.Schema]:
+        """The schemas of the per-class metrics table columns every task writes."""
+        return {
             TRAINING_PHASE: training_phase_schema(),
             FOREIGN_TABLE_ID: tlc.schemas.ForeignTableIdSchema(
                 self.dataloader.dataset.table.url.to_relative(self._run.url / "metrics").to_str(),
@@ -1296,6 +1304,11 @@ class TLCValidatorMixin(BaseValidator):
             NUM_IMAGES: tlc.schemas.Int32Schema(
                 description="Number of images with at least one instance of the class",
             ),
+        }
+
+    def _per_class_metrics_schemas(self):
+        metrics_schemas = {
+            **self._per_class_base_schemas(),
             NUM_INSTANCES: tlc.schemas.Int32Schema(
                 description="Total number of instances of the class in all images",
             ),

@@ -6,7 +6,6 @@ import tlc
 import torch
 from tlc.constants import CONFIDENCE, IMAGE_HEIGHT, IMAGE_WIDTH, INSTANCE_PROPERTIES, LABEL, RLES
 from tlc.data_types import SegmentationMasks
-from tlc.helpers import SegmentationHelper
 from tlc.schemas import ConfidenceSchema
 from ultralytics.models.yolo.detect import DetectionValidator
 from ultralytics.models.yolo.segment.val import SegmentationValidator
@@ -19,8 +18,8 @@ from tlc_ultralytics.constants import (
 )
 from tlc_ultralytics.detect.validator import TLCDetectionValidator
 from tlc_ultralytics.engine.validator import PREDICTION_INDEX
-from tlc_ultralytics.segment.utils import rles_from_column_major_masks
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
+from tlc_ultralytics.utils.rle import rles_from_column_major_chunk
 
 
 class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
@@ -120,10 +119,8 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         smaller than `ori_shape` whenever the image was downscaled to the model input, so sizing the chunk from
         `ori_shape` bounds both steps.
 
-        Each chunk is transposed on the device to `(n, W, H)`, column-major per mask, the order RLE counts runs in.
-        On CUDA the runs are found on the GPU (`rles_from_column_major_masks`), so only run boundaries leave the
-        device. On CPU the chunk's `(H, W, n)` view is the Fortran-ordered layout pycocotools encodes from, so
-        `SegmentationHelper.rles_from_masks` reads it without a copy. Both give the same RLEs.
+        Each chunk is transposed on the device to `(n, W, H)`, column-major per mask, the order RLE counts runs in,
+        and encoded where it lives by `rles_from_column_major_chunk` (on CUDA only the run boundaries leave the GPU).
         """
         h, w = (int(x) for x in pbatch["ori_shape"])
         num_instances = coefficients.shape[0]
@@ -138,10 +135,7 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
             scaled = ops.scale_masks(native[None], (h, w), ratio_pad=pbatch["ratio_pad"])[0]
             chunk = scaled.byte().transpose(1, 2).contiguous()  # (n, W, H)
             del native, scaled
-            if chunk.is_cuda:
-                rles.extend(rles_from_column_major_masks(chunk, h, w))
-            else:
-                rles.extend(SegmentationHelper.rles_from_masks(chunk.numpy().transpose(2, 1, 0)))
+            rles.extend(rles_from_column_major_chunk(chunk, h, w))
             del chunk
 
         return rles

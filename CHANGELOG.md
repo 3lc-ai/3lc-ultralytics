@@ -8,6 +8,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Added
 
+- Support semantic segmentation (`task="semantic"`, e.g. `yolo26n-sem.pt`) on tables with an RLE-backed semantic segmentation column (`tlc.Table.from_semantic_segmentation()` / `tlc.schemas.SemanticSegmentationRleSchema`). Tables are created automatically from Ultralytics semantic segmentation dataset YAMLs (such as `cityscapes8.yaml`), with Ultralytics' ignore label as the void class, under the default dataset names `<yaml stem>-semantic-<split>` so they never collide with other tasks' tables from the same YAML. The column's background is trained as a class of its own and its void class is ignored, so Ultralytics' binary (`nc: 1`) mode is not used and such models cannot collect metrics on 3LC tables. Metrics collection writes the predicted segmentation at the original image resolution, RLE-encoded a chunk of classes at a time (on the GPU on CUDA), optional per-sample losses (`collect_loss=True`) and a per-class metrics table; per-sample IoU is left to the 3LC Dashboard. Instance embeddings are not supported for the task and are disabled with a warning.
+
 - Support per-sample loss collection (`collect_loss=True`) for end-to-end (YOLO26) detection models. The collected loss mirrors the one2one branch of ultralytics' `E2ELoss`, which is the loss ultralytics reports for these models during training. DFL-free models (YOLO26) get no `dfl_loss` column.
 
 ### Changed
@@ -15,6 +17,10 @@ Since this package integrates with two actively developed dependencies (`ultraly
 - Segmentation metrics collection now generates full-resolution masks only for the predictions that are written to 3LC, instead of for every NMS survivor before filtering. This cuts peak memory during collection by orders of magnitude on large images, where it could previously fail outright. The masks are also RLE-encoded a chunk at a time as they are generated, so no full-resolution mask stack is held in memory for an image or a batch, and collection is several times faster on large images with many predictions. On CUDA the encoding runs on the GPU, so only run boundaries are copied to the host. **Behavior change:** the `Mask(P/R/mAP50/mAP50-95)` metrics Ultralytics reports now match a plain `ultralytics` run on the same data, where the integration previously made them differ slightly.
 
 - `save_txt` is now disabled with a warning, like `save_json` already was, because it makes Ultralytics produce full-resolution segmentation masks for every prediction.
+
+- The supported `ultralytics` range is now `>=8.4.53,<8.4.67` (up from `>=8.4.0`), as semantic segmentation first shipped in `ultralytics` 8.4.52, whose semantic validator discards its per-class statistics before they can be read.
+
+- Instance segmentation now rejects semantic segmentation columns, with an error pointing to `task="semantic"`, instead of training on each class region as an instance.
 
 - The supported `3lc` range is now `>=3.2.0,<4.0.0` (up from `>=3.0.0`). `3lc` 3.0 and 3.1 were only ever published to 3LC's public package index and are not available on PyPI, so they are no longer supported.
 

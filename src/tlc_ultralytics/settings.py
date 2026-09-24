@@ -43,7 +43,7 @@ class Settings:
     """The description of the 3LC run. Default: None"""
 
     collect_loss: bool = field(default=False)
-    """Whether to collect per-sample loss values for the 'detect' and 'pose' tasks, including end-to-end
+    """Whether to collect per-sample loss values for the 'detect', 'pose' and 'semantic' tasks, including end-to-end
     (YOLO26) detection models. Not supported for YOLO26 pose models or for the 'segment' and 'obb' tasks,
     where it is disabled with a warning. Cross-Entropy loss is always computed for the 'classify' task.
 
@@ -69,7 +69,7 @@ class Settings:
 
     instance_embeddings_dim: int = field(default=0)
     """Per-instance embeddings dimension. 0 means disabled, 2 means 2D, 3 means 3D. Not supported for the
-    'classify' task, where it is disabled with a warning. Default: 0"""
+    'classify' and 'semantic' tasks, where it is disabled with a warning. Default: 0"""
 
     instance_embeddings_layer: int | None = field(default=None)
     """Model layer index for instance embeddings feature extraction.

@@ -32,7 +32,7 @@ class TLCYOLODataset:
 
         :param table: The 3LC table containing the dataset
         :param data: Optional data parameter for YOLODataset
-        :param task: Either "segment" or "detect"
+        :param task: One of "detect", "segment", "pose", "obb" and "semantic"
         :param exclude_zero: Whether to exclude zero-class annotations
         :param class_map: Optional mapping from original class indices to new ones
         :param image_column_name: Name of the image column in the table
@@ -41,6 +41,7 @@ class TLCYOLODataset:
         """
         from tlc_ultralytics.obb.dataset import TLCOBBDataset
         from tlc_ultralytics.pose.dataset import TLCYOLOPoseDataset
+        from tlc_ultralytics.semantic.dataset import TLCSemanticDataset
 
         if task == "detect":
             return TLCYOLODetectionDataset(
@@ -84,10 +85,20 @@ class TLCYOLODataset:
                 task="obb",
                 **kwargs,
             )
+        elif task == "semantic":
+            return TLCSemanticDataset(
+                table=table,
+                data=data,
+                exclude_zero=exclude_zero,
+                class_map=class_map,
+                image_column_name=image_column_name,
+                label_column_name=label_column_name,
+                **kwargs,
+            )
         else:
             msg = (
                 f"Unsupported task: {task} for TLCYOLODataset. "
-                "Only 'segment', 'detect', 'pose', and 'obb' are supported."
+                "Only 'segment', 'detect', 'pose', 'obb' and 'semantic' are supported."
             )
             raise ValueError(msg)
 

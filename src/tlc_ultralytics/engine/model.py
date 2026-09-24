@@ -7,7 +7,14 @@ import ultralytics
 import ultralytics.utils.checks
 from ultralytics.models import yolo
 from ultralytics.models.yolo.model import YOLO as YOLOBase
-from ultralytics.nn.tasks import ClassificationModel, DetectionModel, OBBModel, PoseModel, SegmentationModel
+from ultralytics.nn.tasks import (
+    ClassificationModel,
+    DetectionModel,
+    OBBModel,
+    PoseModel,
+    SegmentationModel,
+    SemanticSegmentationModel,
+)
 from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.classify import (
@@ -19,6 +26,7 @@ from tlc_ultralytics.detect import TLCDetectionTrainer, TLCDetectionValidator
 from tlc_ultralytics.obb import TLCOBBTrainer, TLCOBBValidator
 from tlc_ultralytics.pose import TLCPoseTrainer, TLCPoseValidator
 from tlc_ultralytics.segment import TLCSegmentationTrainer, TLCSegmentationValidator
+from tlc_ultralytics.semantic import TLCSemanticSegmentationTrainer, TLCSemanticSegmentationValidator
 from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import check_requirements
 
@@ -90,6 +98,12 @@ class YOLO(YOLOBase):
                 "trainer": TLCOBBTrainer,
                 "validator": TLCOBBValidator,
                 "predictor": yolo.obb.OBBPredictor,
+            },
+            "semantic": {
+                "model": SemanticSegmentationModel,
+                "trainer": TLCSemanticSegmentationTrainer,
+                "validator": TLCSemanticSegmentationValidator,
+                "predictor": yolo.semantic.SemanticSegmentationPredictor,
             },
         }
 

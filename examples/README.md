@@ -13,6 +13,7 @@ Tasks:
 - Segmentation: `examples/segment/`
 - Pose Estimation: `examples/pose/`
 - Oriented Bounding Boxes: `examples/obb/`
+- Semantic Segmentation: `examples/semantic/`
 
 Run an example, e.g. detection training:
 
