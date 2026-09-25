@@ -64,6 +64,27 @@ def execute_when_collecting(method):
     return wrapper
 
 
+def _table_root_url(table: object) -> tlc.Url | None:
+    """The project root a table lives under, or None when it cannot be told.
+
+    The table's own root when it was created with one, else read off its URL, which has the layout
+    ``<root>/<project>/datasets/<dataset>/tables/<table>``.
+    """
+    root_url = getattr(table, "root_url", None)
+    if root_url:
+        return tlc.Url(root_url)
+    try:
+        url = tlc.Url(table.url)
+    except Exception:
+        return None
+    parts = url.parts
+    if len(parts) < 6 or parts[-2] != "tables" or parts[-4] != "datasets":
+        return None
+    for _ in range(5):
+        url = url.parent
+    return url
+
+
 class TLCValidatorMixin(BaseValidator):
     def __init__(
         self,
@@ -152,11 +173,16 @@ class TLCValidatorMixin(BaseValidator):
                 run_name = self._run.url.parts[-1]
                 LOGGER.info(f"{TLC_COLORSTR}Using active run named '{run_name}' in project {self._run.project_name}.")
             else:
+                # An explicit root wins; otherwise the run goes beside the table it collects on.
+                root_url = self._settings.root_url
+                if root_url is None:
+                    root_url = _table_root_url(self.data[first_split])
+
                 self._run = tlc.init(
                     project_name=project_name,
                     description=self._settings.run_description or DEFAULT_COLLECT_RUN_DESCRIPTION,
                     run_name=self._settings.run_name,
-                    root_url=self._settings.root_url,
+                    root_url=root_url,
                 )
                 LOGGER.info(
                     f"{TLC_COLORSTR}Created run named '{self._run.url.parts[-1]}' in project {self._run.project_name}."

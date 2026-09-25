@@ -44,7 +44,8 @@ class Settings:
 
     root_url: str | None = field(default=None)
     """The root URL under which the run and any tables created for it are written. Overrides the globally
-    configured 3LC project root URL (`TLC_PROJECT_ROOT_URL`) for this integration run. Default: None"""
+    configured 3LC project root URL (`TLC_PROJECT_ROOT_URL`) for this integration run. When unset, a
+    collection-only run is created under the root of the table it collects on. Default: None"""
 
     collect_loss: bool = field(default=False)
     """Whether to collect per-sample loss values for the 'detect' and 'pose' tasks, including end-to-end
