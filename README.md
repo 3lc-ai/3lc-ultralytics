@@ -90,9 +90,10 @@ tables = create_tables_from_yaml_file(
     dataset="path/to/my/dataset.yaml",
     task="detect",
     project_name="My Project",
-    dataset_name="train",
 )
 ```
+
+This creates one `tlc.Table` per split found in the YAML file and returns them as a dictionary keyed by split name. Each table gets the dataset name `"<yaml file name>-<split>"` (e.g. `"dataset-train"`) unless `dataset_name` is passed, in which case that name is used for every split.
 
 Check out the [examples directory](/examples/) for more examples, for example how to make `tlc.Table`s for different tasks.
 
@@ -127,7 +128,7 @@ In training, when a dictionary of tables is passed to `tables`, the table for th
 
 Another alternative is to pass the argument `data` like in vanilla Ultralytics, pointing to a YOLO dataset YAML file. See the [Ultralytics Documentation](https://docs.ultralytics.com/datasets/) to learn more.
 
-3LC parses these datasets and creates `tlc.Table`s for each split, which can be viewed in the Dashboard. Once you make new versions of your data in the 3LC Dashboard, you can use the same command with `data=<path to your dataset>`, and the latest version will be used automatically. The integration will use default values for `project_name` (the name of the provided dataset yaml file, e.g. `"my_dataset"` for `"data=/path/to/my_dataset.yaml"`), `dataset_name` (the split, e.g. `"train"`) and `table_name` (`"initial"`).
+3LC parses these datasets and creates `tlc.Table`s for each split, which can be viewed in the Dashboard. Once you make new versions of your data in the 3LC Dashboard, you can use the same command with `data=<path to your dataset>`, and the latest version will be used automatically. The integration will use default values for `project_name` (the name of the provided dataset yaml file with a `-YOLO` suffix, e.g. `"my_dataset-YOLO"` for `data="/path/to/my_dataset.yaml"`), `dataset_name` (the yaml file name and the split, e.g. `"my_dataset-train"`) and `table_name` (`"initial"`).
 
 </details>
 
@@ -226,6 +227,8 @@ model.collect(
 
 See [examples/detect/collect.py](examples/detect/collect.py) for a complete metrics collection example.
 
+The Ultralytics arguments `save_json` and `save_txt` are not supported with 3LC datasets and are disabled with a warning; the predictions are collected into the 3LC Run instead.
+
 > WARNING ⚠️: When using `.collect()`, the model must be compatible with the provided `tlc.Table`(s).
 > For example, the categories (called `names` in Ultralytics) in the `tlc.Table`s must match those that the model was trained on.
 
@@ -244,7 +247,7 @@ Image embeddings can be collected by setting `image_embeddings_dim` to 2 or 3. S
 The way in which embeddings are collected is different for the different tasks:
 
 - **Classification**: The integration scans your model for the first occurrence of a `torch.nn.Linear` layer. The inputs to this layer are used to extract image embeddings.
-- **Object Detection, Instance Segmentation and Semantic Segmentation**: The output of the spatial pooling function is used to extract embeddings.
+- **Object Detection, Instance Segmentation, Semantic Segmentation, Pose Estimation and Oriented Bounding Boxes**: The output of the spatial pooling (SPPF) layer is average-pooled to extract embeddings.
 
 Choose the reduction algorithm with `image_embeddings_reducer` (`pacmap`, `umap` or `pca`; `pacmap` is the default) and pass arguments to its constructor via `image_embeddings_reducer_args`. The reducer is fitted on a uniform random sample of at most `image_embeddings_fit_sample_size` images (default 10000) and all images are projected into the fitted space, so memory and fit time stay bounded on large datasets.
 
@@ -252,13 +255,13 @@ Choose the reduction algorithm with `image_embeddings_reducer` (`pacmap`, `umap`
 
 ### Instance Embeddings
 
-Instance embeddings can be collected by setting `instance_embeddings_dim` to 2 or 3. Unlike image embeddings, which produce one embedding per image, these produce one embedding per detected instance (bounding box, segmentation mask, oriented box or pose), so similar instances tend to be close in this space. Supported for the `detect`, `segment`, `pose` and `obb` tasks.
+Instance embeddings can be collected by setting `instance_embeddings_dim` to 2 or 3. Unlike image embeddings, which produce one embedding per image, these produce one embedding per detected instance (bounding box, segmentation mask, oriented box or pose), so similar instances tend to be close in this space. Supported for the `detect`, `segment`, `pose` and `obb` tasks; for `classify` the setting is disabled with a warning.
 
 By default embeddings are extracted from the classification branch of the detection head. Set `instance_embeddings_layer` to a model layer index to extract from a specific layer instead. Set `ground_truth_instance_embeddings=True` to also collect embeddings for the ground-truth annotations, projected into the same space as the predictions.
 
 Instance embeddings have been tested with the YOLOv8, YOLO11 and YOLO26 detection heads. YOLO11 and YOLO26 use the classification branch directly; for YOLOv8 the integration automatically falls back to a neck layer. Other architectures are not guaranteed to be supported and may require setting `instance_embeddings_layer` explicitly.
 
-Choose the reduction algorithm with `instance_embeddings_reducer` (`pacmap`, `umap` or `pca`) and pass arguments to its constructor via `instance_embeddings_reducer_kwargs`. The reducer is fitted on a uniform random sample of at most `instance_embeddings_fit_sample_size` instances (default 10000) and all instances are projected into the fitted space, so memory and fit time stay bounded on large datasets.
+Choose the reduction algorithm with `instance_embeddings_reducer` (`pacmap`, `umap` or `pca`; `pacmap` is the default) and pass arguments to its constructor via `instance_embeddings_reducer_kwargs`. The reducer is fitted on a uniform random sample of at most `instance_embeddings_fit_sample_size` instances (default 10000) and all instances are projected into the fitted space, so memory and fit time stay bounded on large datasets.
 
 > **Experimental:** instance embeddings are currently reduced in-process by the integration. This will move to a native 3LC interface in the future, at which point some of these settings may change.
 
@@ -279,6 +282,8 @@ Use `exclude_zero_weight_training=True` (only applies to training) and `exclude_
 - **`collection_val_only=True`**: Disable metrics collection on the training set. This only applies to training.
 - **`collection_disable=True`**: Disable metrics collection entirely. This only applies to training. A run will still be created, and hyperparameters and aggregate metrics will be logged to 3LC.
 - **`collection_epoch_start` and `collection_epoch_interval`**: Define when to collect metrics during training. The start epoch is 1-based, i.e. 1 means after the first epoch. As an example, `collection_epoch_start=1` with `collection_epoch_interval=2` means metrics collection will occur after the first epoch and then every other epoch after that.
+- **`collect_loss=True`**: Collect per-sample loss values. Supported for `detect` (including end-to-end YOLO26 models) and `pose` (except YOLO26 pose models); for `segment` and `obb` it is disabled with a warning. Cross-entropy loss is always collected for `classify`.
+- **`conf_thres` and `max_det`**: The confidence threshold (default 0.1) and maximum number of detections per image (default 300) for the predictions written to 3LC.
 - **`metrics_max_buffer_mb`**: Maximum size in MB of metrics buffered in memory before they are flushed to a metrics table and a new one is started (default 256). This keeps the metrics buffer from growing with dataset size; the flushed tables are joined back together in the 3LC Dashboard. Lower this when collecting heavy per-row metrics (segmentation masks, instance embeddings) on machines with limited memory.
 
 ### Column names
@@ -307,7 +312,7 @@ Early stopping can be used just like before. Unless metrics collection is disabl
 
 ## Why is embeddings collection disabled by default?
 
-Embeddings collection has an extra dependency for the library used for reduction, and a performance implication (fitting and applying the reducer) at the end of a run. It is therefore disabled by default.
+Embeddings collection has a performance implication (fitting and applying the reducer) at the end of a run, and is therefore disabled by default. The `pacmap` (default) and `pca` reducers work out of the box, while `umap` requires installing `umap-learn` separately.
 
 ## How do I collect embeddings for each bounding box?
 

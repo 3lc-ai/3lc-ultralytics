@@ -12,7 +12,7 @@
 </div>
 
 <p align="center">
-<a href="https://docs.ultralytics.com/">Ultralytics YOLO</a> classification, object detection and segmentation with 3LC integrated.
+<a href="https://docs.ultralytics.com/">Ultralytics YOLO</a> classification, object detection, instance segmentation, pose estimation and OBB with 3LC integrated.
 </p>
 
 ## About 3LC
@@ -37,4 +37,4 @@ If you use [`uv`](https://docs.astral.sh/uv/), the equivalent commands are `uv p
 
 ### Dataset and Training
 
-The integration is documented on the project [GitHub Page](https://github.com/3lc-ai/3lc-ultralytics), and details how to register datasets and run training.
+The integration is documented on the project [GitHub Page](https://github.com/3lc-ai/3lc-ultralytics), and details how to register datasets, run training and collect metrics.
