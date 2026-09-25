@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, NamedTuple, overload
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, overload
 
 import tlc
 import yaml
@@ -22,13 +22,14 @@ from tlc_ultralytics.constants import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
+    from tlc.helpers.annotation_helper import AnnotationColumn
     from tlc.schemas._schema import ValueMapLike
 
     from tlc_ultralytics.settings import Settings
 
 
 def get_dataset_functions(
-    task: Literal["detect", "segment", "pose", "classify", "obb"],
+    task: Literal["detect", "segment", "pose", "classify", "obb", "semantic"],
 ) -> tuple[Callable, Callable]:
     if task == "detect":
         from tlc_ultralytics.detect.utils import check_det_table
@@ -57,6 +58,11 @@ def get_dataset_functions(
 
         dataset_checker = check_det_dataset
         table_checker = check_obb_table
+    elif task == "semantic":
+        from tlc_ultralytics.semantic.utils import check_semantic_table
+
+        dataset_checker = check_det_dataset
+        table_checker = check_semantic_table
     else:
         raise ValueError(f"Invalid task: {task}")
     return dataset_checker, table_checker
@@ -69,7 +75,7 @@ def check_tlc_dataset(  # noqa: C901
     label_column_name: str | None,
     project_name: str | None = None,
     splits: Iterable[str] | None = None,
-    task: Literal["detect", "segment", "pose", "classify", "obb"] | None = None,
+    task: Literal["detect", "segment", "pose", "classify", "obb", "semantic"] | None = None,
     settings: Settings | None = None,
 ) -> dict[str, tlc.Table | dict[float, str] | int]:
     """Get or create tables for YOLO datasets. data is ignored when tables is provided.
@@ -146,7 +152,7 @@ def check_tlc_dataset(  # noqa: C901
                             f"{colorstr(key)}: Failed to read or create table for split {key} from {data}: {e!s}"
                         )
 
-        elif task in ["detect", "segment", "pose", "obb"]:
+        elif task in ["detect", "segment", "pose", "obb", "semantic"]:
             tables = create_tables_from_yaml_file(data, task=task, splits=splits, project_name=resolved_project_name)
 
         # Get the latest version when inferring
@@ -198,6 +204,9 @@ def check_tlc_dataset(  # noqa: C901
             LOGGER.info(f"{colorstr(key)}: Using table {tables[key].url} from {source}")
 
     first_split = next(iter(tables.keys()))
+
+    if task == "semantic":
+        return _semantic_dataset_dict(tables, first_split, label_column_name, settings)
 
     # For annotation tasks, resolve the label column against the actual table: apply the task default
     # when unset, then fall back to structural inference when the named/default column is absent (e.g.
@@ -305,6 +314,70 @@ def check_tlc_dataset(  # noqa: C901
         if points is not None:
             ret["points"] = points
     return ret  # type: ignore[invalid-return-type]
+
+
+def _semantic_dataset_dict(
+    tables: dict[str, tlc.Table],
+    first_split: str,
+    label_column_name: str | None,
+    settings: Settings | None,
+) -> dict[str, Any]:
+    """Build the dataset dict for semantic segmentation tables, whose classes map to training indices differently.
+
+    See `SemanticClasses` for how the classes of a semantic segmentation column map to Ultralytics class indices. All
+    splits must declare the same classes, background and void. `ultralytics_dataset` is the Ultralytics dataset the
+    first split's table was created from, if it records one (see `ultralytics_dataset_from_table`).
+    """
+    from tlc_ultralytics.semantic.utils import (
+        get_semantic_classes,
+        resolve_semantic_label_column,
+        ultralytics_dataset_from_table,
+    )
+
+    label_column_name = resolve_semantic_label_column(tables[first_split], label_column_name)
+    if settings is not None:
+        settings.label_column_name = label_column_name
+
+    classes = get_semantic_classes(tables[first_split], label_column_name)
+    for split, split_table in tables.items():
+        split_classes = get_semantic_classes(split_table, label_column_name)
+        if (split_classes.range_to_3lc_class, split_classes.names, split_classes.background, split_classes.void) != (
+            classes.range_to_3lc_class,
+            classes.names,
+            classes.background,
+            classes.void,
+        ):
+            msg = (
+                f"All splits must have the same semantic segmentation classes, but '{first_split}' has "
+                f"{classes.names} (background={classes.background}, void={classes.void}) and '{split}' has "
+                f"{split_classes.names} (background={split_classes.background}, void={split_classes.void}), "
+                "by training class index."
+            )
+            raise ValueError(msg)
+
+    return {
+        **tables,
+        "names": classes.names,
+        "names_3lc": classes.prediction_value_map,
+        "nc": len(classes.names),
+        "range_to_3lc_class": classes.range_to_3lc_class,
+        "3lc_class_to_range": classes.class_to_range,
+        "semantic_background": classes.background,
+        "semantic_void": classes.void,
+        "ultralytics_dataset": ultralytics_dataset_from_table(tables[first_split], label_column_name),
+        "channels": 3,
+    }
+
+
+def is_semantic_segmentation_column(table: tlc.Table, column_name: str) -> bool:
+    """Whether a column holds RLE-backed semantic segmentation (`SemanticSegmentationRleSchema`).
+
+    TEMP(annotation-helper-semseg): such a column is stored in the instance segmentation RLE layout, so
+    `AnnotationHelper` classifies it as `AnnotationType.SEGMENTATION` like an instance segmentation column. Only its
+    sample type tells them apart. Remove once tlc's AnnotationHelper distinguishes semantic segmentation.
+    """
+    schema = table.rows_schema.values.get(column_name)
+    return schema is not None and schema.sample_type == "semantic_segmentation"
 
 
 def resolve_label_value_path(table: tlc.Table, label_column_name: str) -> str:
@@ -433,7 +506,7 @@ def resolve_annotation_label_path(
 
     # The configured/default column is absent — infer it. Asking for BOUNDING_BOXES matches both new
     # and legacy (`bbs.bb_list.label`) bounding-box columns.
-    ann = AnnotationHelper.find(table, type=config.annotation_type)
+    ann = _find_annotation_column(table, config.annotation_type, task)
     if ann is not None and ann.label_path is not None:
         # Inferring because an explicitly-configured column was not found likely signals a typo or a stale config —
         # warn so it is not silently ignored. Deferred resolution (label_column_name is None) is the normal path and
@@ -457,7 +530,15 @@ def resolve_annotation_label_path(
             "annotations this task requires."
         )
     else:
-        if other is not None:
+        # TEMP(annotation-helper-semseg): `other.type` reports SEGMENTATION for a semantic segmentation column too, so
+        # it is distinguished here for a precise message. Remove once tlc's AnnotationHelper distinguishes semantic
+        # segmentation.
+        if other is not None and is_semantic_segmentation_column(table, other.name):
+            detail = (
+                f"column '{other.name}' holds semantic segmentation label maps, not the "
+                f"{config.annotation_type.name} annotations this task requires. Use task='semantic' instead."
+            )
+        elif other is not None:
             detail = (
                 f"this table has {other.type.name} annotations in column '{other.name}', not the "
                 f"{config.annotation_type.name} annotations this task requires. Use the task matching "
@@ -469,6 +550,48 @@ def resolve_annotation_label_path(
         f"Table with url {table.url} is not compatible with {config.task_description}: {detail} "
         f"Columns present: {columns}."
     )
+
+
+def _find_annotation_column(
+    table: tlc.Table,
+    annotation_type: AnnotationType,
+    task: Literal["detect", "segment", "pose", "obb"],
+) -> AnnotationColumn | None:
+    """Find the table's only annotation column of `annotation_type`, like `AnnotationHelper.find`.
+
+    TEMP(annotation-helper-semseg): a semantic segmentation column is stored in the instance segmentation layout, so
+    `AnnotationHelper.find` matches it as `SEGMENTATION` too. For `task="segment"` semantic columns are no candidates:
+    a lone one is skipped, and a multi-match is decided again without them, so one instance segmentation column next
+    to semantic ones is still unambiguous. Remove once tlc's AnnotationHelper distinguishes semantic segmentation.
+
+    :param table: The table to search.
+    :param annotation_type: The annotation type to find.
+    :param task: The annotation task, which decides whether semantic segmentation columns are skipped.
+    :returns: The matching column, or None if there is none.
+    :raises ValueError: If more than one column matches (for `task="segment"`, more than one instance column).
+    """
+    try:
+        ann = AnnotationHelper.find(table, type=annotation_type)
+    except ValueError:
+        if task != "segment":
+            raise
+        candidates = []
+        for name in table.rows_schema.values:
+            if is_semantic_segmentation_column(table, name):
+                continue
+            try:
+                candidate = AnnotationHelper.get(table, name)
+            except ValueError:  # Not annotation-shaped
+                continue
+            if candidate.type is annotation_type:
+                candidates.append(candidate)
+        if len(candidates) > 1:
+            raise
+        return candidates[0] if candidates else None
+
+    if ann is not None and task == "segment" and is_semantic_segmentation_column(table, ann.name):
+        return None
+    return ann
 
 
 def get_value_map_from_table(
@@ -634,18 +757,24 @@ def _get_default_names(
     split: str,
     project_name: str | None = None,
     dataset_name: str | None = None,
+    task: str | None = None,
 ) -> tuple[str, str]:
     """Get default project and dataset names for a split.
+
+    Semantic segmentation datasets get a `-semantic` infix (`<stem>-semantic-<split>`): Ultralytics reads the instance
+    segmentation YAMLs (like `coco8-seg.yaml`) as polygon semantic segmentation datasets too, and the two tasks need
+    tables of their own. The split stays last, where the validator reads it from for its progress bar.
 
     :param data_path: Path to the dataset YAML file or directory.
     :param split: The split name (e.g., 'train', 'val').
     :param project_name: Optional custom project name.
     :param dataset_name: Optional custom dataset name.
+    :param task: The task the tables are for.
     :returns: Tuple of (project_name, dataset_name).
     """
     name = Path(data_path).stem
     project = project_name or f"{name}-YOLO"
-    dataset = dataset_name or f"{name}-{split}"
+    dataset = dataset_name or (f"{name}-semantic-{split}" if task == "semantic" else f"{name}-{split}")
     return project, dataset
 
 
@@ -730,7 +859,7 @@ def _get_existing_table(
 @overload
 def create_tables_from_yaml_file(
     dataset: str,
-    task: Literal["detect", "segment", "obb"],
+    task: Literal["detect", "segment", "obb", "semantic"],
     autodownload: bool = True,
     project_name: str | None = None,
     dataset_name: str | None = None,
@@ -765,7 +894,7 @@ def create_tables_from_yaml_file(
 def create_tables_from_yaml_file(
     dataset: str,
     *,
-    task: Literal["detect", "segment", "pose", "obb"],
+    task: Literal["detect", "segment", "pose", "obb", "semantic"],
     autodownload: bool = True,
     project_name: str | None = None,
     dataset_name: str | None = None,
@@ -777,7 +906,9 @@ def create_tables_from_yaml_file(
     """Create one tlc.Table for each split defined in a YOLO dataset YAML file.
 
     When a split is defined by a list of locations, one tlc.Table is created for each location and then joined to form
-    a single tlc.Table for the split.
+    a single tlc.Table for the split. For `task="semantic"`, each split is read by the dataset Ultralytics itself trains
+    on and written like `tlc.Table.from_semantic_segmentation` writes it, recording the dataset YAML's stem in the mask
+    column (see `create_semantic_split_table`).
 
     :param dataset: The path to the dataset or dataset descriptor (like a YAML file).
     :param task: The task to create the tables for.
@@ -790,15 +921,28 @@ def create_tables_from_yaml_file(
     :param root_url: The root URL of the project to create the tables for. By default the 3LC project root URL is used.
     :param splits: The splits to create the tables for.
     :param if_exists: The if exists option to pass to the table creator.
-    :param kwargs: Additional keyword arguments to pass to the table creator.
+    :param kwargs: Additional keyword arguments to pass to the table creator, `tlc.Table.from_yolo_url`. Not accepted
+       for `task="semantic"`, whose tables are written with `tlc.TableWriter`.
     :returns: A dictionary of tables, keyed by split.
+    :raises TypeError: If `kwargs` are given for `task="semantic"`.
     """
+    if task == "semantic" and kwargs:
+        # Fail before downloading or creating anything, rather than silently dropping arguments the other tasks
+        # forward to `tlc.Table.from_yolo_url`.
+        msg = (
+            f"Unexpected keyword arguments for task='semantic': {', '.join(sorted(kwargs))}. Semantic segmentation "
+            "tables are written with `tlc.TableWriter` and take no extra arguments."
+        )
+        raise TypeError(msg)
+
     data_dict = check_det_dataset(dataset, autodownload=autodownload)
 
     # Fast-track: reuse existing tables when if_exists="reuse"
     tables = {}
     for split in splits:
-        split_project_name, split_dataset_name = _get_default_names(dataset, split, project_name, dataset_name)
+        split_project_name, split_dataset_name = _get_default_names(
+            dataset, split, project_name, dataset_name, task=task
+        )
         existing_table = _get_existing_table(split_project_name, split_dataset_name, if_exists)
         if existing_table is not None:
             LOGGER.info(f"{TLC_COLORSTR}Using existing table for split {split} from {existing_table.url}")
@@ -821,10 +965,22 @@ def create_tables_from_yaml_file(
         split_paths = data_dict.get(split)
         if split_paths is None:
             continue
-        _, split_dataset_name = _get_default_names(dataset, split, project_name, dataset_name)
-        tables[split] = _create_split_table(
-            split_paths, categories, task, resolved_project_name, split_dataset_name, if_exists, **kwargs
-        )
+        _, split_dataset_name = _get_default_names(dataset, split, project_name, dataset_name, task=task)
+        if task == "semantic":
+            from tlc_ultralytics.semantic.utils import create_semantic_split_table
+
+            tables[split] = create_semantic_split_table(
+                split_paths,
+                data_dict,
+                resolved_project_name,
+                split_dataset_name,
+                if_exists,
+                ultralytics_dataset=dataset,
+            )
+        else:
+            tables[split] = _create_split_table(
+                split_paths, categories, task, resolved_project_name, split_dataset_name, if_exists, **kwargs
+            )
         LOGGER.info(f"{TLC_COLORSTR}Created table for split {split} with URL: {tables[split].url}")
 
     return tables

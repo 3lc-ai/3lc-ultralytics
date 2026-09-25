@@ -259,7 +259,7 @@ class TLCTrainerMixin(BaseTrainer):
         if not self._train_validator:
             train_validator_dataloader = self.get_dataloader(
                 self.data["train"],
-                batch_size=self.batch_size if self.args.task == "obb" else self.batch_size * 2,
+                batch_size=self.batch_size if self.args.task in ("obb", "semantic") else self.batch_size * 2,
                 rank=RANK,  # Distributed in DDP mode
                 mode="val",
             )

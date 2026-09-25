@@ -43,7 +43,7 @@ class Settings:
     """The description of the 3LC run. Default: None"""
 
     collect_loss: bool = field(default=False)
-    """Whether to collect per-sample loss values for the 'detect' and 'pose' tasks, including end-to-end
+    """Whether to collect per-sample loss values for the 'detect', 'pose' and 'semantic' tasks, including end-to-end
     (YOLO26) detection models. Not supported for YOLO26 pose models or for the 'segment' and 'obb' tasks,
     where it is disabled with a warning. Cross-Entropy loss is always computed for the 'classify' task.
 
@@ -69,7 +69,7 @@ class Settings:
 
     instance_embeddings_dim: int = field(default=0)
     """Per-instance embeddings dimension. 0 means disabled, 2 means 2D, 3 means 3D. Not supported for the
-    'classify' task, where it is disabled with a warning. Default: 0"""
+    'classify' and 'semantic' tasks, where it is disabled with a warning. Default: 0"""
 
     instance_embeddings_layer: int | None = field(default=None)
     """Model layer index for instance embeddings feature extraction.
@@ -174,6 +174,12 @@ class Settings:
 
     flip_indices: list[int] | None = field(default=None)
     """Flip indices for pose estimation. Default: None"""
+
+    cityscapes_class_weights: bool | None = field(default=None)
+    """Whether to weight the semantic segmentation cross-entropy loss, in training and in the per-sample `ce_loss`, with
+    Ultralytics' Cityscapes class weights. None applies them when the tables were created from `cityscapes.yaml` or
+    `cityscapes8.yaml` and have 19 classes, as Ultralytics does when training through `data=`. True forces them, which
+    requires 19 classes, and False disables them. Only used for the 'semantic' task. Default: None"""
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -291,6 +297,10 @@ class Settings:
             assert self.instance_embeddings_dim > 0, (
                 "ground_truth_instance_embeddings requires instance_embeddings_dim > 0."
             )
+
+        assert self.cityscapes_class_weights is None or isinstance(self.cityscapes_class_weights, bool), (
+            f"Invalid cityscapes_class_weights {self.cityscapes_class_weights!r}, must be None, True or False."
+        )
 
         # Validate metrics collection function if provided
         if self.metrics_collection_function is not None:
