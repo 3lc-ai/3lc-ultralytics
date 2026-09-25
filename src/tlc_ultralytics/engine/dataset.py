@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import tlc
 from tlc.helpers import ImageHelper
-from ultralytics.data.utils import verify_image
+from ultralytics.data.utils import get_hash, verify_image
 from ultralytics.utils import LOGGER, NUM_THREADS, TQDM, colorstr
 
 if TYPE_CHECKING:
@@ -157,11 +157,20 @@ class TLCDatasetMixin:
         """
         return table_url / f"yolo_{cache_key}.json"
 
-    def _load_cached_example_ids(self, cache_url: tlc.Url) -> tuple[list[int], list[int]] | None:
+    def _load_cached_example_ids(
+        self, cache_url: tlc.Url, expected_hash: str, num_images: int
+    ) -> tuple[list[int], list[int]] | None:
         """Load the cached corrupt and missing example ids from the cache file.
 
-        :param cache_url: The path to the cache file
-        :return: `(corrupt_example_ids, missing_example_ids)`, or None if cache is invalid
+        The cache is invalidated, mirroring `ultralytics.data.utils.get_hash`, whenever any image file changes on
+        disk: `expected_hash` is a hash of the image paths and the sum of their file sizes (a missing file
+        contributes 0), so an image appearing, disappearing, or being replaced with a differently-sized file all
+        change the hash and trigger a full rescan.
+
+        :param cache_url: The path to the cache file.
+        :param expected_hash: The hash of the current image paths and file sizes, compared against the cache.
+        :param num_images: The number of images in the table, used to validate the cached example ids.
+        :return: `(corrupt_example_ids, missing_example_ids)`, or None if the cache is invalid or stale.
         """
         try:
             cache_data = json.loads(cache_url.read_text())
@@ -171,14 +180,20 @@ class TLCDatasetMixin:
                 LOGGER.info("Cache version mismatch, regenerating cache.")
                 return None
 
-            required_fields = ("corrupt_example_ids", "missing_example_ids")
+            required_fields = ("hash", "corrupt_example_ids", "missing_example_ids")
             if any(field not in cache_data for field in required_fields):
                 LOGGER.warning("Cache file is missing image-status fields, regenerating cache.")
                 return None
 
+            if cache_data["hash"] != expected_hash:
+                LOGGER.info("Cache is stale because image files changed, regenerating cache.")
+                return None
+
             corrupt_example_ids = cache_data["corrupt_example_ids"]
             missing_example_ids = cache_data["missing_example_ids"]
-            if not all(isinstance(example_id, int) for example_id in corrupt_example_ids + missing_example_ids):
+            all_example_ids = corrupt_example_ids + missing_example_ids
+            valid_range = range(num_images)
+            if not all(isinstance(example_id, int) and example_id in valid_range for example_id in all_example_ids):
                 LOGGER.warning("Cache file has invalid image-status fields, regenerating cache.")
                 return None
             return corrupt_example_ids, missing_example_ids
@@ -188,9 +203,9 @@ class TLCDatasetMixin:
             return None
 
     def _save_cached_example_ids(
-        self, cache_url: tlc.Url, corrupt_example_ids: list[int], missing_example_ids: list[int]
+        self, cache_url: tlc.Url, image_hash: str, corrupt_example_ids: list[int], missing_example_ids: list[int]
     ) -> None:
-        """Save the corrupt and missing example ids to the cache file.
+        """Save the image hash and the corrupt and missing example ids to the cache file.
 
         Caching is a pure optimization: the corrupt example ids are already computed in-memory and
         used regardless. If the cache cannot be written (e.g. a parent path component is a file,
@@ -198,11 +213,13 @@ class TLCDatasetMixin:
         without a persisted cache rather than aborting dataset construction.
 
         :param cache_url: The URL to the cache file
+        :param image_hash: The hash of the image paths and file sizes this cache was computed from
         :param corrupt_example_ids: A list of corrupt example ids
         :param missing_example_ids: A list of missing example ids
         """
         content = {
             "version": self._CACHE_VERSION,
+            "hash": image_hash,
             "corrupt_example_ids": corrupt_example_ids,
             "missing_example_ids": missing_example_ids,
         }
@@ -218,7 +235,10 @@ class TLCDatasetMixin:
 
     def _get_rows_from_table(self) -> tuple[list[str], list[Any]]:
         """Get the rows from the table and return a list of example ids, excluding zero weight and corrupt images.
-        Rely on the cache to avoid recomputing example ids if possible.
+
+        Rely on the cache to avoid recomputing example ids if possible. The cache is keyed on a hash of the image
+        paths and file sizes (see `_load_cached_example_ids`), so any change to the image files on disk - an image
+        appearing, disappearing, or being replaced - invalidates the cache and triggers a full rescan.
 
         :return: A list of image paths and labels.
         """
@@ -229,22 +249,18 @@ class TLCDatasetMixin:
 
         cache_key = self._get_cache_key(image_paths)
         cache_path = self._get_cache_path(self.table.url, cache_key)
+        image_hash = get_hash(image_paths)
 
-        cached_example_ids = self._load_cached_example_ids(cache_path) if cache_path.exists() else None
+        cached_example_ids = (
+            self._load_cached_example_ids(cache_path, image_hash, len(image_paths)) if cache_path.exists() else None
+        )
 
         if cached_example_ids is not None:
             corrupt_example_ids, missing_example_ids = cached_example_ids
             LOGGER.info(f"{colorstr(self.prefix)}: Loaded cached images.")
-
-            rechecked_example_ids = self._recheck_missing_example_ids(
-                image_paths, corrupt_example_ids, missing_example_ids
-            )
-            if rechecked_example_ids is not None:
-                corrupt_example_ids, missing_example_ids = rechecked_example_ids
-                self._save_cached_example_ids(cache_path, corrupt_example_ids, missing_example_ids)
         else:
             corrupt_example_ids, missing_example_ids = self._get_invalid_example_ids_from_table(image_paths)
-            self._save_cached_example_ids(cache_path, corrupt_example_ids, missing_example_ids)
+            self._save_cached_example_ids(cache_path, image_hash, corrupt_example_ids, missing_example_ids)
 
         if len(missing_example_ids) == len(image_paths):
             msg = (
@@ -310,41 +326,6 @@ class TLCDatasetMixin:
                 f"{colored_prefix} Excluded {excluded_count} ({percentage_excluded:.2f}% of the table) "
                 "zero-weight rows."
             )
-
-    def _recheck_missing_example_ids(
-        self, image_paths: list[str], corrupt_example_ids: list[int], missing_example_ids: list[int]
-    ) -> tuple[list[int], list[int]] | None:
-        """Verify the images a loaded cache recorded as missing, but which exist now.
-
-        The cache is keyed on image paths only, so an image that appears at an unchanged path, e.g. once an alias'
-        mount becomes available, would otherwise stay excluded. Only the cached missing images are checked, which keeps
-        the cost proportional to the number of missing images rather than the size of the Table.
-
-        :param image_paths: List of absolute image paths
-        :param corrupt_example_ids: Corrupt example ids from the cache
-        :param missing_example_ids: Missing example ids from the cache
-        :return: Updated `(corrupt_example_ids, missing_example_ids)`, or None if no missing image has appeared
-        """
-        appeared_example_ids = [
-            example_id for example_id in missing_example_ids if os.path.exists(image_paths[example_id])
-        ]
-        if not appeared_example_ids:
-            return None
-
-        LOGGER.info(
-            f"{colorstr(self.prefix)}: {len(appeared_example_ids)} previously missing image(s) now exist, "
-            "verifying them."
-        )
-        appeared_paths = [image_paths[example_id] for example_id in appeared_example_ids]
-        new_corrupt_indices, new_missing_indices = self._get_invalid_example_ids_from_table(appeared_paths)
-
-        appeared_set = set(appeared_example_ids)
-        corrupt_example_ids = sorted(corrupt_example_ids + [appeared_example_ids[i] for i in new_corrupt_indices])
-        missing_example_ids = sorted(
-            [example_id for example_id in missing_example_ids if example_id not in appeared_set]
-            + [appeared_example_ids[i] for i in new_missing_indices]
-        )
-        return corrupt_example_ids, missing_example_ids
 
     def _get_invalid_example_ids_from_table(self, image_paths: list[str]) -> tuple[list[int], list[int]]:
         """Get corrupt and missing example ids from the table by scanning all images.

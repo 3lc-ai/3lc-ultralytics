@@ -2499,11 +2499,14 @@ def test_cache_write_failure_degrades_gracefully() -> None:
     assert any("Could not write the images cache" in msg for msg in warnings)
 
 
-def test_dataset_cache_rechecks_missing_images_when_they_appear() -> None:
-    """A cached missing image must not make a Table permanently unusable.
+def test_dataset_cache_is_invalidated_when_image_files_change() -> None:
+    """A cached missing or corrupt image must not make a Table permanently unusable.
 
     This is the same failure mode as an alias that initially points at an unavailable mount and is later fixed
-    without changing the Table's image URL. Only the images the cache recorded as missing are verified again.
+    without changing the Table's image URL. The cache stores a hash of the image paths and their file sizes
+    (matching `ultralytics.data.utils.get_hash`); any change to the files on disk - an image appearing,
+    disappearing, or being replaced with a differently-sized file - changes the hash and triggers a full rescan,
+    so a corrupt verdict is not permanent either.
     """
     from tlc.data_types import BoundingBoxes2D
 
@@ -2560,8 +2563,10 @@ def test_dataset_cache_rechecks_missing_images_when_they_appear() -> None:
         assert cache_data["version"] == 2
         assert cache_data["corrupt_example_ids"] == []
         assert cache_data["missing_example_ids"] == [0, 1]
+        assert "hash" in cache_data
 
-        # One image appears: only it is verified, and the cache is updated in place
+        # One image appears: the changed hash triggers a full rescan, but only the still-missing image is caught by
+        # the stat before verify_image is reached
         image_paths[0].write_bytes(DUMMY_IMAGE_FILE.read_bytes())
         with patch.object(dataset_module, "verify_image", wraps=dataset_module.verify_image) as verify_image_mock:
             dataset = make_dataset()
@@ -2570,21 +2575,39 @@ def test_dataset_cache_rechecks_missing_images_when_they_appear() -> None:
         verify_image_mock.assert_called_once()
         assert read_cache()["missing_example_ids"] == [1]
 
-        # The other image appears
+        # The other image appears: a full rescan verifies both images
         image_paths[1].write_bytes(DUMMY_IMAGE_FILE.read_bytes())
         with patch.object(dataset_module, "verify_image", wraps=dataset_module.verify_image) as verify_image_mock:
             dataset = make_dataset()
 
         assert len(dataset.labels) == 2
-        verify_image_mock.assert_called_once()
+        assert verify_image_mock.call_count == 2
         assert read_cache()["missing_example_ids"] == []
 
-        # Nothing is missing anymore, so a warm cache verifies no images
+        # Nothing changed, so a warm cache verifies no images
         with patch.object(dataset_module, "verify_image", wraps=dataset_module.verify_image) as verify_image_mock:
             dataset = make_dataset()
 
         assert len(dataset.labels) == 2
         verify_image_mock.assert_not_called()
+
+        # One image becomes corrupt (a different size than the dummy image, so the hash changes)
+        corrupt_bytes = b"not an image"
+        assert len(corrupt_bytes) != DUMMY_IMAGE_FILE.stat().st_size
+        image_paths[1].write_bytes(corrupt_bytes)
+        with patch.object(dataset_module, "verify_image", wraps=dataset_module.verify_image) as verify_image_mock:
+            dataset = make_dataset()
+
+        assert len(dataset.labels) == 1
+        assert verify_image_mock.call_count == 2
+        assert read_cache()["corrupt_example_ids"] == [1]
+
+        # The corrupt image is restored: the cache is invalidated again, showing that corrupt is not permanent
+        image_paths[1].write_bytes(DUMMY_IMAGE_FILE.read_bytes())
+        dataset = make_dataset()
+
+        assert len(dataset.labels) == 2
+        assert read_cache()["corrupt_example_ids"] == []
     finally:
         tlc.url.unregister_url_alias(alias)
 
@@ -2651,7 +2674,75 @@ def test_dataset_cache_from_older_version_is_regenerated() -> None:
 
     assert list(Path(table.url.to_str()).glob("yolo_*.json")) == [cache_path]
     cache_data = json.loads(cache_path.read_text())
-    assert cache_data == {"version": 2, "corrupt_example_ids": [], "missing_example_ids": []}
+    assert set(cache_data.keys()) == {"version", "hash", "corrupt_example_ids", "missing_example_ids"}
+    assert cache_data["version"] == 2
+    assert cache_data["corrupt_example_ids"] == []
+    assert cache_data["missing_example_ids"] == []
+    assert isinstance(cache_data["hash"], str) and cache_data["hash"]
+
+
+def test_dataset_cache_with_out_of_range_id_is_regenerated() -> None:
+    """A hand-edited cache with an out-of-range example id must not crash dataset construction.
+
+    This can happen if a cache file is corrupted or edited outside of the normal write path; the id-range check in
+    `_load_cached_example_ids` must catch it and fall back to a full rescan rather than raising an IndexError later.
+    """
+    from tlc.data_types import BoundingBoxes2D
+
+    image_root = TMP / "cache_out_of_range_images"
+    image_root.mkdir(parents=True, exist_ok=True)
+    image_paths = [image_root / "image_0.png", image_root / "image_1.png"]
+    for image_path in image_paths:
+        image_path.write_bytes(DUMMY_IMAGE_FILE.read_bytes())
+
+    writer = tlc.TableWriter(
+        table_name="initial",
+        dataset_name="cache out of range",
+        project_name="test_dataset_cache_out_of_range",
+        schema={"image": tlc.schemas.ImageSchema(), "bbs": BoundingBoxes2D.schema(classes={0: "cat"})},
+    )
+    for image_path in image_paths:
+        writer.add_row(
+            {
+                "image": str(image_path),
+                "bbs": BoundingBoxes2D(
+                    bounding_boxes=[[10.0, 10.0, 50.0, 50.0]],
+                    bounding_box_format="xyxy",
+                    image_width=100,
+                    image_height=100,
+                    labels=[0],
+                ).to_row(),
+            }
+        )
+    table = writer.finalize()
+
+    def make_dataset() -> TLCYOLODataset:
+        return TLCYOLODataset(
+            table,
+            task="detect",
+            data={"channels": 3},
+            image_column_name="image",
+            label_column_name=TASK2LABEL_COLUMN_NAME["detect"],
+        )
+
+    make_dataset()
+    cache_paths = list(Path(table.url.to_str()).glob("yolo_*.json"))
+    assert len(cache_paths) == 1
+    cache_path = cache_paths[0]
+    valid_hash = json.loads(cache_path.read_text())["hash"]
+
+    # Hand-edit the cache to reference an out-of-range example id, keeping the hash valid
+    cache_path.write_text(
+        json.dumps({"version": 2, "hash": valid_hash, "corrupt_example_ids": [99], "missing_example_ids": []})
+    )
+
+    dataset = make_dataset()
+
+    assert len(dataset.labels) == 2
+    assert list(Path(table.url.to_str()).glob("yolo_*.json")) == [cache_path]
+    cache_data = json.loads(cache_path.read_text())
+    assert cache_data["corrupt_example_ids"] == []
+    assert cache_data["missing_example_ids"] == []
 
 
 def test_extra_metrics() -> None:
@@ -2848,6 +2939,7 @@ def test_dataset_cache(task) -> None:
     assert cache_data["version"] == 2, "Cache version should be 2"
     assert cache_data["corrupt_example_ids"] == []
     assert cache_data["missing_example_ids"] == []
+    assert "hash" in cache_data
 
 
 @pytest.mark.parametrize("task", ["detect", "segment", "classify", "obb", "pose"])
