@@ -3806,6 +3806,33 @@ class TestCreateTablesFromYamlFileReuse:
         # Verify the table name is "initial"
         assert combined_table.name == "initial"
 
+    def test_root_url_override(self):
+        """Test that root_url moves table creation and reuse out of the default project root."""
+        from tlc_ultralytics.utils.dataset import create_tables_from_yaml_file
+
+        custom_root_url = TMP / "root_url_override_tables"
+
+        tables1 = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            project_name="test-root-url-override",
+            root_url=str(custom_root_url),
+            if_exists="overwrite",
+            splits=("train",),
+        )
+        assert str(tables1["train"].url).startswith(str(custom_root_url)), "Table not written under custom root_url"
+
+        # Reuse fast-path (_get_existing_table) must look under the same custom root_url too
+        tables2 = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            project_name="test-root-url-override",
+            root_url=str(custom_root_url),
+            if_exists="reuse",
+            splits=("train",),
+        )
+        assert tables2["train"].url == tables1["train"].url, "Table under custom root_url not reused"
+
 
 # === Instance embeddings tests ===
 

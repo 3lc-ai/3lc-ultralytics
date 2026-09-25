@@ -42,6 +42,10 @@ class Settings:
     run_description: str | None = field(default=None)
     """The description of the 3LC run. Default: None"""
 
+    root_url: str | None = field(default=None)
+    """The root URL under which the run and any tables created for it are written. Overrides the globally
+    configured 3LC project root URL (`TLC_PROJECT_ROOT_URL`) for this integration run. Default: None"""
+
     collect_loss: bool = field(default=False)
     """Whether to collect per-sample loss values for the 'detect' and 'pose' tasks, including end-to-end
     (YOLO26) detection models. Not supported for YOLO26 pose models or for the 'segment' and 'obb' tasks,

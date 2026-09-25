@@ -258,6 +258,8 @@ Choose the reduction algorithm with `instance_embeddings_reducer` (`pacmap`, `um
 
 Use `project_name`, `run_name` and `run_description` to customize the `tlc.Run` that is created. Any tables created by the integration will be under the `project_name` provided here. If these settings are not set, appropriate defaults are used instead.
 
+Use `root_url` to control where the run and any tables it creates are written, overriding the globally configured 3LC project root URL for this run.
+
 ### Sampling Weights
 
 Use `sampling_weights=True` to enable the usage of sampling weights. This resamples the data presented to the model according to the weight column in the `Table`. If a sample has weight 2.0, it is twice as likely to appear as a particular sample with weight 1.0. Any given sample can occur multiple times in one epoch. This setting only applies to training.

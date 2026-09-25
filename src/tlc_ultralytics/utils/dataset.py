@@ -68,6 +68,7 @@ def check_tlc_dataset(  # noqa: C901
     image_column_name: str,
     label_column_name: str | None,
     project_name: str | None = None,
+    root_url: str | None = None,
     splits: Iterable[str] | None = None,
     task: Literal["detect", "segment", "pose", "classify", "obb"] | None = None,
     settings: Settings | None = None,
@@ -82,6 +83,7 @@ def check_tlc_dataset(  # noqa: C901
     :param table_creator: Function to create the tables for the YOLO dataset
     :param table_checker: Function to check that a table is compatible with the current task
     :param project_name: Name of the project
+    :param root_url: The root URL to create any new tables under. If not provided, the 3LC project root URL is used.
     :param splits: List of splits to parse.
     :return: Dictionary of tables and class names
     """
@@ -117,6 +119,7 @@ def check_tlc_dataset(  # noqa: C901
     if tables is None:
         resolved_project_name = settings.project_name if settings else project_name
         resolved_project_name = resolved_project_name or _get_default_names(data, "")[0]
+        resolved_root_url = settings.root_url if settings else root_url
         splits = splits or ("train", "val", "test", "minival")
 
         tables = {}
@@ -137,6 +140,7 @@ def check_tlc_dataset(  # noqa: C901
                             project_name=resolved_project_name,
                             dataset_name=split_dataset_name,
                             table_name="initial",
+                            root_url=resolved_root_url,
                             settings=settings,
                         )
                         tables[key] = table
@@ -147,7 +151,9 @@ def check_tlc_dataset(  # noqa: C901
                         )
 
         elif task in ["detect", "segment", "pose", "obb"]:
-            tables = create_tables_from_yaml_file(data, task=task, splits=splits, project_name=resolved_project_name)
+            tables = create_tables_from_yaml_file(
+                data, task=task, splits=splits, project_name=resolved_project_name, root_url=resolved_root_url
+            )
 
         # Get the latest version when inferring
         for key, table in tables.items():
@@ -708,10 +714,11 @@ def _get_existing_table(
     project_name: str | None,
     dataset_name: str | None,
     if_exists: Literal["raise", "reuse", "rename", "overwrite"],
+    root_url: str | None = None,
 ) -> tlc.Table | None:
     """Check if a table already exists and return it if if_exists is 'reuse'."""
     final_table_url = tlc.helpers.ProjectLayout.table_url(
-        table_name="initial", dataset_name=dataset_name, project_name=project_name
+        table_name="initial", dataset_name=dataset_name, project_name=project_name, root_url=root_url
     )
 
     if not final_table_url.exists():
@@ -799,7 +806,7 @@ def create_tables_from_yaml_file(
     tables = {}
     for split in splits:
         split_project_name, split_dataset_name = _get_default_names(dataset, split, project_name, dataset_name)
-        existing_table = _get_existing_table(split_project_name, split_dataset_name, if_exists)
+        existing_table = _get_existing_table(split_project_name, split_dataset_name, if_exists, root_url=root_url)
         if existing_table is not None:
             LOGGER.info(f"{TLC_COLORSTR}Using existing table for split {split} from {existing_table.url}")
             tables[split] = existing_table
@@ -823,7 +830,14 @@ def create_tables_from_yaml_file(
             continue
         _, split_dataset_name = _get_default_names(dataset, split, project_name, dataset_name)
         tables[split] = _create_split_table(
-            split_paths, categories, task, resolved_project_name, split_dataset_name, if_exists, **kwargs
+            split_paths,
+            categories,
+            task,
+            resolved_project_name,
+            split_dataset_name,
+            if_exists,
+            root_url=root_url,
+            **kwargs,
         )
         LOGGER.info(f"{TLC_COLORSTR}Created table for split {split} with URL: {tables[split].url}")
 
