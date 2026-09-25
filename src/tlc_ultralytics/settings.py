@@ -175,6 +175,12 @@ class Settings:
     flip_indices: list[int] | None = field(default=None)
     """Flip indices for pose estimation. Default: None"""
 
+    cityscapes_class_weights: bool | None = field(default=None)
+    """Whether to weight the semantic segmentation cross-entropy loss, in training and in the per-sample `ce_loss`, with
+    Ultralytics' Cityscapes class weights. None applies them when the tables were created from `cityscapes.yaml` or
+    `cityscapes8.yaml` and have 19 classes, as Ultralytics does when training through `data=`. True forces them, which
+    requires 19 classes, and False disables them. Only used for the 'semantic' task. Default: None"""
+
     @classmethod
     def from_env(cls) -> Settings:
         """Create a Settings instance from environment variables.
@@ -291,6 +297,10 @@ class Settings:
             assert self.instance_embeddings_dim > 0, (
                 "ground_truth_instance_embeddings requires instance_embeddings_dim > 0."
             )
+
+        assert self.cityscapes_class_weights is None or isinstance(self.cityscapes_class_weights, bool), (
+            f"Invalid cityscapes_class_weights {self.cityscapes_class_weights!r}, must be None, True or False."
+        )
 
         # Validate metrics collection function if provided
         if self.metrics_collection_function is not None:

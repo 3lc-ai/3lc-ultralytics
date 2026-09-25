@@ -48,6 +48,11 @@ class TLCSemanticDataset(BaseTLCYOLODataset, SemanticDataset):
     ):
         """Initialize the semantic segmentation dataset.
 
+        `check_tlc_dataset(task="semantic")` produces the `data` and `class_map` (its `3lc_class_to_range`) to pass.
+        Without the column's background and void ids in `data` (as when `data` is None), pixels no layer covers are
+        ignored (`IGNORE_INDEX`) and no layer is treated as void. Layer ids are still mapped through `class_map`, or
+        used as training indices as they are without one.
+
         :param table: The 3LC table containing the dataset
         :param data: The dataset dict, with the column's background and void ids from `check_tlc_dataset`
         :param exclude_zero: Whether to exclude zero-weight samples
@@ -55,14 +60,19 @@ class TLCSemanticDataset(BaseTLCYOLODataset, SemanticDataset):
         :param image_column_name: Name of the image column in the table
         :param label_column_name: Name of the semantic segmentation column in the table
         """
+        data = data or {}  # As Ultralytics' `SemanticDataset` does
         self._annotation_column = label_column_name.split(".")[0]
         self._void = data.get("semantic_void")
 
         # Pixels no layer covers are the background when the column declares one. Otherwise 3LC reads them as id 0,
-        # which is either a class of its own or leaves them unlabeled, so they are ignored.
-        background = data.get("semantic_background")
-        fill_id = background if background is not None else 0
-        self._fill = (class_map or {}).get(fill_id, IGNORE_INDEX)
+        # which is either a class of its own or leaves them unlabeled, so they are ignored. Without the column's
+        # background in `data` it is unknown which, so they are ignored too.
+        if "semantic_background" in data:
+            background = data["semantic_background"]
+            fill_id = background if background is not None else 0
+            self._fill = (class_map or {}).get(fill_id, IGNORE_INDEX)
+        else:
+            self._fill = IGNORE_INDEX
 
         super().__init__(
             table,

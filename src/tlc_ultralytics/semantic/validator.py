@@ -21,7 +21,12 @@ from tlc_ultralytics.constants import (
 )
 from tlc_ultralytics.detect.validator import TLCDetectionValidator
 from tlc_ultralytics.semantic.dataset import RESIZED_SHAPE, SEMANTIC_SHAPE
-from tlc_ultralytics.semantic.utils import IGNORE_INDEX, apply_dataset_class_weights
+from tlc_ultralytics.semantic.utils import (
+    IGNORE_INDEX,
+    apply_dataset_class_weights,
+    check_cityscapes_class_weights,
+    dataset_class_weights_message,
+)
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
 from tlc_ultralytics.utils.rle import rles_from_column_major_chunk
 
@@ -41,7 +46,7 @@ class TLCSemanticSegmentationValidator(TLCDetectionValidator, SemanticSegmentati
     """The current batch's raw logits, `[B, nc, H/8, W/8]`, stashed by `postprocess`."""
 
     _logged_class_weights: bool = False
-    """Whether the use of the dataset's class weights in the per-sample losses has been logged."""
+    """Whether the class weights of the per-sample losses have been reported, so they are reported once."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -55,7 +60,9 @@ class TLCSemanticSegmentationValidator(TLCDetectionValidator, SemanticSegmentati
             self._settings.ground_truth_instance_embeddings = False
 
     def check_dataset(self, *args, **kwargs):
-        return check_tlc_dataset(*args, task="semantic", settings=self._settings, **kwargs)
+        data = check_tlc_dataset(*args, task="semantic", settings=self._settings, **kwargs)
+        check_cityscapes_class_weights(self._settings.cityscapes_class_weights, data["nc"])
+        return data
 
     def _verify_model_data_compatibility(self, model_class_names):
         """Verify that the model's classes match the tables' classes, except for the background's name.
@@ -121,13 +128,18 @@ class TLCSemanticSegmentationValidator(TLCDetectionValidator, SemanticSegmentati
         # Ultralytics weights the loss from `model.args.data`, which names the dataset only while training through
         # `data=`. Deciding from the tables instead weights the per-sample losses the same in every collection.
         ultralytics_dataset = self.data.get("ultralytics_dataset")
-        weighted = apply_dataset_class_weights(self.loss_fn, ultralytics_dataset)
-        if weighted and ultralytics_dataset and not self.training and not self._logged_class_weights:
-            # The trainer logs it when training
-            LOGGER.info(
-                f"{TLC_COLORSTR}Weighting the per-sample cross-entropy loss with Ultralytics' Cityscapes class "
-                f"weights, since the tables were created from '{ultralytics_dataset}'"
+        cityscapes_class_weights = self._settings.cityscapes_class_weights
+        apply_dataset_class_weights(self.loss_fn, ultralytics_dataset, cityscapes_class_weights)
+        # The losses are computed in float32 whatever the model's precision (see `_per_sample_losses`), so the class
+        # weights, which the loss takes in the model's dtype, must be too: a half-precision model (`half=True`) has
+        # float16 weights.
+        self.loss_fn.float()
+        if not self.training and not self._logged_class_weights:  # the trainer logs it when training
+            message = dataset_class_weights_message(
+                ultralytics_dataset, self.loss_fn.nc, cityscapes_class_weights, "the per-sample cross-entropy loss"
             )
+            if message:
+                LOGGER.info(f"{TLC_COLORSTR}{message}")
             self._logged_class_weights = True
 
     def _pre_validation(self, model):
@@ -253,7 +265,11 @@ class TLCSemanticSegmentationValidator(TLCDetectionValidator, SemanticSegmentati
         }
 
     def _per_sample_losses(self, logits: torch.Tensor, batch: dict[str, Any]) -> dict[str, list[float]]:
-        """Compute Ultralytics' semantic segmentation loss for each image on its own, as a batch of one."""
+        """Compute Ultralytics' semantic segmentation loss for each image on its own, as a batch of one.
+
+        The logits are cast to float32: Ultralytics runs `update_metrics` outside its autocast, so during AMP training
+        they arrive as float16, which the cross-entropy rejects next to its float32 class weights.
+        """
         losses: dict[str, list[float]] = {"ce_loss": [], "dice_loss": [], "loss": []}
         for i in range(logits.shape[0]):
             mask = batch["semantic_mask"][i : i + 1]
@@ -262,12 +278,23 @@ class TLCSemanticSegmentationValidator(TLCDetectionValidator, SemanticSegmentati
                 # its cross-entropy averages over zero pixels, which is NaN.
                 ce_loss = dice_loss = 0.0
             else:
-                _, loss_items = self.loss_fn(logits[i : i + 1], {"semantic_mask": mask})
+                _, loss_items = self.loss_fn(logits[i : i + 1].float(), {"semantic_mask": mask})
                 ce_loss, dice_loss = loss_items[:2].tolist()  # the auxiliary loss is zero outside training
             losses["ce_loss"].append(ce_loss)
             losses["dice_loss"].append(dice_loss)
             losses["loss"].append(ce_loss + dice_loss)
         return losses
+
+    def _per_class_base_schemas(self) -> dict[str, tlc.Schema]:
+        """The base per-class schemas, with the classes named as in the tables rather than the model.
+
+        A model trained with plain Ultralytics may name the background differently from the tables (see
+        `_verify_model_data_compatibility`). The per-class table names it as the tables do, like the input table and
+        the predicted segmentation column.
+        """
+        schemas = super()._per_class_base_schemas()
+        schemas[LABEL] = tlc.schemas.CategoricalLabelSchema(classes={**self.data["names"], self.nc: "all"})
+        return schemas
 
     def _per_class_metrics_schemas(self):
         return {

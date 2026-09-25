@@ -22,6 +22,7 @@ from tlc_ultralytics.constants import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
+    from tlc.helpers.annotation_helper import AnnotationColumn
     from tlc.schemas._schema import ValueMapLike
 
     from tlc_ultralytics.settings import Settings
@@ -505,12 +506,7 @@ def resolve_annotation_label_path(
 
     # The configured/default column is absent — infer it. Asking for BOUNDING_BOXES matches both new
     # and legacy (`bbs.bb_list.label`) bounding-box columns.
-    ann = AnnotationHelper.find(table, type=config.annotation_type)
-    # TEMP(annotation-helper-semseg): a semantic segmentation column is stored in the instance segmentation layout, so
-    # AnnotationHelper's structural match above finds it too; reject it here so segment auto-detection skips it.
-    # Remove once tlc's AnnotationHelper distinguishes semantic segmentation.
-    if ann is not None and task == "segment" and is_semantic_segmentation_column(table, ann.name):
-        ann = None
+    ann = _find_annotation_column(table, config.annotation_type, task)
     if ann is not None and ann.label_path is not None:
         # Inferring because an explicitly-configured column was not found likely signals a typo or a stale config —
         # warn so it is not silently ignored. Deferred resolution (label_column_name is None) is the normal path and
@@ -554,6 +550,48 @@ def resolve_annotation_label_path(
         f"Table with url {table.url} is not compatible with {config.task_description}: {detail} "
         f"Columns present: {columns}."
     )
+
+
+def _find_annotation_column(
+    table: tlc.Table,
+    annotation_type: AnnotationType,
+    task: Literal["detect", "segment", "pose", "obb"],
+) -> AnnotationColumn | None:
+    """Find the table's only annotation column of `annotation_type`, like `AnnotationHelper.find`.
+
+    TEMP(annotation-helper-semseg): a semantic segmentation column is stored in the instance segmentation layout, so
+    `AnnotationHelper.find` matches it as `SEGMENTATION` too. For `task="segment"` semantic columns are no candidates:
+    a lone one is skipped, and a multi-match is decided again without them, so one instance segmentation column next
+    to semantic ones is still unambiguous. Remove once tlc's AnnotationHelper distinguishes semantic segmentation.
+
+    :param table: The table to search.
+    :param annotation_type: The annotation type to find.
+    :param task: The annotation task, which decides whether semantic segmentation columns are skipped.
+    :returns: The matching column, or None if there is none.
+    :raises ValueError: If more than one column matches (for `task="segment"`, more than one instance column).
+    """
+    try:
+        ann = AnnotationHelper.find(table, type=annotation_type)
+    except ValueError:
+        if task != "segment":
+            raise
+        candidates = []
+        for name in table.rows_schema.values:
+            if is_semantic_segmentation_column(table, name):
+                continue
+            try:
+                candidate = AnnotationHelper.get(table, name)
+            except ValueError:  # Not annotation-shaped
+                continue
+            if candidate.type is annotation_type:
+                candidates.append(candidate)
+        if len(candidates) > 1:
+            raise
+        return candidates[0] if candidates else None
+
+    if ann is not None and task == "segment" and is_semantic_segmentation_column(table, ann.name):
+        return None
+    return ann
 
 
 def get_value_map_from_table(
@@ -883,9 +921,20 @@ def create_tables_from_yaml_file(
     :param root_url: The root URL of the project to create the tables for. By default the 3LC project root URL is used.
     :param splits: The splits to create the tables for.
     :param if_exists: The if exists option to pass to the table creator.
-    :param kwargs: Additional keyword arguments to pass to the table creator.
+    :param kwargs: Additional keyword arguments to pass to the table creator, `tlc.Table.from_yolo_url`. Not accepted
+       for `task="semantic"`, whose tables are written with `tlc.TableWriter`.
     :returns: A dictionary of tables, keyed by split.
+    :raises TypeError: If `kwargs` are given for `task="semantic"`.
     """
+    if task == "semantic" and kwargs:
+        # Fail before downloading or creating anything, rather than silently dropping arguments the other tasks
+        # forward to `tlc.Table.from_yolo_url`.
+        msg = (
+            f"Unexpected keyword arguments for task='semantic': {', '.join(sorted(kwargs))}. Semantic segmentation "
+            "tables are written with `tlc.TableWriter` and take no extra arguments."
+        )
+        raise TypeError(msg)
+
     data_dict = check_det_dataset(dataset, autodownload=autodownload)
 
     # Fast-track: reuse existing tables when if_exists="reuse"

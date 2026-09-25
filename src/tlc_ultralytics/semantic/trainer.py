@@ -3,7 +3,6 @@ from typing import ClassVar
 import matplotlib.pyplot as plt
 import numpy as np
 from ultralytics.models.yolo.semantic.train import SemanticSegmentationTrainer
-from ultralytics.nn.tasks import SemanticSegmentationModel
 from ultralytics.utils import LOGGER
 from ultralytics.utils.loss import SemanticSegmentationLoss
 from ultralytics.utils.plotting import colors, plt_settings
@@ -11,22 +10,12 @@ from ultralytics.utils.plotting import colors, plt_settings
 from tlc_ultralytics.constants import TLC_COLORSTR
 from tlc_ultralytics.detect.trainer import TLCDetectionTrainer
 from tlc_ultralytics.engine.trainer import TLCTrainerMixin
-from tlc_ultralytics.semantic.utils import apply_dataset_class_weights, uses_dataset_class_weights
+from tlc_ultralytics.semantic.utils import (
+    apply_dataset_class_weights,
+    check_cityscapes_class_weights,
+    dataset_class_weights_message,
+)
 from tlc_ultralytics.semantic.validator import TLCSemanticSegmentationValidator
-
-
-# Monkeypatch Ultralytics' SemanticSegmentationModel to weight its loss from the dataset its 3LC table was created from,
-# which `TLCSemanticSegmentationTrainer.set_model_attributes` attaches to the model. Ultralytics decides from
-# `model.args.data` instead, which names no dataset when training from tables. Models without the attribute, like
-# those plain Ultralytics trains, get Ultralytics' loss unchanged.
-def _tlc_semantic_init_criterion(self):
-    loss = SemanticSegmentationLoss(self)
-    apply_dataset_class_weights(loss, getattr(self, "tlc_ultralytics_dataset", None))
-    return loss
-
-
-# Apply the monkeypatch once at import time
-SemanticSegmentationModel.init_criterion = _tlc_semantic_init_criterion
 
 
 class TLCSemanticSegmentationTrainer(SemanticSegmentationTrainer, TLCDetectionTrainer):
@@ -36,28 +25,47 @@ class TLCSemanticSegmentationTrainer(SemanticSegmentationTrainer, TLCDetectionTr
     _loss_names = ("ce_loss", "dice_loss", "aux_loss")
     _metric_replacements: ClassVar[list[tuple[str, str]]] = [("metrics", "val"), ("/", "_")]
 
-    # Explicit bindings to ensure the TLCTrainerMixin methods win over SemanticSegmentationTrainer's in the MRO. Its
-    # `get_dataset` adds a background class for polygon datasets, which a 3LC table declares itself.
+    # Explicit binding to ensure TLCTrainerMixin.get_validator wins over SemanticSegmentationTrainer's in the MRO
     get_validator = TLCTrainerMixin.get_validator
-    get_dataset = TLCTrainerMixin.get_dataset
+
+    def get_dataset(self):
+        """Get the 3LC dataset, and verify that `Settings.cityscapes_class_weights` can be applied to it.
+
+        `TLCTrainerMixin.get_dataset` is used rather than `SemanticSegmentationTrainer.get_dataset`, which adds a
+        background class for polygon datasets, which a 3LC table declares itself.
+        """
+        data = TLCTrainerMixin.get_dataset(self)
+        check_cityscapes_class_weights(self._settings.cityscapes_class_weights, data["nc"])
+        return data
 
     def set_model_attributes(self):
-        """Set model attributes, and attach the Ultralytics dataset the tables were created from to the model.
+        """Set model attributes, and give the model a loss weighted from the dataset its tables were created from.
 
-        The model's loss weights its classes from it (see `apply_dataset_class_weights`). The EMA model is deep-copied
-        from the model after this, so it carries the dataset too.
+        Ultralytics' `SemanticSegmentationModel.init_criterion` weights the loss from `model.args.data`, which names no
+        dataset when training from tables. The criterion is built here on the trainer's own model instead, weighted with
+        `apply_dataset_class_weights`: `BaseModel.loss` only calls `init_criterion` while the model's `criterion` is
+        None, so this one is used. `BaseTrainer._setup_train` calls this after moving the model to its device, whose
+        device and dtype the loss takes, and before compiling it, wrapping it in DDP and deep-copying it into the EMA
+        model, which computes the validation loss during training, so all of them share the weighted loss. Checkpoints
+        carry the criterion only as Ultralytics' own loss class, and the final ones not at all (`strip_optimizer`).
         """
         super().set_model_attributes()
-        self.model.tlc_ultralytics_dataset = self.data.get("ultralytics_dataset")
+        criterion = SemanticSegmentationLoss(self.model)
+        apply_dataset_class_weights(
+            criterion, self.data.get("ultralytics_dataset"), self._settings.cityscapes_class_weights
+        )
+        self.model.criterion = criterion
 
     def _print_task_specific_parameters(self):
         """Print task-specific parameters to the console."""
-        ultralytics_dataset = self.data.get("ultralytics_dataset")
-        if uses_dataset_class_weights(ultralytics_dataset, self.data["nc"]):
-            LOGGER.info(
-                f"{TLC_COLORSTR}Weighting the cross-entropy loss with Ultralytics' Cityscapes class weights, since the "
-                f"tables were created from '{ultralytics_dataset}'"
-            )
+        message = dataset_class_weights_message(
+            self.data.get("ultralytics_dataset"),
+            self.data["nc"],
+            self._settings.cityscapes_class_weights,
+            "the cross-entropy loss",
+        )
+        if message:
+            LOGGER.info(f"{TLC_COLORSTR}{message}")
 
     @plt_settings()
     def plot_training_labels(self):
@@ -68,7 +76,7 @@ class TLCSemanticSegmentationTrainer(SemanticSegmentationTrainer, TLCDetectionTr
         `TLCSemanticDataset.load_mask` instead, already in training class indices, so no label mapping is applied.
         """
         LOGGER.info(f"Plotting labels to {self.save_dir / 'labels.jpg'}...")
-        nc = self.data["nc"]
+        nc = int(self.data["nc"])  # the data dict is typed as a union of its values
         names = self.data["names"]
         pixel_counts = np.zeros(nc, dtype=np.int64)
 

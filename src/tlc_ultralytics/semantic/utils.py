@@ -72,13 +72,9 @@ def get_semantic_classes(table: tlc.Table, column_name: str) -> SemanticClasses:
     :returns: The column's classes.
     :raises ValueError: If the column has fewer than two classes to train on.
     """
-    # The background id lives in the column schema's metadata and void is tagged in the value map; tlc reads both at
-    # its (de)serialization boundary with these helpers, which it does not expose publicly.
-    from tlc.data_types.semantic_segmentation import _background_id_from_metadata, _void_id
-
     value_map = table.get_value_map(f"{column_name}.{INSTANCE_PROPERTIES}.{LABEL}") or {}
     void = _void_id(value_map)
-    background = _background_id_from_metadata(table.rows_schema.values[column_name])
+    background = _background_id(table.rows_schema.values[column_name])
 
     class_names = {
         int(class_id): name
@@ -113,6 +109,30 @@ def get_semantic_classes(table: tlc.Table, column_name: str) -> SemanticClasses:
         background=background,
         void=void,
     )
+
+
+# A column's void and background ids are read from its persisted on-disk format: the value map tag 3LC marks the void
+# class with, and the `semantic_segmentation` namespace of the schema metadata 3LC records the background id in. tlc
+# reads them with private helpers (`_void_id`, `_background_id_from_metadata`), whose names are a weaker contract than
+# the format stored tables already carry. A public accessor has been requested upstream.
+
+
+def _void_id(value_map: dict[float, Any]) -> int | None:
+    """The id of the void class tagged in a semantic segmentation column's value map, or None."""
+    from tlc.data_types.semantic_segmentation import TLC_SEMSEG_VOID
+
+    for class_id, element in value_map.items():
+        if getattr(element, "internal_name", None) == TLC_SEMSEG_VOID:
+            return int(class_id)
+    return None
+
+
+def _background_id(schema: tlc.Schema) -> int | None:
+    """The id of the background class recorded in a semantic segmentation column schema's metadata, or None."""
+    metadata = getattr(schema, "metadata", None) or {}
+    namespace = metadata.get("semantic_segmentation") or {}
+    background = namespace.get("background")
+    return None if background is None else int(background)
 
 
 def resolve_semantic_label_column(table: tlc.Table, label_column_name: str | None) -> str:
@@ -174,11 +194,42 @@ def _describe_semantic_candidates(table: tlc.Table) -> str:
             "`SemanticSegmentationSchema`), which is not supported. Store the masks in a "
             "`SemanticSegmentationRleSchema` column, for example with `tlc.Table.from_semantic_segmentation`."
         )
+    instance_columns = _instance_segmentation_columns(table)
+    if instance_columns:
+        return (
+            f"Column '{instance_columns[0]}' holds instance segmentation: one polygon or mask per object instance, "
+            "each with a class. Semantic segmentation needs one class for every pixel of the image, so the integration "
+            "cannot train on it directly. To use this data, either train an instance segmentation model with "
+            "`task='segment'`, or create semantic segmentation tables from the YOLO dataset YAML with "
+            "`create_tables_from_yaml_file(..., task='semantic')` (or by passing `data=` with `task='semantic'`), "
+            "which rasterizes the polygons onto a `background` class as Ultralytics' `SemanticSegmentationTrainer` "
+            "does, or write a table from rasterized masks with `tlc.Table.from_semantic_segmentation`."
+        )
     names = ", ".join(f"'{name}'" for name in columns)
     return (
         "Semantic segmentation needs a `SemanticSegmentationRleSchema` column, as written by "
         f"`tlc.Table.from_semantic_segmentation`. Columns present: {names}."
     )
+
+
+def _instance_segmentation_columns(table: tlc.Table) -> list[str]:
+    """The table's instance segmentation columns.
+
+    TEMP(annotation-helper-semseg): `AnnotationHelper` classifies semantic segmentation columns as
+    `AnnotationType.SEGMENTATION` too, so they are excluded by sample type. Each column is classified on its own with
+    `AnnotationHelper.get`, since `AnnotationHelper.find` raises when a table has several segmentation columns.
+    """
+    from tlc.helpers import AnnotationHelper, AnnotationType
+
+    columns = []
+    for name in table.rows_schema.values:
+        try:
+            annotation = AnnotationHelper.get(table, name)
+        except (KeyError, ValueError):  # not an annotation column
+            continue
+        if annotation.type is AnnotationType.SEGMENTATION and not is_semantic_segmentation_column(table, name):
+            columns.append(name)
+    return columns
 
 
 def check_semantic_table(
@@ -312,45 +363,110 @@ def ultralytics_dataset_from_table(table: tlc.Table, column_name: str) -> str | 
     return None if dataset is None else str(dataset)
 
 
-def uses_dataset_class_weights(ultralytics_dataset: str | None, nc: int) -> bool:
-    """Whether a semantic segmentation table gets class weights in the loss, from the dataset it was created from.
+def _is_cityscapes(ultralytics_dataset: str | None) -> bool:
+    """Whether the stem of an Ultralytics dataset YAML names one Ultralytics has Cityscapes class weights for."""
+    return ultralytics_dataset is not None and ultralytics_dataset.lower() in CITYSCAPES_DATASETS
 
-    Only Cityscapes has them in Ultralytics, for its 19 classes. See `apply_dataset_class_weights`.
 
-    :param ultralytics_dataset: The stem of the Ultralytics dataset YAML the table was created from, or None.
+def check_cityscapes_class_weights(cityscapes_class_weights: bool | None, nc: int) -> None:
+    """Verify that the Cityscapes class weights can be applied when `Settings.cityscapes_class_weights` forces them.
+
+    :param cityscapes_class_weights: The value of `Settings.cityscapes_class_weights`.
     :param nc: The number of training classes.
-    :returns: Whether the loss is weighted.
+    :raises ValueError: If the weights are forced for a number of classes other than Cityscapes' 19.
     """
     from ultralytics.utils.metrics import CITYSCAPES_WEIGHT
 
-    return (
-        ultralytics_dataset is not None
-        and ultralytics_dataset.lower() in CITYSCAPES_DATASETS
-        and nc == len(CITYSCAPES_WEIGHT)
-    )
+    if cityscapes_class_weights is True and nc != len(CITYSCAPES_WEIGHT):
+        msg = (
+            f"`Settings.cityscapes_class_weights=True` forces Ultralytics' Cityscapes class weights, which are for "
+            f"Cityscapes' {len(CITYSCAPES_WEIGHT)} classes, but the tables have {nc} classes to train on. Leave it "
+            "unset (None) to apply them only to tables created from a Cityscapes YAML, or set it to False."
+        )
+        raise ValueError(msg)
 
 
-def apply_dataset_class_weights(loss: SemanticSegmentationLoss, ultralytics_dataset: str | None) -> bool:
+def uses_dataset_class_weights(
+    ultralytics_dataset: str | None, nc: int, cityscapes_class_weights: bool | None = None
+) -> bool:
+    """Whether a semantic segmentation table gets Ultralytics' Cityscapes class weights in the loss.
+
+    Only Cityscapes has class weights in Ultralytics, for its 19 classes. By default they apply to tables created from a
+    Cityscapes YAML with that many classes, as Ultralytics applies them when training through `data=`.
+    `cityscapes_class_weights` (see `Settings.cityscapes_class_weights`) forces them on or off instead. See
+    `apply_dataset_class_weights`.
+
+    :param ultralytics_dataset: The stem of the Ultralytics dataset YAML the table was created from, or None.
+    :param nc: The number of training classes.
+    :param cityscapes_class_weights: The value of `Settings.cityscapes_class_weights`.
+    :returns: Whether the loss is weighted.
+    :raises ValueError: If the weights are forced for a number of classes other than Cityscapes' 19.
+    """
+    from ultralytics.utils.metrics import CITYSCAPES_WEIGHT
+
+    if cityscapes_class_weights is not None:
+        check_cityscapes_class_weights(cityscapes_class_weights, nc)
+        return cityscapes_class_weights
+    return _is_cityscapes(ultralytics_dataset) and nc == len(CITYSCAPES_WEIGHT)
+
+
+def dataset_class_weights_message(
+    ultralytics_dataset: str | None, nc: int, cityscapes_class_weights: bool | None, loss_name: str
+) -> str | None:
+    """Explain whether, and why, a loss is weighted with Ultralytics' Cityscapes class weights, for logging.
+
+    :param ultralytics_dataset: The stem of the Ultralytics dataset YAML the table was created from, or None.
+    :param nc: The number of training classes.
+    :param cityscapes_class_weights: The value of `Settings.cityscapes_class_weights`.
+    :param loss_name: What the loss is, like "the cross-entropy loss".
+    :returns: The message, or None when there is nothing to say: no weights, and none that the setting turned off.
+    """
+    if uses_dataset_class_weights(ultralytics_dataset, nc, cityscapes_class_weights):
+        reason = (
+            "forced by `Settings.cityscapes_class_weights=True`"
+            if cityscapes_class_weights
+            else f"from the table's recorded dataset '{ultralytics_dataset}'"
+        )
+        return f"Weighting {loss_name} with Ultralytics' Cityscapes class weights, {reason}"
+    if cityscapes_class_weights is False and uses_dataset_class_weights(ultralytics_dataset, nc):
+        return (
+            f"Not weighting {loss_name} with Ultralytics' Cityscapes class weights, which the table's recorded dataset "
+            f"'{ultralytics_dataset}' would get, since `Settings.cityscapes_class_weights=False`"
+        )
+    return None
+
+
+def apply_dataset_class_weights(
+    loss: SemanticSegmentationLoss, ultralytics_dataset: str | None, cityscapes_class_weights: bool | None = None
+) -> bool:
     """Weight a semantic segmentation loss's cross-entropy with the class weights of the dataset its table came from.
 
     `SemanticSegmentationLoss` applies Ultralytics' Cityscapes class weights only when `model.args.data` names a
     Cityscapes YAML, which holds when training through `data=`, but neither when training from tables nor on a model
     loaded from a checkpoint, whose `args` is a dict. Deciding from the table's recorded dataset instead weights
-    Cityscapes tables the same in training and in the per-sample `ce_loss` of metrics collection. The weights are
-    registered exactly as Ultralytics does, and a loss Ultralytics already weighted, with these or any other weights,
-    is left as it is.
+    Cityscapes tables the same in training and in the per-sample `ce_loss` of metrics collection.
+    `cityscapes_class_weights` overrides the decision (see `uses_dataset_class_weights`), and turning the weights off
+    also removes them from a loss Ultralytics weighted itself. The weights are registered exactly as Ultralytics does,
+    and a loss Ultralytics weighted with other weights is left as it is.
 
     :param loss: The loss to weight, modified in place.
     :param ultralytics_dataset: The stem of the Ultralytics dataset YAML the table was created from, or None.
+    :param cityscapes_class_weights: The value of `Settings.cityscapes_class_weights`.
     :returns: Whether the loss is weighted with the dataset's class weights, by this call or already by Ultralytics.
+    :raises ValueError: If the weights are forced for a number of classes other than Cityscapes' 19.
     """
     from ultralytics.utils.metrics import CITYSCAPES_WEIGHT
 
+    if cityscapes_class_weights is False:
+        if getattr(loss, "use_cityscapes_weight", False):
+            loss.use_cityscapes_weight = False
+            loss.ce.register_buffer("weight", None, persistent=False)
+        return False
     if getattr(loss, "use_cityscapes_weight", False):
         return True
     if getattr(loss.ce, "weight", None) is not None:  # weighted otherwise, like newer Ultralytics' `cls_pw` weights
         return False
-    if not uses_dataset_class_weights(ultralytics_dataset, loss.nc):
+    if not uses_dataset_class_weights(ultralytics_dataset, loss.nc, cityscapes_class_weights):
         return False
 
     loss.use_cityscapes_weight = True
