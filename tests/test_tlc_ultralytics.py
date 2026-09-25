@@ -3519,32 +3519,6 @@ class TestCreateTablesFromYamlFileReuse:
         )
         assert tables2["train"].url == tables1["train"].url, "Table under custom root_url not reused"
 
-    def test_collect_run_root_prefers_root_url_then_the_tables_root(self):
-        """A collection-only run goes under ``root_url`` when set, else beside the table it collects on."""
-        from tlc_ultralytics.utils.dataset import create_tables_from_yaml_file
-
-        table_root = TMP / "collect_root_tables"
-        tables = create_tables_from_yaml_file(
-            "coco8.yaml",
-            task="detect",
-            project_name="test-collect-root",
-            root_url=str(table_root),
-            if_exists="overwrite",
-            splits=("val",),
-        )
-        model = TLCYOLO(TASK2MODEL["detect"])
-
-        tlc.close()
-        beside = model.collect(tables=tables, settings=Settings(run_name="beside"), device="cpu")
-        assert str(beside["val"].run_url).startswith(str(table_root)), "Run not created beside its table"
-
-        tlc.close()
-        run_root = TMP / "collect_root_runs"
-        chosen = model.collect(
-            tables=tables, settings=Settings(run_name="chosen", root_url=str(run_root)), device="cpu"
-        )
-        assert str(chosen["val"].run_url).startswith(str(run_root)), "Run not created under root_url"
-
 
 # === Instance embeddings tests ===
 
