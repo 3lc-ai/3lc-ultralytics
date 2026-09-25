@@ -2176,6 +2176,14 @@ def test_absolute_segmentation_polygons() -> None:
     assert results, "Training should succeed"
 
 
+def _decode_rles(rles):
+    """Decode COCO RLEs to a `(H, W, N)` uint8 tensor."""
+    import pycocotools.mask as mask_utils
+    import torch
+
+    return torch.from_numpy(np.ascontiguousarray(mask_utils.decode(rles)))
+
+
 def test_segment_masks_built_only_for_filtered_predictions(monkeypatch) -> None:
     # Masks must be generated for the filtered predictions only, at the original image resolution, and stay
     # index-aligned with the other per-instance columns.
@@ -2227,7 +2235,7 @@ def test_segment_masks_built_only_for_filtered_predictions(monkeypatch) -> None:
         )[0]
         .byte()
         .permute(1, 2, 0)
-    )  # (H, W, N), the layout the mask builder produces
+    )  # (H, W, N), the layout the RLEs decode to
 
     processed_instances = []
     real_process_mask_native = ops.process_mask_native
@@ -2244,19 +2252,20 @@ def test_segment_masks_built_only_for_filtered_predictions(monkeypatch) -> None:
     assert sum(processed_instances) == 4, f"Expected masks for the four filtered predictions, got {processed_instances}"
     assert max(processed_instances) <= validator._mask_chunk_instances, "Mask generation was not chunked"
 
-    # `(H, W, N)`: the instance axis goes last, so `SegmentationMasks` stores the array without transposing it.
-    assert scaled["masks"].shape == (*ori_shape, 4), "Masks must be (H, W, N) at the original image resolution"
-    assert scaled["masks"].dtype == torch.uint8
-    assert scaled["masks"].is_contiguous(), "A non-contiguous array would be copied again on the way into 3LC"
-    assert torch.equal(scaled["masks"], reference), "Chunked masks differ from the unchunked reference"
+    # The masks arrive RLE-encoded, one COCO RLE per instance at the original image resolution.
+    assert scaled["masks"].shape[1:] == (16, 16), "Only Ultralytics' prototype-resolution masks may stay dense"
+    assert all(rle["size"] == list(ori_shape) for rle in scaled["rles"]), "RLEs must be at the original resolution"
+    masks = _decode_rles(scaled["rles"])
+    assert masks.shape == (*ori_shape, 4)
+    assert torch.equal(masks, reference), "Chunked masks differ from the unchunked reference"
 
     # Per-instance columns stay aligned: one mask per confidence/class, in the same order.
-    assert len(scaled["conf"]) == len(scaled["cls"]) == scaled["masks"].shape[2]
+    assert len(scaled["conf"]) == len(scaled["cls"]) == len(scaled["rles"])
     assert torch.equal(scaled["conf"], conf[kept])
 
     # Every mask survives the crop to its own box, which by construction (see the stripes above) only happens if
     # the coefficients PREDICTION_INDEX selected belong to the same instances as the boxes they were cropped with.
-    for mask, box in zip(scaled["masks"].permute(2, 0, 1), scaled["bboxes"], strict=True):
+    for mask, box in zip(masks.permute(2, 0, 1), scaled["bboxes"], strict=True):
         rows, cols = torch.nonzero(mask, as_tuple=True)
         assert rows.numel() > 0, "Mask is empty, so its coefficients do not belong to the box it was cropped with"
         x0, y0, x1, y1 = box.tolist()
@@ -2272,7 +2281,52 @@ def test_segment_masks_built_only_for_filtered_predictions(monkeypatch) -> None:
     rescaled = validator._scale_filtered_pred(0, filtered, pbatch)
 
     assert processed_instances == [2, 2], f"Expected chunks sized by the pixel budget, got {processed_instances}"
-    assert torch.equal(rescaled["masks"], reference), "Pixel-budget chunks differ from the unchunked reference"
+    assert torch.equal(_decode_rles(rescaled["rles"]), reference), (
+        "Pixel-budget chunks differ from the unchunked reference"
+    )
+
+
+def test_segment_rles_on_mps_match_pycocotools() -> None:
+    # `_rles_at_original_resolution` must copy each chunk to host memory before handing it to pycocotools on any
+    # non-CUDA accelerator, not just CPU: an MPS tensor raises on `.numpy()` without an explicit `.cpu()` first.
+    import torch
+
+    if not torch.backends.mps.is_available():
+        pytest.skip("Requires an MPS device")
+
+    from tlc.helpers import SegmentationHelper
+    from ultralytics.utils import ops
+
+    from tlc_ultralytics.segment.validator import TLCSegmentationValidator
+
+    device = torch.device("mps")
+    generator = torch.Generator(device=device).manual_seed(0)
+
+    imgsz = [64, 64]  # model input size, four times the prototype resolution below
+    ori_shape = (50, 80)
+    num_instances = 6
+
+    proto = torch.rand((32, 16, 16), generator=generator, device=device)
+    coefficients = torch.rand((num_instances, 32), generator=generator, device=device)
+    bboxes = torch.tensor([[8.0 * j, 14.0, 8.0 * j + 8.0, 44.0] for j in range(num_instances)], device=device)
+    pbatch = {"ori_shape": ori_shape, "ratio_pad": None}
+
+    validator = TLCSegmentationValidator.__new__(TLCSegmentationValidator)
+    validator._mask_imgsz = imgsz
+    validator._mask_chunk_instances = 2  # force several chunks
+
+    rles = validator._rles_at_original_resolution(proto, coefficients, bboxes, pbatch)
+    assert len(rles) == num_instances
+
+    # Reference: the same masks, built in one go and encoded from MPS too - masks built from identical inputs
+    # differ slightly across devices, so a CPU-built reference would not be a fair comparison.
+    reference_native = ops.process_mask_native(proto, coefficients, bboxes, shape=imgsz)
+    reference_scaled = ops.scale_masks(reference_native[None], ori_shape, ratio_pad=None)[0]
+    reference = reference_scaled.byte().permute(1, 2, 0).cpu().numpy()  # (H, W, N)
+    reference_rles = SegmentationHelper.rles_from_masks(reference)
+
+    for rle, reference_rle in zip(rles, reference_rles, strict=True):
+        assert rle["counts"] == reference_rle["counts"], "Chunked MPS encoding differs from the unchunked reference"
 
 
 def test_segment_postprocess_stashes_mask_sources(monkeypatch) -> None:
@@ -2340,7 +2394,10 @@ def test_segment_postprocess_stashes_mask_sources(monkeypatch) -> None:
 
 def test_segment_annotation_masks_at_original_resolution(monkeypatch) -> None:
     # End-to-end counterpart of the unit test above: every segmentation annotation written during a real
-    # collection pass carries one mask per written instance, at the original image resolution.
+    # collection pass carries one mask per written instance, at the original image resolution, and reaches the
+    # metrics writer already RLE-encoded.
+    from tlc.constants import MASKS, RLES
+
     from tlc_ultralytics.engine.validator import PREDICTION_INDEX
     from tlc_ultralytics.segment.validator import TLCSegmentationValidator
 
@@ -2349,15 +2406,11 @@ def test_segment_annotation_masks_at_original_resolution(monkeypatch) -> None:
 
     def recording_build_annotation(self, scaled, mapped_classes, h, w):
         assert PREDICTION_INDEX not in scaled, "The prediction index is bookkeeping and must not reach annotations"
-        recorded.append((tuple(scaled["masks"].shape), (int(h), int(w)), scaled["conf"].tolist(), mapped_classes))
+        sizes = [tuple(rle["size"]) for rle in scaled["rles"]]
+        recorded.append((sizes, (int(h), int(w)), scaled["conf"].tolist(), mapped_classes))
         annotation = build_annotation(self, scaled, mapped_classes, h, w)
-
-        # The masks are built in SegmentationMasks' own (H, W, N) layout, so it stores the array as it arrives.
-        # Handing it Ultralytics-native (N, H, W) would transpose into a second full-size buffer instead, which
-        # doubles the peak of the image being built — at original resolution that is hundreds of MB on 4K inputs.
-        assert np.shares_memory(annotation.masks, scaled["masks"].numpy()), (
-            "SegmentationMasks copied the mask array; it should store the (H, W, N) buffer as given"
-        )
+        assert MASKS not in annotation, "Annotations must be in row form, without dense masks"
+        assert len(annotation[RLES]) == len(mapped_classes)
         return annotation
 
     monkeypatch.setattr(TLCSegmentationValidator, "_build_annotation", recording_build_annotation)
@@ -2371,12 +2424,52 @@ def test_segment_annotation_masks_at_original_resolution(monkeypatch) -> None:
     model.collect(data=TASK2DATASET["segment"], splits=("val",), settings=settings, device="cpu", workers=0)
 
     assert recorded, "Expected at least one image with predictions above the confidence threshold"
-    for mask_shape, ori_shape, confidences, labels in recorded:
-        mask_h, mask_w, num_masks = mask_shape  # (H, W, N), handed to SegmentationMasks as "hwn"
-        assert (mask_h, mask_w) == ori_shape, f"Masks at {(mask_h, mask_w)}, expected original shape {ori_shape}"
-        assert num_masks == len(confidences) == len(labels), "One mask per written instance"
-        assert num_masks <= settings.max_det
+    for sizes, ori_shape, confidences, labels in recorded:
+        assert all(size == ori_shape for size in sizes), f"Masks at {set(sizes)}, expected original shape {ori_shape}"
+        assert len(sizes) == len(confidences) == len(labels), "One mask per written instance"
+        assert len(sizes) <= settings.max_det
         assert all(confidence >= settings.conf_thres for confidence in confidences)
+
+
+def test_segment_row_form_annotation_matches_tlc_encoding() -> None:
+    # The segmentation validator hands the metrics writer annotations in row form, with masks it RLE-encoded
+    # itself. That row must be exactly what 3LC produces from the same dense masks, and the writer must store it
+    # unchanged next to sample-form values and read it back as the same masks.
+    import torch
+    from tlc.data_types import SegmentationMasks
+    from tlc.helpers import SegmentationHelper
+    from tlc.schemas import ConfidenceSchema
+
+    from tlc_ultralytics.segment.validator import TLCSegmentationValidator
+
+    h, w = 30, 40
+    rng = np.random.default_rng(0)
+    dense = np.asfortranarray((rng.random((h, w, 3)) > 0.6).astype(np.uint8))  # (H, W, N)
+    labels = [2, 0, 1]
+    conf = torch.tensor([0.9, 0.45, 0.3])
+    sample = SegmentationMasks(
+        image_height=h, image_width=w, masks=dense, mask_format="hwn", labels=labels, confidences=conf.tolist()
+    )
+
+    validator = TLCSegmentationValidator.__new__(TLCSegmentationValidator)
+    scaled = {"rles": SegmentationHelper.rles_from_masks(dense), "conf": conf}
+    row = validator._build_annotation(scaled, labels, h, w)
+
+    schema = SegmentationMasks.schema(
+        classes={0: "a", 1: "b", 2: "c"}, per_instance_schemas={"confidence": ConfidenceSchema(writable=False)}
+    )
+    assert row == schema.to_row(sample), "The row form differs from what 3LC encodes from the dense masks"
+
+    run = tlc.init(project_name="test_segment_row_form", run_name="test_segment_row_form")
+    writer = tlc.MetricsTableWriter(run_url=run.url, foreign_table_url=run.url, schema={"seg": schema})
+    writer.add_batch({"example_id": [0, 1], "seg": [row, sample]})
+    table = writer.finalize()
+
+    for i in range(2):
+        written = table[i]["seg"]
+        assert isinstance(written, SegmentationMasks)
+        assert np.array_equal(written.masks, dense), f"Row {i} does not read back as the original masks"
+        assert written.labels.tolist() == labels
 
 
 @pytest.mark.parametrize("task", ["detect", "pose"])
