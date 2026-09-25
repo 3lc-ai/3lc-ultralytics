@@ -134,6 +134,7 @@ class TLCTrainerMixin(BaseTrainer):
             project_name=project_name,
             description=description,
             run_name=self._settings.run_name,
+            root_url=self._settings.root_url,
         )
 
         LOGGER.info(f"{TLC_COLORSTR}Created run named '{self._run.url.parts[-1]}' in project {self._run.project_name}.")
@@ -203,6 +204,7 @@ class TLCTrainerMixin(BaseTrainer):
             self._settings.image_column_name,
             self._settings.label_column_name,
             project_name=self._settings.project_name,
+            root_url=self._settings.root_url,
             splits=("train", "val"),
             task=self.args.task,
             settings=self._settings,
@@ -214,6 +216,7 @@ class TLCTrainerMixin(BaseTrainer):
                 self._settings.image_column_name,
                 self._settings.label_column_name,
                 project_name=self._settings.project_name,
+                root_url=self._settings.root_url,
                 splits=("test",),
                 task=self.args.task,
                 settings=self._settings,
