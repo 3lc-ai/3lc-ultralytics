@@ -28,6 +28,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 - Reduce memory usage when entering reduced embeddings into metrics tables, avoiding redundant copies of metrics.
 
+- The image cache is now invalidated whenever an image file changes on disk - appears, disappears, or changes size - matching ultralytics' own dataset cache. Previously, images that were missing or corrupt when a Table was first used, for example because an image URL alias pointed at an unavailable location, stayed cached as such at the same image paths until the `yolo_*.json` cache file next to it was deleted, even after the underlying files were fixed. Missing images are still reported separately from corrupt ones, with a dedicated error when all of a Table's images are missing.
+
 ## [0.4.0] - 2026-08-07
 
 ### Added

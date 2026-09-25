@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from multiprocessing.pool import ThreadPool
 from typing import TYPE_CHECKING, Any
 
 import tlc
 from tlc.helpers import ImageHelper
-from ultralytics.data.utils import verify_image
+from ultralytics.data.utils import get_hash, verify_image
 from ultralytics.utils import LOGGER, NUM_THREADS, TQDM, colorstr
 
 if TYPE_CHECKING:
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
 # Responsible for any generic 3LC dataset handling, such as scanning, caching and adding example ids to each sample
 # Assume there is an attribute self.table that is a tlc.Table
 class TLCDatasetMixin:
+    _CACHE_VERSION = 2
     _warned_missing_image_dimensions = False
 
     _table: tlc.Table | None = None
@@ -155,34 +157,55 @@ class TLCDatasetMixin:
         """
         return table_url / f"yolo_{cache_key}.json"
 
-    def _load_cached_example_ids(self, cache_url: tlc.Url) -> list[int] | None:
-        """Load the cached corrupt example ids from the cache file.
+    def _load_cached_example_ids(
+        self, cache_url: tlc.Url, expected_hash: str, num_images: int
+    ) -> tuple[list[int], list[int]] | None:
+        """Load the cached corrupt and missing example ids from the cache file.
 
-        :param cache_url: The path to the cache file
-        :return: A list of corrupt example ids, or None if cache is invalid
+        The cache is invalidated, mirroring `ultralytics.data.utils.get_hash`, whenever any image file changes on
+        disk: `expected_hash` is a hash of the image paths and the sum of their file sizes (a missing file
+        contributes 0), so an image appearing, disappearing, or being replaced with a differently-sized file all
+        change the hash and trigger a full rescan.
+
+        :param cache_url: The path to the cache file.
+        :param expected_hash: The hash of the current image paths and file sizes, compared against the cache.
+        :param num_images: The number of images in the table, used to validate the cached example ids.
+        :return: `(corrupt_example_ids, missing_example_ids)`, or None if the cache is invalid or stale.
         """
         try:
             cache_data = json.loads(cache_url.read_text())
 
             # Check cache version
-            if cache_data.get("version") != 1:
+            if cache_data.get("version") != self._CACHE_VERSION:
                 LOGGER.info("Cache version mismatch, regenerating cache.")
                 return None
 
-            if "corrupt_example_ids" not in cache_data:
-                LOGGER.warning("Cache file missing corrupt_example_ids field, regenerating cache.")
+            required_fields = ("hash", "corrupt_example_ids", "missing_example_ids")
+            if any(field not in cache_data for field in required_fields):
+                LOGGER.warning("Cache file is missing image-status fields, regenerating cache.")
                 return None
 
-            # Get corrupt example IDs
+            if cache_data["hash"] != expected_hash:
+                LOGGER.info("Cache is stale because image files changed, regenerating cache.")
+                return None
+
             corrupt_example_ids = cache_data["corrupt_example_ids"]
-            return corrupt_example_ids
+            missing_example_ids = cache_data["missing_example_ids"]
+            all_example_ids = corrupt_example_ids + missing_example_ids
+            valid_range = range(num_images)
+            if not all(isinstance(example_id, int) and example_id in valid_range for example_id in all_example_ids):
+                LOGGER.warning("Cache file has invalid image-status fields, regenerating cache.")
+                return None
+            return corrupt_example_ids, missing_example_ids
 
         except (json.JSONDecodeError, KeyError, ValueError, OSError) as e:
             LOGGER.warning(f"Failed to load cache: {e}, regenerating cache.")
             return None
 
-    def _save_cached_example_ids(self, cache_url: tlc.Url, corrupt_example_ids: list[int]):
-        """Save the corrupt example ids to the cache file.
+    def _save_cached_example_ids(
+        self, cache_url: tlc.Url, image_hash: str, corrupt_example_ids: list[int], missing_example_ids: list[int]
+    ) -> None:
+        """Save the image hash and the corrupt and missing example ids to the cache file.
 
         Caching is a pure optimization: the corrupt example ids are already computed in-memory and
         used regardless. If the cache cannot be written (e.g. a parent path component is a file,
@@ -190,11 +213,15 @@ class TLCDatasetMixin:
         without a persisted cache rather than aborting dataset construction.
 
         :param cache_url: The URL to the cache file
+        :param image_hash: The hash of the image paths and file sizes this cache was computed from
         :param corrupt_example_ids: A list of corrupt example ids
+        :param missing_example_ids: A list of missing example ids
         """
         content = {
-            "version": 1,
+            "version": self._CACHE_VERSION,
+            "hash": image_hash,
             "corrupt_example_ids": corrupt_example_ids,
+            "missing_example_ids": missing_example_ids,
         }
 
         try:
@@ -208,7 +235,10 @@ class TLCDatasetMixin:
 
     def _get_rows_from_table(self) -> tuple[list[str], list[Any]]:
         """Get the rows from the table and return a list of example ids, excluding zero weight and corrupt images.
-        Rely on the cache to avoid recomputing example ids if possible.
+
+        Rely on the cache to avoid recomputing example ids if possible. The cache is keyed on a hash of the image
+        paths and file sizes (see `_load_cached_example_ids`), so any change to the image files on disk - an image
+        appearing, disappearing, or being replaced - invalidates the cache and triggers a full rescan.
 
         :return: A list of image paths and labels.
         """
@@ -219,26 +249,37 @@ class TLCDatasetMixin:
 
         cache_key = self._get_cache_key(image_paths)
         cache_path = self._get_cache_path(self.table.url, cache_key)
+        image_hash = get_hash(image_paths)
 
-        corrupt_example_ids = self._load_cached_example_ids(cache_path) if cache_path.exists() else None
+        cached_example_ids = (
+            self._load_cached_example_ids(cache_path, image_hash, len(image_paths)) if cache_path.exists() else None
+        )
 
-        if corrupt_example_ids is not None:
+        if cached_example_ids is not None:
+            corrupt_example_ids, missing_example_ids = cached_example_ids
             LOGGER.info(f"{colorstr(self.prefix)}: Loaded cached images.")
+        else:
+            corrupt_example_ids, missing_example_ids = self._get_invalid_example_ids_from_table(image_paths)
+            self._save_cached_example_ids(cache_path, image_hash, corrupt_example_ids, missing_example_ids)
 
-        if corrupt_example_ids is None:
-            corrupt_example_ids = self._get_corrupt_example_ids_from_table(image_paths)
-            self._save_cached_example_ids(cache_path, corrupt_example_ids)
+        if len(missing_example_ids) == len(image_paths):
+            msg = (
+                f"All images in the Table with URL {self.table.url.to_str()} are missing, can't use it. "
+                "This often means that an image URL alias is incorrect or points to an unavailable location."
+            )
+            raise ValueError(msg)
 
         if len(corrupt_example_ids) == len(image_paths):
             msg = f"All images in the Table with URL {self.table.url.to_str()} are corrupt, can't use it."
             raise ValueError(msg)
 
-        # Filter out corrupt and zero-weight example IDs
-        example_ids = list(self._filter_example_ids(image_paths, corrupt_example_ids))
+        # Filter out corrupt, missing, and zero-weight example IDs
+        invalid_example_ids = corrupt_example_ids + missing_example_ids
+        example_ids = list(self._filter_example_ids(image_paths, invalid_example_ids))
 
         if not example_ids:
             msg = (
-                "No valid images found after filtering corrupt and zero-weight images in the Table with URL "
+                "No valid images found after filtering corrupt, missing, and zero-weight images in the Table with URL "
                 f"{self.table.url.to_str()}. Please check the Table and ensure it contains valid images, or provide a "
                 "Table with valid images."
             )
@@ -254,21 +295,21 @@ class TLCDatasetMixin:
 
         return im_files, labels
 
-    def _filter_example_ids(self, image_paths: list[str], corrupt_example_ids: list[int]) -> Iterator[int]:
-        """Filter example IDs to exclude corrupt and zero-weight images.
+    def _filter_example_ids(self, image_paths: list[str], invalid_example_ids: list[int]) -> Iterator[int]:
+        """Filter example IDs to exclude corrupt, missing, and zero-weight images.
 
         :param image_paths: List of absolute image paths
-        :param corrupt_example_ids: List of corrupt example IDs
+        :param invalid_example_ids: List of corrupt or missing example IDs
         :yield: Valid example IDs
         """
-        corrupt_set = set(corrupt_example_ids)
+        invalid_set = set(invalid_example_ids)
         weight_column_name = self.table.weights_column_name if self._exclude_zero else None
 
         excluded_count = 0
 
         for example_id in range(len(image_paths)):
-            # Skip corrupt images
-            if example_id in corrupt_set:
+            # Skip corrupt or missing images
+            if example_id in invalid_set:
                 continue
 
             # Skip zero-weight images if exclusion is enabled
@@ -286,55 +327,70 @@ class TLCDatasetMixin:
                 "zero-weight rows."
             )
 
-    def _get_corrupt_example_ids_from_table(self, image_paths: list[str]) -> list[int]:
-        """Get the corrupt example ids from the table by scanning all images.
+    def _get_invalid_example_ids_from_table(self, image_paths: list[str]) -> tuple[list[int], list[int]]:
+        """Get corrupt and missing example ids from the table by scanning all images.
 
         :param image_paths: List of absolute image paths
-        :return: A list of corrupt example ids
+        :return: `(corrupt_example_ids, missing_example_ids)`
         """
-        corrupt_example_ids = []
-        verified_count, corrupt_count, msgs = 0, 0, []
+        corrupt_example_ids, missing_example_ids = [], []
+        verified_count, corrupt_count, missing_count = 0, 0, 0
+        corrupt_msgs, missing_msgs = [], []
         colored_prefix = colorstr(self.prefix + ":")
         desc = f"{colored_prefix} Preparing data from {self.table.url.to_str()}"
 
-        image_iterator = (((im_file, None), "") for im_file in image_paths)
+        def verify_image_path(im_file: str) -> tuple[bool, bool, bool, str]:
+            try:
+                os.stat(im_file)
+            except FileNotFoundError:
+                return False, False, True, f"{im_file}: missing image file"
+            except OSError:
+                # Existing-but-unreadable files belong in the corrupt bucket. verify_image supplies its cause.
+                pass
+
+            _, verified, corrupt, msg = verify_image(((im_file, None), ""))
+            return verified, corrupt, False, msg
 
         with ThreadPool(NUM_THREADS) as pool:
-            results = pool.imap(func=verify_image, iterable=image_iterator)
+            results = pool.imap(func=verify_image_path, iterable=image_paths)
             iterator = enumerate(results)
             pbar = TQDM(iterator, desc=desc, total=len(image_paths))
 
-            for example_id, (_, verified, corrupt, msg) in pbar:
+            for example_id, (verified, corrupt, missing, msg) in pbar:
                 if verified:
                     verified_count += 1
                 elif corrupt:
                     corrupt_example_ids.append(example_id)
                     corrupt_count += 1
+                elif missing:
+                    missing_example_ids.append(example_id)
+                    missing_count += 1
 
                 if msg:
-                    msgs.append(msg)
+                    (missing_msgs if missing else corrupt_msgs).append(msg)
 
-                pbar.desc = f"{desc} {verified_count} images, {corrupt_count} corrupt"
+                pbar.desc = f"{desc} {verified_count} images, {missing_count} missing, {corrupt_count} corrupt"
 
             pbar.close()
 
-        if msgs:
-            # Only take first 10 messages if there are more
-            truncated = len(msgs) > 10
-            msgs_to_show = msgs[:10]
+        self._log_invalid_images(colored_prefix, "missing", missing_count, len(image_paths), missing_msgs)
+        self._log_invalid_images(colored_prefix, "corrupt", corrupt_count, len(image_paths), corrupt_msgs)
 
-            # Create the message string with truncation notice if needed
-            msgs_str = "\n".join(msgs_to_show)
-            if truncated:
-                msgs_str += f"\n... (showing first 10 of {len(msgs)} messages)"
+        return corrupt_example_ids, missing_example_ids
 
-            percentage_corrupt = corrupt_count / len(image_paths) * 100
+    @staticmethod
+    def _log_invalid_images(prefix: str, status: str, count: int, total: int, msgs: list[str]) -> None:
+        """Log one compact warning for missing or corrupt images."""
+        if not msgs:
+            return
 
-            verb = "is" if corrupt_count == 1 else "are"
-            plural = "s" if corrupt_count != 1 else ""
-            LOGGER.warning(
-                f"{colored_prefix} There {verb} {corrupt_count} ({percentage_corrupt:.2f}%) corrupt image{plural}:"
-                f"\n{msgs_str}"
-            )
+        msgs_to_show = msgs[:10]
+        if len(msgs) > len(msgs_to_show):
+            msgs_to_show.append(f"... (showing first 10 of {len(msgs)} messages)")
 
-        return corrupt_example_ids
+        verb = "is" if count == 1 else "are"
+        plural = "" if count == 1 else "s"
+        percentage = count / total * 100
+        LOGGER.warning(
+            f"{prefix} There {verb} {count} ({percentage:.2f}%) {status} image{plural}:\n" + "\n".join(msgs_to_show)
+        )
