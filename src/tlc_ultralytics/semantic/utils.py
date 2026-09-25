@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import tlc
+import torch
 from tlc.constants import INSTANCE_PROPERTIES, LABEL
 from ultralytics.utils import LOGGER
 
@@ -14,9 +16,21 @@ from tlc_ultralytics.utils.dataset import is_semantic_segmentation_column
 
 if TYPE_CHECKING:
     from ultralytics.data.dataset import SemanticDataset
+    from ultralytics.utils.loss import SemanticSegmentationLoss
 
 IGNORE_INDEX = 255
 """The label Ultralytics' semantic segmentation ignores in its loss and metrics, which 3LC's void class maps to."""
+
+METADATA_NAMESPACE = "tlc_ultralytics"
+"""The integration's namespace in a column schema's `metadata`."""
+
+ULTRALYTICS_DATASET_METADATA_KEY = "ultralytics_dataset"
+"""The key, in `METADATA_NAMESPACE`, of the stem of the Ultralytics dataset YAML a semantic segmentation column was
+created from (e.g. `cityscapes8`)."""
+
+CITYSCAPES_DATASETS = frozenset({"cityscapes", "cityscapes8"})
+"""The Ultralytics datasets whose tables get Ultralytics' Cityscapes class weights in the cross-entropy loss, as
+`SemanticSegmentationLoss` gives them when trained through `data=`."""
 
 
 @dataclass(frozen=True)
@@ -189,8 +203,8 @@ def check_semantic_table(
 
 
 class _LazyMasks(Sequence):
-    """The masks of an Ultralytics semantic dataset, loaded one at a time as `tlc.Table.from_semantic_segmentation`
-    writes them, so a split's masks are never all in memory at once."""
+    """The masks of an Ultralytics semantic dataset, loaded one at a time as `create_semantic_split_table` writes them,
+    so a split's masks are never all in memory at once."""
 
     def __init__(self, dataset: SemanticDataset) -> None:
         self._dataset = dataset
@@ -230,6 +244,7 @@ def create_semantic_split_table(
     project_name: str,
     dataset_name: str,
     if_exists: Literal["raise", "reuse", "rename", "overwrite"],
+    ultralytics_dataset: str | None = None,
 ) -> tlc.Table:
     """Create a semantic segmentation table for one split of an Ultralytics semantic dataset.
 
@@ -237,11 +252,18 @@ def create_semantic_split_table(
     `label_mapping`, 1-bit masks and polygon rasterization behave exactly as in Ultralytics, and each mask is written
     at its original resolution in the Ultralytics class indices.
 
+    The table is written like `tlc.Table.from_semantic_segmentation` writes it, with the stem of the dataset YAML
+    recorded in the mask column's schema metadata (see `ultralytics_dataset_from_table`), which that function has no
+    way to take. Mask ids are not validated one by one as it does: the masks come from Ultralytics' own dataset, whose
+    classes are the table's.
+
     :param split_paths: The image directories (or files) of the split.
     :param data_dict: The dataset dict, as returned by `check_det_dataset`.
     :param project_name: The name of the project.
     :param dataset_name: The name of the dataset.
     :param if_exists: What to do if the table already exists.
+    :param ultralytics_dataset: The dataset YAML the split is read from, whose stem is recorded in the table. Nothing is
+        recorded when None.
     :returns: The created table.
     """
     from ultralytics.cfg import get_cfg
@@ -253,17 +275,89 @@ def create_semantic_split_table(
     dataset = build_yolo_dataset(cfg, split_paths, batch=1, data=data_dict, mode="val")
 
     classes, background, void = semantic_classes_from_yaml(data_dict)
-    return tlc.Table.from_semantic_segmentation(
-        images=list(dataset.im_files),
-        masks=_LazyMasks(dataset),
-        classes=classes,
-        background=background,
-        void=void,
+    mask_schema = tlc.schemas.SemanticSegmentationRleSchema(classes=classes, background=background, void=void)
+    if ultralytics_dataset is not None:
+        mask_schema.metadata = {
+            **(mask_schema.metadata or {}),
+            METADATA_NAMESPACE: {ULTRALYTICS_DATASET_METADATA_KEY: Path(ultralytics_dataset).stem},
+        }
+    row_schema = tlc.Schema.from_schema_like({IMAGE_COLUMN_NAME: tlc.schemas.ImageSchema(), "mask": mask_schema})
+    row_schema.add_sample_weight()
+
+    writer = tlc.TableWriter(
+        schema=row_schema,
         project_name=project_name,
         dataset_name=dataset_name,
         table_name="initial",
         if_exists="rename" if if_exists == "reuse" else if_exists,  # "reuse" of an existing table is handled upstream
     )
+    for image, mask in zip(dataset.im_files, _LazyMasks(dataset), strict=True):
+        writer.add_row({IMAGE_COLUMN_NAME: image, "mask": mask})
+    return writer.finalize()
+
+
+def ultralytics_dataset_from_table(table: tlc.Table, column_name: str) -> str | None:
+    """The stem of the Ultralytics dataset YAML a semantic segmentation column was created from, if it records one.
+
+    Tables created with `create_tables_from_yaml_file` record it (see `create_semantic_split_table`); tables written
+    with `tlc.Table.from_semantic_segmentation` or created before it was recorded do not.
+
+    :param table: The table holding the column.
+    :param column_name: The semantic segmentation column.
+    :returns: The dataset YAML's stem, like `cityscapes8`, or None.
+    """
+    metadata = getattr(table.rows_schema.values[column_name], "metadata", None) or {}
+    namespace = metadata.get(METADATA_NAMESPACE) or {}
+    dataset = namespace.get(ULTRALYTICS_DATASET_METADATA_KEY)
+    return None if dataset is None else str(dataset)
+
+
+def uses_dataset_class_weights(ultralytics_dataset: str | None, nc: int) -> bool:
+    """Whether a semantic segmentation table gets class weights in the loss, from the dataset it was created from.
+
+    Only Cityscapes has them in Ultralytics, for its 19 classes. See `apply_dataset_class_weights`.
+
+    :param ultralytics_dataset: The stem of the Ultralytics dataset YAML the table was created from, or None.
+    :param nc: The number of training classes.
+    :returns: Whether the loss is weighted.
+    """
+    from ultralytics.utils.metrics import CITYSCAPES_WEIGHT
+
+    return (
+        ultralytics_dataset is not None
+        and ultralytics_dataset.lower() in CITYSCAPES_DATASETS
+        and nc == len(CITYSCAPES_WEIGHT)
+    )
+
+
+def apply_dataset_class_weights(loss: SemanticSegmentationLoss, ultralytics_dataset: str | None) -> bool:
+    """Weight a semantic segmentation loss's cross-entropy with the class weights of the dataset its table came from.
+
+    `SemanticSegmentationLoss` applies Ultralytics' Cityscapes class weights only when `model.args.data` names a
+    Cityscapes YAML, which holds when training through `data=`, but neither when training from tables nor on a model
+    loaded from a checkpoint, whose `args` is a dict. Deciding from the table's recorded dataset instead weights
+    Cityscapes tables the same in training and in the per-sample `ce_loss` of metrics collection. The weights are
+    registered exactly as Ultralytics does, and a loss Ultralytics already weighted, with these or any other weights,
+    is left as it is.
+
+    :param loss: The loss to weight, modified in place.
+    :param ultralytics_dataset: The stem of the Ultralytics dataset YAML the table was created from, or None.
+    :returns: Whether the loss is weighted with the dataset's class weights, by this call or already by Ultralytics.
+    """
+    from ultralytics.utils.metrics import CITYSCAPES_WEIGHT
+
+    if getattr(loss, "use_cityscapes_weight", False):
+        return True
+    if getattr(loss.ce, "weight", None) is not None:  # weighted otherwise, like newer Ultralytics' `cls_pw` weights
+        return False
+    if not uses_dataset_class_weights(ultralytics_dataset, loss.nc):
+        return False
+
+    loss.use_cityscapes_weight = True
+    # Non-persistent, as in Ultralytics: the weight is a constant, not to be serialized into checkpoints.
+    weight = torch.from_numpy(CITYSCAPES_WEIGHT).to(device=loss.device, dtype=loss.dtype)
+    loss.ce.register_buffer("weight", weight, persistent=False)
+    return True
 
 
 def decode_semantic_mask(

@@ -259,6 +259,16 @@ class TLCValidatorMixin(BaseValidator):
         """Build a dataset from a table"""
         raise NotImplementedError("Subclasses must implement this method.")
 
+    def get_dataset(self):
+        """Return the 3LC data dict as is.
+
+        The data dict is built from the tables by `check_tlc_dataset` and must not be post-processed by task validators,
+        such as `SemanticSegmentationValidator.get_dataset`, which adds a polygon background class to it. Ultralytics
+        currently resolves the dataset through `check_det_dataset`, which `__call__` bypasses, but future versions may
+        route dataset resolution through `get_dataset` instead.
+        """
+        return self.data
+
     def _verify_model_data_compatibility(self, names):
         """Verify that the model being validated is compatible with the data"""
         raise NotImplementedError("Subclasses must implement this method.")

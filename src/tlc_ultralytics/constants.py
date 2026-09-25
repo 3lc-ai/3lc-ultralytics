@@ -7,7 +7,7 @@ CONFIDENCE = "confidence"
 PREDICTED_BOUNDING_BOXES = "bbs_predicted"
 PREDICTED_SEGMENTATIONS = "segmentations_predicted"
 PREDICTED_KEYPOINTS_2D = "keypoints_2d_predicted"
-PREDICTED_SEMANTIC_SEGMENTATION = "predicted_segmentation"
+PREDICTED_SEMANTIC_SEGMENTATION = "mask_predicted"
 
 # Instance embeddings
 PREDICTED_INSTANCE_EMBEDDING = "predicted_instance_embedding"

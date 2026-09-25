@@ -59,6 +59,7 @@ from tlc_ultralytics.constants import (
     POSE_LABEL_COLUMN_NAME,
     PRECISION,
     PREDICTED_SEGMENTATIONS,
+    PREDICTED_SEMANTIC_SEGMENTATION,
     RECALL,
     SEGMENTATION_LABEL_COLUMN_NAME,
     TRAINING_PHASE,
@@ -126,7 +127,7 @@ TASK2PREDICTED_LABEL_COLUMN_NAME = {
     "segment": "segmentations_predicted.instance_properties.label",
     "pose": "keypoints_2d_predicted",
     "obb": "oriented_bbs_2d_predicted",
-    "semantic": "predicted_segmentation",
+    "semantic": PREDICTED_SEMANTIC_SEGMENTATION,
 }
 TASK2TRAINER = {
     "detect": TLCDetectionTrainer,
@@ -4461,7 +4462,7 @@ def test_semantic_collect() -> None:
     exact = Version(ultralytics.__version__) >= Version("8.4.57")
     predictor = UltralyticsYOLO(TASK2MODEL["semantic"])
     for row in metrics_table:
-        prediction = row["predicted_segmentation"].mask
+        prediction = row[PREDICTED_SEMANTIC_SEGMENTATION].mask
         image = input_table.table_rows[row["example_id"]]["image"]
         expected = predictor.predict(image, imgsz=SEMANTIC_OVERRIDES["imgsz"], device="cpu", verbose=False)[0]
         agreement = (prediction == expected.semantic_mask.data.cpu().numpy()).mean()
@@ -4511,7 +4512,7 @@ def test_semantic_training() -> None:
     # Train and val after each of the two epochs and after training
     assert len(metrics_tables["default_stream"]) == len(metrics_tables[PER_CLASS_METRICS_STREAM_NAME]) == 6
     metrics_df = pd.concat([t.to_pandas() for t in metrics_tables["default_stream"]], ignore_index=True)
-    assert {"predicted_segmentation", "loss", EPOCH, TRAINING_PHASE} <= set(metrics_df.columns)
+    assert {PREDICTED_SEMANTIC_SEGMENTATION, "loss", EPOCH, TRAINING_PHASE} <= set(metrics_df.columns)
 
 
 def test_semantic_prediction_inverts_letterbox_exactly() -> None:
@@ -4587,3 +4588,242 @@ def test_semantic_and_segment_tables_from_same_yaml() -> None:
     data = check_tlc_dataset("", {"val": semantic}, "image", None, task="semantic", splits=("val",))
     assert data["semantic_background"] == 80 and data["names"][80] == "background"
     check_seg_table(segment, "image", None)  # the instance segmentation table is still its own
+
+
+def test_semantic_all_void_image_losses() -> None:
+    # An image with no pixel other than void has nothing to compute a loss over. Its losses are written as 0 rather than
+    # the NaN Ultralytics' cross-entropy gives it, while other images' losses are unaffected.
+    names = YOLO(TASK2MODEL["semantic"]).names
+    rng = np.random.default_rng(0)
+    masks = [rng.integers(0, len(names), size=(48, 64)), np.full((48, 64), 255)]
+    table = _semantic_table("semantic_all_void", masks, classes={**names, 255: "ignore"}, void=255)
+
+    settings = Settings(
+        project_name="test_semantic_all_void_image_losses",
+        run_name="test_semantic_all_void_image_losses",
+        collect_loss=True,
+    )
+    TLCYOLO(TASK2MODEL["semantic"]).collect(
+        tables={"val": table}, settings=settings, **{**SEMANTIC_OVERRIDES, "imgsz": 64}
+    )
+
+    run = _get_run_from_settings(settings)
+    (metrics_table,) = get_metrics_tables_from_run(run)["default_stream"]
+    rows = {row[EXAMPLE_ID]: row for row in metrics_table.table_rows}
+    assert rows[1]["ce_loss"] == rows[1]["dice_loss"] == rows[1]["loss"] == 0.0, "An all-void image has no loss"
+    assert np.isfinite(rows[0]["ce_loss"]) and rows[0]["ce_loss"] > 0
+    assert rows[0]["loss"] == pytest.approx(rows[0]["ce_loss"] + rows[0]["dice_loss"], rel=1e-5)
+
+
+def test_semantic_training_from_tables() -> None:
+    # Training from tables alone, with plots enabled, collects metrics and reports the tables' classes.
+    from tlc_ultralytics.utils.dataset import create_tables_from_yaml_file
+
+    project_name = "test_semantic_training_from_tables"
+    tables = create_tables_from_yaml_file(
+        TASK2DATASET["semantic"], task="semantic", project_name=project_name, splits=("train", "val")
+    )
+    settings = Settings(
+        project_name=project_name,
+        run_name="test_semantic_training_from_tables",
+        collection_epoch_start=1,
+        collect_loss=True,
+    )
+    model = TLCYOLO(TASK2MODEL["semantic"])
+    results = model.train(tables=tables, settings=settings, epochs=1, **{**SEMANTIC_OVERRIDES, "imgsz": 64})
+
+    run = _get_run_from_settings(settings)
+    assert run.status == RUN_STATUS_COMPLETED
+    assert "val_mIoU" in run.constants["outputs"][-1]
+    # The label plot is drawn from the table's masks, where Ultralytics would look for mask files and skip it
+    assert (Path(model.trainer.save_dir) / "labels.jpg").exists()
+    # The tables were created from cityscapes8, so training weights the loss as training through `data=` would
+    assert model.trainer.model.criterion.use_cityscapes_weight
+
+    metrics_tables = get_metrics_tables_from_run(run)
+    # Train and val after the epoch and after training
+    assert len(metrics_tables["default_stream"]) == len(metrics_tables[PER_CLASS_METRICS_STREAM_NAME]) == 4
+
+    data = check_tlc_dataset("", tables, "image", None, task="semantic", splits=("train", "val"))
+    assert results.names == data["names"]
+
+
+def test_semantic_polygon_background_end_to_end() -> None:
+    # A polygon dataset's background is trained as a class of its own, but is the fill of the predicted segmentation,
+    # never a layer of it.
+    from tlc.constants import INSTANCE_PROPERTIES
+    from tlc.constants import LABEL as TLC_LABEL
+
+    from tlc_ultralytics.utils.dataset import create_tables_from_yaml_file
+
+    project_name = "test_semantic_polygon_background"
+    tables = create_tables_from_yaml_file(
+        TASK2DATASET["segment"], task="semantic", project_name=project_name, splits=("train", "val")
+    )
+    data = check_tlc_dataset("", tables, "image", None, task="semantic", splits=("train", "val"))
+    assert data["semantic_background"] == 80 and data["names"][80] == "background"
+
+    settings = Settings(
+        project_name=project_name,
+        run_name="test_semantic_polygon_background",
+        collection_epoch_start=1,
+        collection_val_only=True,
+    )
+    TLCYOLO(TASK2MODEL["semantic"]).train(
+        tables=tables, settings=settings, epochs=1, plots=False, **{**SEMANTIC_OVERRIDES, "imgsz": 64}
+    )
+
+    run = _get_run_from_settings(settings)
+    metrics_tables = get_metrics_tables_from_run(run)
+    assert metrics_tables["default_stream"], "No metrics were collected"
+    val_table = tables["val"]
+    num_layers = 0
+    for metrics_table in metrics_tables["default_stream"]:
+        value_map = metrics_table.get_value_map(f"{PREDICTED_SEMANTIC_SEGMENTATION}.{INSTANCE_PROPERTIES}.{TLC_LABEL}")
+        for i, row in enumerate(metrics_table.table_rows):
+            labels = row[PREDICTED_SEMANTIC_SEGMENTATION][INSTANCE_PROPERTIES][TLC_LABEL]
+            num_layers += len(labels)
+            assert 80 not in labels, "The background is the fill, not a layer"
+            assert all(label in value_map for label in labels)
+
+            image = tlc.Url(val_table.table_rows[row[EXAMPLE_ID]]["image"]).to_absolute().to_str()
+            width, height = Image.open(image).size
+            assert metrics_table[i][PREDICTED_SEMANTIC_SEGMENTATION].mask.shape == (height, width)
+    assert num_layers > 0, "Expected some predicted classes besides the background"
+
+    per_class_table = metrics_tables[PER_CLASS_METRICS_STREAM_NAME][-1]
+    assert len(per_class_table) == 82, "One row per class (80 plus the background) plus 'all'"
+
+
+def test_semantic_tables_record_ultralytics_dataset() -> None:
+    # Tables created from an Ultralytics YAML record its stem in the mask column's schema metadata, next to 3LC's own,
+    # and the dataset dict reports it. Tables written directly with 3LC record none.
+    from tlc_ultralytics.semantic.utils import ultralytics_dataset_from_table
+    from tlc_ultralytics.utils.dataset import create_tables_from_yaml_file
+
+    tables = create_tables_from_yaml_file(
+        TASK2DATASET["semantic"], task="semantic", project_name="test_semantic_ultralytics_dataset", splits=("val",)
+    )
+    table = tlc.Table.from_url(tables["val"].url)
+    assert table.rows_schema.values["mask"].metadata["tlc_ultralytics"] == {"ultralytics_dataset": "cityscapes8"}
+    assert ultralytics_dataset_from_table(table, "mask") == "cityscapes8"
+    assert "weight" in table.rows_schema.values, "The table has a sample weight column, like any 3LC table"
+
+    data = check_tlc_dataset("", tables, "image", None, task="semantic", splits=("val",))
+    assert data["ultralytics_dataset"] == "cityscapes8"
+
+    other = _semantic_table("semantic_no_dataset", [np.zeros((16, 16), dtype=np.int32)], classes={0: "a", 1: "b"})
+    assert ultralytics_dataset_from_table(other, "mask") is None
+    data = check_tlc_dataset("", {"val": other}, "image", None, task="semantic", splits=("val",))
+    assert data["ultralytics_dataset"] is None
+
+
+def test_semantic_dataset_class_weights() -> None:
+    # Cityscapes tables weight the cross-entropy with Ultralytics' Cityscapes class weights, registered as Ultralytics
+    # does, whatever `model.args.data` says (a dict without it on a model loaded from a checkpoint). Other datasets,
+    # and models without Cityscapes' 19 classes, stay unweighted.
+    import torch
+    from ultralytics.nn.tasks import SemanticSegmentationModel
+    from ultralytics.utils.loss import SemanticSegmentationLoss
+    from ultralytics.utils.metrics import CITYSCAPES_WEIGHT
+
+    from tlc_ultralytics.semantic.utils import apply_dataset_class_weights
+
+    model = YOLO(TASK2MODEL["semantic"]).model
+    assert len(model.names) == len(CITYSCAPES_WEIGHT)
+
+    loss = SemanticSegmentationLoss(model)
+    assert not loss.use_cityscapes_weight, "Ultralytics does not weight a loaded model's loss"
+    assert not apply_dataset_class_weights(loss, None)
+    assert not apply_dataset_class_weights(loss, "coco8-seg")
+    assert loss.ce.weight is None
+
+    assert apply_dataset_class_weights(loss, "cityscapes8")
+    assert loss.use_cityscapes_weight
+    assert torch.equal(loss.ce.weight, torch.from_numpy(CITYSCAPES_WEIGHT).to(loss.dtype))
+    assert "weight" not in loss.ce.state_dict(), "The weight is not persisted, as in Ultralytics"
+
+    small = SemanticSegmentationModel("yolo26n-sem.yaml", nc=5, verbose=False)
+    small.args = {}
+    small_loss = SemanticSegmentationLoss(small)
+    assert not apply_dataset_class_weights(small_loss, "cityscapes")
+    assert small_loss.ce.weight is None
+
+    # The model's criterion is weighted from the dataset the trainer attaches to it (see `set_model_attributes`)
+    model.tlc_ultralytics_dataset = "cityscapes8"
+    assert torch.equal(model.init_criterion().ce.weight, loss.ce.weight)
+    model.tlc_ultralytics_dataset = None
+    assert model.init_criterion().ce.weight is None
+
+
+def test_semantic_collect_dataset_class_weights(monkeypatch) -> None:
+    # Post-hoc collection on a Cityscapes table computes the per-sample `ce_loss` with the class weights Ultralytics
+    # trains with, although a loaded model's `args` name no dataset.
+    import torch
+    from ultralytics.utils.metrics import CITYSCAPES_WEIGHT
+
+    from tlc_ultralytics.semantic.validator import TLCSemanticSegmentationValidator
+
+    loss_fns = []
+    prepare_loss_fn = TLCSemanticSegmentationValidator._prepare_loss_fn
+
+    def spy(self, model):
+        prepare_loss_fn(self, model)
+        loss_fns.append(self.loss_fn)
+
+    monkeypatch.setattr(TLCSemanticSegmentationValidator, "_prepare_loss_fn", spy)
+
+    settings = Settings(
+        project_name="test_semantic_collect_dataset_class_weights",
+        run_name="test_semantic_collect_dataset_class_weights",
+        collect_loss=True,
+    )
+    with capture_logs() as log_messages:
+        TLCYOLO(TASK2MODEL["semantic"]).collect(
+            data=TASK2DATASET["semantic"], splits=("val",), settings=settings, **{**SEMANTIC_OVERRIDES, "imgsz": 64}
+        )
+
+    (loss_fn,) = loss_fns
+    assert torch.equal(loss_fn.ce.weight.cpu(), torch.from_numpy(CITYSCAPES_WEIGHT).to(loss_fn.dtype))
+    assert sum("Cityscapes class weights" in m for m in log_messages) == 1
+
+    (metrics_table,) = get_metrics_tables_from_run(_get_run_from_settings(settings))["default_stream"]
+    assert all(np.isfinite(row["ce_loss"]) and row["ce_loss"] > 0 for row in metrics_table.table_rows)
+
+
+def test_semantic_accepts_differing_background_name() -> None:
+    # 3LC stores only the background's id, so the tables name it "background" whatever its author called it. A model
+    # whose name for it differs is accepted; every other class must match by name and index.
+    from tlc_ultralytics.semantic.validator import TLCSemanticSegmentationValidator
+
+    names = YOLO(TASK2MODEL["semantic"]).names
+    table = _semantic_table(
+        "semantic_background_name",
+        [np.zeros((16, 16), dtype=np.int32)],
+        classes={**names, 0: "unlabeled"},
+        background=0,
+    )
+    validator = TLCSemanticSegmentationValidator.__new__(TLCSemanticSegmentationValidator)
+    validator.data = check_tlc_dataset("", {"val": table}, "image", None, task="semantic", splits=("val",))
+    assert validator.data["names"][0] == "background" != names[0]
+    validator._verify_model_data_compatibility(names)
+
+    with pytest.raises(ValueError, match="1: model 'renamed', data"):
+        validator._verify_model_data_compatibility({**names, 1: "renamed"})
+    with pytest.raises(ValueError, match="trained on 18 classes"):
+        validator._verify_model_data_compatibility({i: names[i] for i in range(18)})
+
+    # The background's 3LC id maps through to its training index
+    validator.data = {
+        "names": {0: "a", 1: "background", 2: "b"},
+        "semantic_background": 4,
+        "3lc_class_to_range": {1: 0, 4: 1, 6: 2},
+    }
+    validator._verify_model_data_compatibility({0: "a", 1: "sky", 2: "b"})
+    with pytest.raises(ValueError, match="0: model 'sky', data 'a'"):
+        validator._verify_model_data_compatibility({0: "sky", 1: "background", 2: "b"})
+
+    # Without a background, every name must match
+    validator.data = {"names": {0: "a", 1: "b"}, "semantic_background": None, "3lc_class_to_range": {0: 0, 1: 1}}
+    with pytest.raises(ValueError, match="0: model 'sky', data 'a'"):
+        validator._verify_model_data_compatibility({0: "sky", 1: "b"})

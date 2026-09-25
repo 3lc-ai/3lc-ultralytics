@@ -324,9 +324,14 @@ def _semantic_dataset_dict(
     """Build the dataset dict for semantic segmentation tables, whose classes map to training indices differently.
 
     See `SemanticClasses` for how the classes of a semantic segmentation column map to Ultralytics class indices. All
-    splits must declare the same classes, background and void.
+    splits must declare the same classes, background and void. `ultralytics_dataset` is the Ultralytics dataset the
+    first split's table was created from, if it records one (see `ultralytics_dataset_from_table`).
     """
-    from tlc_ultralytics.semantic.utils import get_semantic_classes, resolve_semantic_label_column
+    from tlc_ultralytics.semantic.utils import (
+        get_semantic_classes,
+        resolve_semantic_label_column,
+        ultralytics_dataset_from_table,
+    )
 
     label_column_name = resolve_semantic_label_column(tables[first_split], label_column_name)
     if settings is not None:
@@ -358,6 +363,7 @@ def _semantic_dataset_dict(
         "3lc_class_to_range": classes.class_to_range,
         "semantic_background": classes.background,
         "semantic_void": classes.void,
+        "ultralytics_dataset": ultralytics_dataset_from_table(tables[first_split], label_column_name),
         "channels": 3,
     }
 
@@ -863,7 +869,8 @@ def create_tables_from_yaml_file(
 
     When a split is defined by a list of locations, one tlc.Table is created for each location and then joined to form
     a single tlc.Table for the split. For `task="semantic"`, each split is read by the dataset Ultralytics itself trains
-    on and written with `tlc.Table.from_semantic_segmentation` (see `create_semantic_split_table`).
+    on and written like `tlc.Table.from_semantic_segmentation` writes it, recording the dataset YAML's stem in the mask
+    column (see `create_semantic_split_table`).
 
     :param dataset: The path to the dataset or dataset descriptor (like a YAML file).
     :param task: The task to create the tables for.
@@ -914,7 +921,12 @@ def create_tables_from_yaml_file(
             from tlc_ultralytics.semantic.utils import create_semantic_split_table
 
             tables[split] = create_semantic_split_table(
-                split_paths, data_dict, resolved_project_name, split_dataset_name, if_exists
+                split_paths,
+                data_dict,
+                resolved_project_name,
+                split_dataset_name,
+                if_exists,
+                ultralytics_dataset=dataset,
             )
         else:
             tables[split] = _create_split_table(
