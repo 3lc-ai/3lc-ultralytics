@@ -3507,6 +3507,8 @@ class TestCreateTablesFromYamlFileReuse:
             splits=("train",),
         )
         assert str(tables1["train"].url).startswith(str(custom_root_url)), "Table not written under custom root_url"
+        # The root is registered as a scan URL, so the standalone helper's tables are indexed
+        assert tables1["train"].latest() is not None
 
         # Reuse fast-path (_get_existing_table) must look under the same custom root_url too
         tables2 = create_tables_from_yaml_file(

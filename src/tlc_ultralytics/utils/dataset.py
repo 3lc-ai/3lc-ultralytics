@@ -822,6 +822,8 @@ def create_tables_from_yaml_file(
     :param kwargs: Additional keyword arguments to pass to the table creator.
     :returns: A dictionary of tables, keyed by split.
     """
+    ensure_root_url_is_scanned(root_url)
+
     data_dict = check_det_dataset(dataset, autodownload=autodownload)
 
     # Fast-track: reuse existing tables when if_exists="reuse"
