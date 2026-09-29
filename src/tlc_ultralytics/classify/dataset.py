@@ -26,7 +26,10 @@ class _DummyImageFolder:
 
     @property
     def classes(self):
-        return sorted({str(label) for _, label in self._samples}) if self._samples else []
+        # Like ImageFolder, position `i` must name the class of target `i`, since ultralytics maps each sample's target
+        # through `classes[target]`. Labels are already model indices, so cover every index up to the largest one, even
+        # those no sample in this Table carries, which keeps that mapping the identity.
+        return [str(i) for i in range(max(label for _, label in self._samples) + 1)] if self._samples else []
 
 
 class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):

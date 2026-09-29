@@ -16,7 +16,7 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 - `save_txt` is now disabled with a warning, like `save_json` already was, because it makes Ultralytics produce full-resolution segmentation masks for every prediction.
 
-- The supported `ultralytics` range is now `>=8.4.104,<8.4.149` (up from `>=8.4.0,<8.4.67`), i.e. `ultralytics` 8.4.148 is the newest tested version. The lower bound rises because `ultralytics` 8.4.91 renamed the scaled keypoints that pose metrics collection reads, and 8.4.104 moved loss names from the trainer onto the criterion. Note that `ultralytics` 8.4.124 and newer cannot be installed on macOS with Python 3.10, since they require a `numpy` version that needs Python 3.11 or newer; that combination resolves to 8.4.123 instead.
+- The supported `ultralytics` range is now `>=8.4.104,<8.4.166` (up from `>=8.4.0,<8.4.67`), i.e. `ultralytics` 8.4.165 is the newest tested version.
 
 - The supported `3lc` range is now `>=3.2.0,<4.0.0` (up from `>=3.0.0`). `3lc` 3.0 and 3.1 were only ever published to 3LC's public package index and are not available on PyPI, so they are no longer supported.
 

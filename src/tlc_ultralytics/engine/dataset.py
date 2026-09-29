@@ -163,8 +163,8 @@ class TLCDatasetMixin:
         """Load the cached corrupt and missing example ids from the cache file.
 
         The cache is invalidated, mirroring `ultralytics.data.utils.get_hash`, whenever any image file changes on
-        disk: `expected_hash` is a hash of the image paths and the sum of their file sizes (a missing file
-        contributes 0), so an image appearing, disappearing, or being replaced with a differently-sized file all
+        disk: `expected_hash` is `get_hash` of the image paths, which covers the paths and the files' sizes (and, from
+        `ultralytics` 8.4.160, their modification times), so an image appearing, disappearing, or being replaced all
         change the hash and trigger a full rescan.
 
         :param cache_url: The path to the cache file.

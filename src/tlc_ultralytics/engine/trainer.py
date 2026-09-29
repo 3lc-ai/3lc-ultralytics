@@ -222,6 +222,11 @@ class TLCTrainerMixin(BaseTrainer):
                 settings=self._settings,
             )
             self.data["test"] = data_test["test"]
+
+        # Ultralytics builds the loader it validates on during training from `self.data[self.args.split]`, so point
+        # the split at the one loaded above: val when there is one, otherwise test.
+        if self.args.split not in self.data:
+            self.args.split = "val" if "val" in self.data else "test"
         return self.data
 
     def build_dataset(self, table, mode="train", batch=None):
