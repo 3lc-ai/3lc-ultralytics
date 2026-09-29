@@ -3806,6 +3806,58 @@ class TestCreateTablesFromYamlFileReuse:
         # Verify the table name is "initial"
         assert combined_table.name == "initial"
 
+    def test_root_url_override(self):
+        """Test that root_url moves table creation and reuse out of the default project root."""
+        from tlc_ultralytics.utils.dataset import create_tables_from_yaml_file
+
+        custom_root_url = TMP / "root_url_override_tables"
+
+        tables1 = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            project_name="test-root-url-override",
+            root_url=str(custom_root_url),
+            if_exists="overwrite",
+            splits=("train",),
+        )
+        assert str(tables1["train"].url).startswith(str(custom_root_url)), "Table not written under custom root_url"
+        # The root is registered as a scan URL, so the standalone helper's tables are indexed
+        assert tables1["train"].latest() is not None
+
+        # Reuse fast-path (_get_existing_table) must look under the same custom root_url too
+        tables2 = create_tables_from_yaml_file(
+            "coco8.yaml",
+            task="detect",
+            project_name="test-root-url-override",
+            root_url=str(custom_root_url),
+            if_exists="reuse",
+            splits=("train",),
+        )
+        assert tables2["train"].url == tables1["train"].url, "Table under custom root_url not reused"
+
+    def test_root_url_registers_scan_url_via_check_tlc_dataset(self):
+        """Test that root_url outside the scan URLs works end to end through check_tlc_dataset (calls latest())."""
+        custom_root_url = TMP / "root_url_unscanned_tables"
+        config = tlc.configuration.Configuration.instance()
+        original_scan_urls = list(config.scan_urls)
+        try:
+            data_dict = check_tlc_dataset(
+                data="coco8.yaml",
+                tables=None,
+                image_column_name="image",
+                label_column_name=None,
+                task="detect",
+                splits=("train",),
+                settings=Settings(project_name="test-root-url-unscanned", root_url=str(custom_root_url)),
+            )
+            assert str(data_dict["train"].url).startswith(str(custom_root_url))
+            assert any(
+                tlc.Url(e["url"] if isinstance(e, dict) else e).to_absolute() == tlc.Url(custom_root_url).to_absolute()
+                for e in config.scan_urls
+            ), "root_url was not added to the scan URLs"
+        finally:
+            config.scan_urls = original_scan_urls
+
 
 # === Instance embeddings tests ===
 

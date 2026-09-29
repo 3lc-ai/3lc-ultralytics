@@ -18,6 +18,7 @@ def get_or_create_cls_table(
     project_name: str,
     dataset_name: str,
     table_name: str,
+    root_url: str | None = None,
     settings: Settings | None = None,
 ) -> tlc.Table:
     """Get or create a classification table from a dataset dictionary.
@@ -28,6 +29,7 @@ def get_or_create_cls_table(
     :param table_name: Name of the table
     :param image_column_name: Name of the column containing image paths
     :param label_column_name: Name of the column containing labels
+    :param root_url: The root URL to create the table under. If not provided, the 3LC project root URL is used.
     :return: A tlc.Table.from_image_folder() table
     """
 
@@ -53,6 +55,7 @@ def get_or_create_cls_table(
         project_name=project_name,
         dataset_name=dataset_name,
         table_name=table_name,
+        root_url=root_url,
         extensions=IMG_FORMATS,
         if_exists="reuse",
         add_weight_column=True,
