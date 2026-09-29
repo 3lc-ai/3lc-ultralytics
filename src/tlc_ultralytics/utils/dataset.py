@@ -62,6 +62,27 @@ def get_dataset_functions(
     return dataset_checker, table_checker
 
 
+def ensure_root_url_is_scanned(root_url: str | None) -> None:
+    """Add `root_url` to the 3LC scan URLs if it is not already covered.
+
+    Tables under a root that is not scanned are missing from the lineage index, so `Table.latest()` fails on them
+    and they are not listed in the Dashboard.
+    """
+    if not root_url:
+        return
+
+    config = tlc.configuration.Configuration.instance()
+    root = tlc.Url(root_url).to_absolute()
+    covered = [tlc.Url(config.project_root_url)] + [
+        tlc.Url(entry["url"] if isinstance(entry, dict) else entry) for entry in config.scan_urls
+    ]
+    if any(url.to_absolute() == root for url in covered):
+        return
+
+    LOGGER.info(f"{TLC_COLORSTR}Adding root_url {root} to the 3LC scan URLs")
+    config.scan_urls = [*config.scan_urls, {"url": str(root), "layout": "project"}]
+
+
 def check_tlc_dataset(  # noqa: C901
     data: str,
     tables: dict[str, tlc.Table | tlc.Url | str] | None,
@@ -120,6 +141,7 @@ def check_tlc_dataset(  # noqa: C901
         resolved_project_name = settings.project_name if settings else project_name
         resolved_project_name = resolved_project_name or _get_default_names(data, "")[0]
         resolved_root_url = settings.root_url if settings else root_url
+        ensure_root_url_is_scanned(resolved_root_url)
         splits = splits or ("train", "val", "test", "minival")
 
         tables = {}

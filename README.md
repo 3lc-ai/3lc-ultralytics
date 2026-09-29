@@ -258,7 +258,7 @@ Choose the reduction algorithm with `instance_embeddings_reducer` (`pacmap`, `um
 
 Use `project_name`, `run_name` and `run_description` to customize the `tlc.Run` that is created. Any tables created by the integration will be under the `project_name` provided here. If these settings are not set, appropriate defaults are used instead.
 
-Use `root_url` to control where the run and any tables it creates are written, overriding the globally configured 3LC project root URL for this run.
+Use `root_url` to control where the run and any tables it creates are written, overriding the globally configured 3LC project root URL for this run. The root is added to the 3LC scan URLs for the current process if it is not already one, so the run shows up in the Dashboard (an Object Service or Dashboard started separately still needs to scan it).
 
 ### Sampling Weights
 
