@@ -7,7 +7,6 @@ from tlc_ultralytics.obb.validator import TLCOBBValidator
 
 class TLCOBBTrainer(OBBTrainer, TLCDetectionTrainer):
     _validator_class = TLCOBBValidator
-    _loss_names = ("box_loss", "seg_loss", "cls_loss", "dfl_loss")
 
     # Explicit binding to ensure TLCTrainerMixin.get_validator wins over OBBTrainer.get_validator in MRO
     get_validator = TLCTrainerMixin.get_validator

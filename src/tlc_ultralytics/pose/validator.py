@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from tlc.data_types import Keypoints2D
 from ultralytics.models.yolo.pose.val import PoseValidator
+from ultralytics.nn.modules.head import Pose26
 from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.constants import (
@@ -93,7 +94,7 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
             image_height=int(h),
             image_width=int(w),
         )
-        kpts = scaled["kpts"]  # scale_preds outputs scaled keypoints under "kpts"
+        kpts = scaled["keypoints"]  # scale_preds outputs scaled keypoints under "keypoints"
         for j in range(len(mapped_classes)):
             kxy = kpts[j, :, 0:2].cpu().numpy().astype(np.float32)
             kconf = kpts[j, :, 2].cpu().numpy().astype(np.float32).tolist() if kpts.shape[2] == 3 else None
@@ -115,8 +116,11 @@ class TLCPoseValidator(TLCValidatorMixin, PoseValidator):
     def _prepare_loss_fn(self, model):
         loss_model = model.model if hasattr(model.model, "model") else model
 
-        # YOLO26 pose models use ultralytics' `PoseLoss26`, which has no unreduced counterpart here yet.
-        is_end2end = getattr(loss_model.model[-1], "end2end", False) if hasattr(loss_model, "model") else False
+        # YOLO26 pose models use ultralytics' `PoseLoss26`, which has no unreduced counterpart here yet. The head
+        # type is what ultralytics keys that choice off, and unlike the head's `end2end` it does not depend on
+        # whether the model has been fused yet.
+        head = loss_model.model[-1] if hasattr(loss_model, "model") else None
+        is_end2end = isinstance(head, Pose26)
 
         if is_end2end and self._settings.collect_loss:
             LOGGER.warning(

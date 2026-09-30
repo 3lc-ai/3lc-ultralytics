@@ -9,7 +9,6 @@ from tlc_ultralytics.segment.validator import TLCSegmentationValidator
 
 class TLCSegmentationTrainer(SegmentationTrainer, TLCDetectionTrainer):
     _validator_class = TLCSegmentationValidator
-    _loss_names = ("box_loss", "seg_loss", "cls_loss", "dfl_loss")
     _metric_replacements: ClassVar[list[tuple[str, str]]] = [
         ("(B)", ""),
         ("(M)", "_seg"),

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 import torch.nn.functional as F
-from ultralytics.utils.loss import KeypointLoss, PoseLoss26, v8PoseLoss
+from ultralytics.utils.loss import KeypointLoss, v8PoseLoss
 from ultralytics.utils.ops import xyxy2xywh
 
 from tlc_ultralytics.detect.loss import UnreducedBboxLoss
@@ -170,31 +170,24 @@ class v8UnreducedPoseLoss(v8PoseLoss):
         return anchor_points, stride_tensor
 
 
-class TLCv8PoseLoss(v8PoseLoss):
-    """Pose loss that prefers dataset-provided OKS sigmas when available.
+def apply_oks_sigmas(criterion, model):
+    """Point the keypoint loss of `criterion` at the OKS sigmas carried by `model`, if it has any.
 
-    If the attached model has an attribute `oks_sigmas` (list/ndarray/tensor), use it to
-    configure the `KeypointLoss`. Falls back to the default behavior otherwise.
+    `criterion` is whatever `ultralytics` built for the model, so this covers both a plain pose loss and the `E2ELoss`
+    wrapper end-to-end models get, which holds one pose loss per assignment branch. Picking between them is
+    `ultralytics`' decision, and one they have changed before, so leave it to them and only swap out the sigmas.
+
+    :param criterion: The criterion `ultralytics` built for `model`.
+    :param model: The de-paralleled model, which carries `oks_sigmas` when the Table or Settings provided any.
+    :return: The same criterion, for convenience.
     """
+    oks_sigmas = getattr(model, "oks_sigmas", None)
+    if oks_sigmas is None:
+        return criterion
 
-    def __init__(self, model, tal_topk: int = 10, tal_topk2: int | None = None):
-        super().__init__(model, tal_topk, tal_topk2)
-        oks_sigmas = getattr(model, "oks_sigmas", None)
-        if oks_sigmas is not None:
-            sigmas_tensor = torch.as_tensor(oks_sigmas, device=self.device, dtype=torch.float32)
-            self.keypoint_loss = KeypointLoss(sigmas=sigmas_tensor)
+    for sub_criterion in (criterion, getattr(criterion, "one2many", None), getattr(criterion, "one2one", None)):
+        if getattr(sub_criterion, "keypoint_loss", None) is not None:
+            sigmas = torch.as_tensor(oks_sigmas, device=sub_criterion.device, dtype=torch.float32)
+            sub_criterion.keypoint_loss = KeypointLoss(sigmas=sigmas)
 
-
-class TLCPoseLoss26(PoseLoss26):
-    """PoseLoss26 that prefers dataset-provided OKS sigmas when available.
-
-    If the attached model has an attribute `oks_sigmas` (list/ndarray/tensor), use it to
-    configure the `KeypointLoss`. Falls back to the default behavior otherwise.
-    """
-
-    def __init__(self, model, tal_topk: int = 10, tal_topk2: int | None = None):
-        super().__init__(model, tal_topk, tal_topk2)
-        oks_sigmas = getattr(model, "oks_sigmas", None)
-        if oks_sigmas is not None:
-            sigmas_tensor = torch.as_tensor(oks_sigmas, device=self.device, dtype=torch.float32)
-            self.keypoint_loss = KeypointLoss(sigmas=sigmas_tensor)
+    return criterion

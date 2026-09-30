@@ -1,5 +1,10 @@
 import shutil
 
+# Importing this module builds `ultralytics.utils.events.events`, whose constructor draws once from Python's global
+# `random` state for its session id. It is otherwise imported lazily from inside the first training in a process,
+# after ultralytics has seeded the RNG, so the first training draws a different augmentation stream than every
+# training after it. Importing it here keeps all trainings in a session bit-comparable.
+import ultralytics.utils.events  # noqa: F401
 from tmp_paths import TMP, TMP_ROOT
 
 
