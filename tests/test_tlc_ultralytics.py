@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.metadata
 import io
 import json
 import logging
@@ -20,6 +21,7 @@ import pandas as pd
 import pytest
 import tlc
 import yaml
+from packaging.version import Version
 from PIL import Image
 from testing_helpers import (
     check_pose_table_and_metrics_tables,
@@ -72,10 +74,10 @@ from tlc_ultralytics.segment.utils import check_seg_table
 from tlc_ultralytics.utils import check_tlc_dataset
 from tlc_ultralytics.utils.dataset import _complete_label_column_name
 
-# PaCMAP embedding reduction is known not to work on macOS: the reducer collects
+# PaCMAP < 0.9 (annoy-based) is known not to work on macOS: the reducer collects
 # zero embeddings and silently produces no reduced table. Embedding-specific
-# checks are therefore skipped on macOS (everything else still runs there).
-PACMAP_BROKEN_ON_MACOS = sys.platform == "darwin"
+# checks are therefore skipped there (everything else still runs). PaCMAP 0.9 uses faiss and works.
+PACMAP_BROKEN_ON_MACOS = sys.platform == "darwin" and Version(importlib.metadata.version("pacmap")) < Version("0.9")
 skip_pacmap_on_macos = pytest.mark.skipif(
     PACMAP_BROKEN_ON_MACOS,
     reason="PaCMAP embedding reduction does not work on macOS",
@@ -90,7 +92,7 @@ tlc._core.objects.tables.system_tables.indexing_tables.table_indexing_table.Tabl
         "url": tlc.Url(TMP_PROJECT_ROOT_URL),
         "layout": "project",
         "object_type": "table",
-        "static": True,
+        "static": False,
     }
 )
 
