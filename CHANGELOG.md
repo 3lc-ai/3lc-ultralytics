@@ -12,6 +12,10 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Changed
 
+- Python 3.14 is now supported (`requires-python` is `>=3.10,<3.15`). This needs `3lc>=3.4`, the first release with Python 3.14 wheels.
+
+- The supported `pacmap` range is now `>=0.8.0,<0.10` (up from `>=0.8.0,<0.9`) to match `3lc` 3.4's `pacmap` extra (`>=0.9,<0.10`). PaCMAP 0.9 replaces `annoy` with `faiss-cpu`.
+
 - Segmentation metrics collection now generates full-resolution masks only for the predictions that are written to 3LC, instead of for every NMS survivor before filtering. This cuts peak memory during collection by orders of magnitude on large images, where it could previously fail outright. The masks are also RLE-encoded a chunk at a time as they are generated, so no full-resolution mask stack is held in memory for an image or a batch, and collection is several times faster on large images with many predictions. On CUDA the encoding runs on the GPU, so only run boundaries are copied to the host. **Behavior change:** the `Mask(P/R/mAP50/mAP50-95)` metrics Ultralytics reports now match a plain `ultralytics` run on the same data, where the integration previously made them differ slightly.
 
 - `save_txt` is now disabled with a warning, like `save_json` already was, because it makes Ultralytics produce full-resolution segmentation masks for every prediction.
