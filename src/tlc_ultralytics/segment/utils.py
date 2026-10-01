@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import torch
 from tlc.helpers import AnnotationHelper, AnnotationType
 
 from tlc_ultralytics.constants import IMAGE_COLUMN_NAME
 from tlc_ultralytics.utils.dataset import resolve_annotation_label_path
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     import tlc
-    import torch
 
 
 def check_seg_table(
@@ -42,6 +45,28 @@ def check_seg_table(
     except (AssertionError, KeyError, ValueError) as e:
         msg = f"Validation failed for {label_root} column in table with URL {table.url}. {e!s}"
         raise ValueError(msg) from e
+
+
+@contextmanager
+def nondeterministic_algorithms() -> Iterator[None]:
+    """Turn off PyTorch's deterministic algorithms for the block, restoring the caller's setting afterwards.
+
+    Ultralytics training defaults to `deterministic=True`, which calls `torch.use_deterministic_algorithms(True)` for
+    the rest of the process, so it is also on for metrics collection during and after training. On CUDA, bilinear
+    `F.interpolate` then runs through PyTorch's decomposition instead of its native kernel, since the native backward
+    is nondeterministic. That made upsampling masks to the original image resolution ~30x slower and use several times
+    more GPU memory. The native forward kernel is deterministic and gives the same masks, so mask generation,
+    which never backpropagates, is safe to run without the setting.
+    """
+    if not torch.are_deterministic_algorithms_enabled():
+        yield
+        return
+    warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+    torch.use_deterministic_algorithms(False)
+    try:
+        yield
+    finally:
+        torch.use_deterministic_algorithms(True, warn_only=warn_only)
 
 
 def rles_from_column_major_masks(masks: torch.Tensor, height: int, width: int) -> list[dict[str, Any]]:

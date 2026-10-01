@@ -26,6 +26,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Fixed
 
+- Segmentation metrics collection during and after training is several times faster on CUDA. Ultralytics training defaults to `deterministic=True`, which made PyTorch upsample masks to the original image resolution with a much slower and more memory-hungry implementation. Mask generation now runs with deterministic algorithms turned off, which gives the same masks.
+
 - Per-epoch losses logged to the 3LC run are now named after the losses the model actually computes, instead of a hardcoded list per task. For `obb` this corrects names that were shifted by one, where `seg_loss` held the classification loss and `dfl_loss` the angle loss, and for `segment` it adds the `sem_loss` that was previously dropped.
 
 - Only write per-class metrics tables when metrics collection is active, instead of unconditionally on every validation pass. Previously these tables were written even on non-collection training epochs and when `collection_disable` was set, needlessly growing the run's metrics list and leaking table objects in the object registry cache.
