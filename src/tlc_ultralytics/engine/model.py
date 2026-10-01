@@ -23,7 +23,7 @@ from tlc_ultralytics.settings import Settings
 from tlc_ultralytics.utils import check_requirements
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
 
 class YOLO(YOLOBase):
@@ -99,7 +99,7 @@ class YOLO(YOLOBase):
         splits: Iterable[str] | None = None,
         tables: dict[str, str | tlc.Url | tlc.Table] | None = None,
         settings: Settings | None = None,
-        progress_callback: object | None = None,
+        progress_callback: Callable[[str, int, int], None] | None = None,
         **kwargs,
     ) -> dict[str, dict[str, float]]:
         """Perform calls to model.val() to collect metrics on a set of splits, all under one tlc.Run.
