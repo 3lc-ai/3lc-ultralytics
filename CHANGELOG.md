@@ -26,6 +26,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Fixed
 
+- Training with metrics collection on the training set no longer holds an extra set of dataloader workers, and over a GB of pinned host memory with their prefetched batches, for the rest of training and after it. The loader used to collect metrics on the training set is now built without pinned memory, like the one Ultralytics validates on outside of training, and its workers are shut down after every collection pass.
+
 - Per-epoch losses logged to the 3LC run are now named after the losses the model actually computes, instead of a hardcoded list per task. For `obb` this corrects names that were shifted by one, where `seg_loss` held the classification loss and `dfl_loss` the angle loss, and for `segment` it adds the `sem_loss` that was previously dropped.
 
 - Only write per-class metrics tables when metrics collection is active, instead of unconditionally on every validation pass. Previously these tables were written even on non-collection training epochs and when `collection_disable` was set, needlessly growing the run's metrics list and leaking table objects in the object registry cache.
