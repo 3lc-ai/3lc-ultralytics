@@ -332,7 +332,7 @@ def check_tlc_dataset(  # noqa: C901
             ret["oks_sigmas"] = oks_sigmas
         if points is not None:
             ret["points"] = points
-    return ret  # type: ignore[invalid-return-type]
+    return ret  # ty: ignore[invalid-return-type]
 
 
 def resolve_label_value_path(table: tlc.Table, label_column_name: str) -> str:
@@ -509,10 +509,10 @@ def get_value_map_from_table(
         try:
             ann = AnnotationHelper.get(table, column_name)
             assert ann.label_path is not None
-            return table.get_value_map(ann.label_path)  # type: ignore[return-value]
+            return table.get_value_map(ann.label_path)  # ty: ignore[invalid-return-type]
         except (AssertionError, KeyError, ValueError) as e:
             raise ValueError("Failed to get value map from table") from e
-    return table.get_value_map(resolve_label_value_path(table, label_column_name))  # type: ignore[return-value]
+    return table.get_value_map(resolve_label_value_path(table, label_column_name))  # ty: ignore[invalid-return-type]
 
 
 class IdentityDict(dict):

@@ -13,12 +13,17 @@ supports variable-length embedding list columns. All symbols here are private
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 from ultralytics.utils import LOGGER, TQDM
 
 from tlc_ultralytics.constants import TLC_COLORSTR
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # Fitted reducers shared across one run's validation passes, keyed by
 # (run URL, kind) where kind is "instance" or "image". The first split to fit
@@ -49,7 +54,7 @@ def _fit_embeddings_reducer(
     sample: np.ndarray,
     method: str,
     n_components: int,
-    progress_callback: object | None = None,
+    progress_callback: Callable[[str, int, int], None] | None = None,
     label: str = "instance",
     **reducer_args,
 ) -> object:
@@ -170,7 +175,7 @@ def _transform_embeddings(
     raw_embeddings_per_image: list[np.ndarray],
     reducer: object,
     n_components: int,
-    progress_callback: object | None = None,
+    progress_callback: Callable[[str, int, int], None] | None = None,
     label: str = "instance",
     show_progress_bar: bool = False,
 ) -> list[np.ndarray]:
