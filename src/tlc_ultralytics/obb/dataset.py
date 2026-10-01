@@ -114,7 +114,7 @@ class TLCOBBDataset(BaseTLCYOLODataset):
         for cx, cy, sx, sy, r in instances.obbs:
             r_deg = r * 180 / np.pi  # cv2.boxPoints expects degrees
             # Build the corners in pixel space, then normalize each coordinate by the image size.
-            corner_points = cv2.boxPoints(((cx, cy), (sx, sy), r_deg))
+            corner_points = cv2.boxPoints(((float(cx), float(cy)), (float(sx), float(sy)), float(r_deg)))
             corner_points[:, 0] /= image_width
             corner_points[:, 1] /= image_height
             segments.append(corner_points)
