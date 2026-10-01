@@ -6,6 +6,7 @@ from functools import partial
 from pathlib import Path
 from typing import ClassVar
 
+import numpy as np
 import tlc
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
@@ -366,7 +367,7 @@ class TLCTrainerMixin(BaseTrainer):
             values = {}
             for py, name in zip(curves, names, strict=False):
                 y = smooth(py.mean(0), 0.05)
-                values[f"3LC/{name}"] = {"best_val": y.max(), "best_conf": px[y.argmax()]}
+                values[f"3LC/{name}"] = {"best_val": y.max(), "best_conf": px[np.argmax(y)]}
 
             self._run.set_parameters(values)
         except Exception as e:
