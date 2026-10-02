@@ -8,35 +8,29 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Added
 
-- Support per-sample loss collection (`collect_loss=True`) for end-to-end (YOLO26) detection models. The collected loss mirrors the one2one branch of ultralytics' `E2ELoss`, which is the loss ultralytics reports for these models during training. DFL-free models (YOLO26) get no `dfl_loss` column.
+- Support per-sample loss collection (`collect_loss=True`) for end-to-end (YOLO26) detection models, matching the loss Ultralytics reports during training. These models have no `dfl_loss` column ([#88](https://github.com/3lc-ai/3lc-ultralytics/pull/88)).
+
+- Support Python 3.14, which requires `3lc>=3.4` ([#104](https://github.com/3lc-ai/3lc-ultralytics/pull/104)).
 
 ### Changed
 
-- Python 3.14 is now supported (`requires-python` is `>=3.10,<3.15`). This needs `3lc>=3.4`, the first release with Python 3.14 wheels.
+- Supported dependency ranges are now `ultralytics>=8.4.104,<8.4.166` (up from `>=8.4.0,<8.4.67`), `3lc>=3.2.0,<4.0.0` (up from `>=3.0.0`, as 3.0 and 3.1 are not on PyPI) and `pacmap>=0.8.0,<0.10` (up from `<0.9`) ([#87](https://github.com/3lc-ai/3lc-ultralytics/pull/87), [#103](https://github.com/3lc-ai/3lc-ultralytics/pull/103), [#104](https://github.com/3lc-ai/3lc-ultralytics/pull/104)).
 
-- The supported `pacmap` range is now `>=0.8.0,<0.10` (up from `>=0.8.0,<0.9`) to match `3lc` 3.4's `pacmap` extra (`>=0.9,<0.10`). PaCMAP 0.9 replaces `annoy` with `faiss-cpu`.
+- Metrics collection uses much less memory and is faster, in particular for segmentation on large images, where it could previously run out of memory ([#91](https://github.com/3lc-ai/3lc-ultralytics/pull/91), [#92](https://github.com/3lc-ai/3lc-ultralytics/pull/92), [#93](https://github.com/3lc-ai/3lc-ultralytics/pull/93), [#96](https://github.com/3lc-ai/3lc-ultralytics/pull/96), [#97](https://github.com/3lc-ai/3lc-ultralytics/pull/97), [#106](https://github.com/3lc-ai/3lc-ultralytics/pull/106), [#107](https://github.com/3lc-ai/3lc-ultralytics/pull/107)).
 
-- Segmentation metrics collection now generates full-resolution masks only for the predictions that are written to 3LC, instead of for every NMS survivor before filtering. This cuts peak memory during collection by orders of magnitude on large images, where it could previously fail outright. The masks are also RLE-encoded a chunk at a time as they are generated, so no full-resolution mask stack is held in memory for an image or a batch, and collection is several times faster on large images with many predictions. On CUDA the encoding runs on the GPU, so only run boundaries are copied to the host. Masks are upsampled with PyTorch's deterministic algorithms off: Ultralytics training turns them on by default, which made upsampling far slower on CUDA without changing the masks. **Behavior change:** the `Mask(P/R/mAP50/mAP50-95)` metrics Ultralytics reports now match a plain `ultralytics` run on the same data, where the integration previously made them differ slightly.
+- **Behavior change:** the `Mask(P/R/mAP50/mAP50-95)` metrics reported by Ultralytics now match a plain `ultralytics` run on the same data, where they previously differed slightly ([#91](https://github.com/3lc-ai/3lc-ultralytics/pull/91)).
 
-- `save_txt` is now disabled with a warning, like `save_json` already was, because it makes Ultralytics produce full-resolution segmentation masks for every prediction.
-
-- The supported `ultralytics` range is now `>=8.4.104,<8.4.166` (up from `>=8.4.0,<8.4.67`), i.e. `ultralytics` 8.4.165 is the newest tested version.
-
-- The supported `3lc` range is now `>=3.2.0,<4.0.0` (up from `>=3.0.0`). `3lc` 3.0 and 3.1 were only ever published to 3LC's public package index and are not available on PyPI, so they are no longer supported.
+- `save_txt` is now disabled with a warning, like `save_json` already was ([#91](https://github.com/3lc-ai/3lc-ultralytics/pull/91)).
 
 ### Fixed
 
-- Per-epoch losses logged to the 3LC run are now named after the losses the model actually computes, instead of a hardcoded list per task. For `obb` this corrects names that were shifted by one, where `seg_loss` held the classification loss and `dfl_loss` the angle loss, and for `segment` it adds the `sem_loss` that was previously dropped.
+- Fix the names of per-epoch losses logged to the 3LC run, which were shifted by one for `obb` and missed `sem_loss` for `segment` ([#103](https://github.com/3lc-ai/3lc-ultralytics/pull/103)).
 
-- Only write per-class metrics tables when metrics collection is active, instead of unconditionally on every validation pass. Previously these tables were written even on non-collection training epochs and when `collection_disable` was set, needlessly growing the run's metrics list and leaking table objects in the object registry cache.
+- `collect_loss=True` now warns and is disabled for `segment` and `obb` instead of being silently ignored ([#88](https://github.com/3lc-ai/3lc-ultralytics/pull/88)).
 
-- `collect_loss=True` now warns and is disabled for the `segment` and `obb` tasks instead of being silently ignored, and loss schemas are no longer declared when loss collection is disabled.
+- Per-class metrics tables are no longer written on validation passes where metrics collection is inactive ([#94](https://github.com/3lc-ai/3lc-ultralytics/pull/94)).
 
-- No longer carry full `tlc.Table`s into dataloader workers. The `tlc.Table` backing a dataset is always available through the now lazy attribute `dataset.table`. The loader that collects metrics on the training set also no longer pins memory or keeps its workers alive between collection passes.
-
-- Reduce memory usage when entering reduced embeddings into metrics tables, avoiding redundant copies of metrics.
-
-- The image cache is now invalidated whenever an image file changes on disk - appears, disappears, or changes size - matching ultralytics' own dataset cache. Previously, images that were missing or corrupt when a Table was first used, for example because an image URL alias pointed at an unavailable location, stayed cached as such at the same image paths until the `yolo_*.json` cache file next to it was deleted, even after the underlying files were fixed. Missing images are still reported separately from corrupt ones, with a dedicated error when all of a Table's images are missing.
+- Images that were missing or corrupt when a Table was first used are now rechecked once the files change, instead of staying cached as missing or corrupt until the `yolo_*.json` cache file is deleted ([#99](https://github.com/3lc-ai/3lc-ultralytics/pull/99)).
 
 ## [0.4.0] - 2026-08-07
 
