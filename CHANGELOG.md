@@ -12,6 +12,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 - Support Python 3.14, which requires `3lc>=3.4` ([#104](https://github.com/3lc-ai/3lc-ultralytics/pull/104)).
 
+- Add the `root_url` setting to control where the run and the tables it creates are written, overriding the globally configured 3LC project root URL ([#102](https://github.com/3lc-ai/3lc-ultralytics/pull/102)).
+
 ### Changed
 
 - Supported dependency ranges are now `ultralytics>=8.4.104,<8.4.166` (up from `>=8.4.0,<8.4.67`), `3lc>=3.2.0,<4.0.0` (up from `>=3.0.0`, as 3.0 and 3.1 are not on PyPI) and `pacmap>=0.8.0,<0.10` (up from `<0.9`) ([#87](https://github.com/3lc-ai/3lc-ultralytics/pull/87), [#103](https://github.com/3lc-ai/3lc-ultralytics/pull/103), [#104](https://github.com/3lc-ai/3lc-ultralytics/pull/104)).
@@ -26,7 +28,7 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 - Fix the names of per-epoch losses logged to the 3LC run, which were shifted by one for `obb` and missed `sem_loss` for `segment` ([#103](https://github.com/3lc-ai/3lc-ultralytics/pull/103)).
 
-- `collect_loss=True` now warns and is disabled for `segment` and `obb` instead of being silently ignored ([#88](https://github.com/3lc-ai/3lc-ultralytics/pull/88)).
+- Settings a task does not support now warn and are disabled: `collect_loss=True` for `segment` and `obb`, which was previously silently ignored, and instance embeddings for `classify` ([#88](https://github.com/3lc-ai/3lc-ultralytics/pull/88), [#95](https://github.com/3lc-ai/3lc-ultralytics/pull/95)).
 
 - Per-class metrics tables are no longer written on validation passes where metrics collection is inactive ([#94](https://github.com/3lc-ai/3lc-ultralytics/pull/94)).
 
