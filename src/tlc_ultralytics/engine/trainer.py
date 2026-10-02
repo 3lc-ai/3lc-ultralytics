@@ -246,12 +246,17 @@ class TLCTrainerMixin(BaseTrainer):
             training=True,
         )
 
-    def get_dataloader(self, dataset_path, batch_size=16, rank=0, mode="train"):
-        """Construct and return dataloader."""
+    def get_dataloader(self, dataset_path, batch_size=16, rank=0, mode="train", pin_memory=True):
+        """Construct and return dataloader.
+
+        `pin_memory=False` builds the loader without pinned memory, which Ultralytics otherwise uses for every loader
+        the trainer builds.
+        """
         sampler = create_sampler(dataset_path, mode, self._settings, distributed=rank != -1)
 
         original = self._build_dataloader_module.build_dataloader
-        self._build_dataloader_module.build_dataloader = partial(build_dataloader, sampler=sampler)
+        loader_kwargs = {} if pin_memory else {"pin_memory": False}
+        self._build_dataloader_module.build_dataloader = partial(build_dataloader, sampler=sampler, **loader_kwargs)
         try:
             return super().get_dataloader(dataset_path, batch_size, rank, mode)
         finally:
@@ -263,6 +268,11 @@ class TLCTrainerMixin(BaseTrainer):
 
         In DDP mode, uses distributed dataloader so each GPU validates its portion.
         Metrics are gathered to RANK 0 in the validator's _post_validation.
+
+        Its dataloader is built without pinned memory, like the one Ultralytics validates on outside of training, and
+        its workers are shut down after every pass (see `_collect_on_train_split`). Ultralytics never closes this
+        loader, and a live loader keeps its workers and their prefetched batches between passes, pinned ones in host
+        memory that PyTorch keeps cached for the rest of the process.
         """
         if not self._train_validator:
             train_validator_dataloader = self.get_dataloader(
@@ -270,9 +280,20 @@ class TLCTrainerMixin(BaseTrainer):
                 batch_size=self.batch_size if self.args.task == "obb" else self.batch_size * 2,
                 rank=RANK,  # Distributed in DDP mode
                 mode="val",
+                pin_memory=False,
             )
             self._train_validator = self.get_validator(dataloader=train_validator_dataloader)
         return self._train_validator
+
+    def _collect_on_train_split(self, **kwargs):
+        """Run the train-split validator, then shut down its dataloader workers until the next collection pass."""
+        try:
+            with _restore_random_state():
+                self.train_validator(**kwargs)
+        finally:
+            dataloader = self._train_validator.dataloader if self._train_validator else None
+            if hasattr(dataloader, "reset"):
+                dataloader.reset()  # joins the workers; the next pass starts new ones
 
     def validate(self):
         """Perform validation with 3LC metrics collection, also on the training data, if applicable.
@@ -289,8 +310,7 @@ class TLCTrainerMixin(BaseTrainer):
             and self.epoch + 1 in self._metrics_collection_epochs
             and not self._train_equals_val()
         ):
-            with _restore_random_state():
-                self.train_validator(trainer=self)
+            self._collect_on_train_split(trainer=self)
 
         # Validate on the validation/test set like usual
         # In DDP mode, 3LC metrics are gathered from all ranks in the validator
@@ -317,11 +337,10 @@ class TLCTrainerMixin(BaseTrainer):
         # Final validation on training set (all ranks participate in DDP mode)
         if not self._settings.collection_val_only and not self._settings.collection_disable:
             if self.best.exists() and not self._train_equals_val():
-                with _restore_random_state():
-                    self.train_validator._final_validation = True
-                    self.train_validator._epoch = self.epoch
-                    self.train_validator.data = self.data
-                    self.train_validator(model=self.best)
+                self.train_validator._final_validation = True
+                self.train_validator._epoch = self.epoch
+                self.train_validator.data = self.data
+                self._collect_on_train_split(model=self.best)
 
         # Mark validator for final validation (all ranks, so gathering works correctly)
         if not self._settings.collection_disable:

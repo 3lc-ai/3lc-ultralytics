@@ -32,7 +32,7 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 - `collect_loss=True` now warns and is disabled for the `segment` and `obb` tasks instead of being silently ignored, and loss schemas are no longer declared when loss collection is disabled.
 
-- No longer carry full `tlc.Table`s into dataloader workers. The `tlc.Table` backing a dataset is always available through the now lazy attribute `dataset.table`.
+- No longer carry full `tlc.Table`s into dataloader workers. The `tlc.Table` backing a dataset is always available through the now lazy attribute `dataset.table`. The loader that collects metrics on the training set also no longer pins memory or keeps its workers alive between collection passes.
 
 - Reduce memory usage when entering reduced embeddings into metrics tables, avoiding redundant copies of metrics.
 

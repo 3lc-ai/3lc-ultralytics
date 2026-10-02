@@ -773,6 +773,51 @@ def test_embeddings_collection() -> None:
     )
 
 
+def test_train_split_loader_unpinned_and_closed_between_passes(monkeypatch) -> None:
+    # The train-split collection loader is a third loader Ultralytics knows nothing about, so it never closes it. It
+    # must be built without pinned memory (which PyTorch caches for the rest of the process) and have its workers shut
+    # down after every collection pass, instead of holding them and their prefetched batches for the rest of training.
+    import torch
+
+    import tlc_ultralytics.overrides
+
+    loaders = []
+    build_dataloader = tlc_ultralytics.overrides.build_dataloader_ultralytics
+
+    def recording_build_dataloader(*args, **kwargs):
+        loader = build_dataloader(*args, **kwargs)
+        loaders.append((loader, kwargs.get("pin_memory", True)))
+        return loader
+
+    monkeypatch.setattr(tlc_ultralytics.overrides, "build_dataloader_ultralytics", recording_build_dataloader)
+
+    workers_alive_at_epoch_start = []
+
+    def on_train_epoch_start(trainer):
+        if trainer._train_validator is not None:
+            workers_alive_at_epoch_start.append(trainer._train_validator.dataloader.iterator is not None)
+
+    model = TLCYOLO(TASK2MODEL["detect"])
+    model.add_callback("on_train_epoch_start", on_train_epoch_start)
+    settings = Settings(
+        collection_epoch_start=1,
+        project_name="test_train_split_loader_project",
+        run_name="test_train_split_loader",
+    )
+    # batch=1 gives the train-split loader (batch 2) two batches of coco8's four images, so on CUDA it gets workers.
+    # On CPU Ultralytics trains without workers, but a live loader still keeps its iterator until it is closed.
+    device = "0" if torch.cuda.is_available() else "cpu"
+    model.train(
+        data=TASK2DATASET["detect"], epochs=2, batch=1, workers=2, device=device, plots=False, settings=settings
+    )
+
+    train_validator_loader = model.trainer.train_validator.dataloader
+    assert [pinned for loader, pinned in loaders if loader is train_validator_loader] == [False]
+    assert all(pinned for loader, pinned in loaders if loader is not train_validator_loader)
+    assert workers_alive_at_epoch_start == [False]  # closed after epoch 1's collection, before epoch 2 trains
+    assert train_validator_loader.iterator is None  # closed after the final collection pass
+
+
 def test_train_collection_val_only() -> None:
     task = "classify"
     model_arg = TASK2MODEL[task]
