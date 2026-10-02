@@ -286,14 +286,23 @@ class TLCTrainerMixin(BaseTrainer):
         return self._train_validator
 
     def _collect_on_train_split(self, **kwargs):
-        """Run the train-split validator, then shut down its dataloader workers until the next collection pass."""
+        """Run the train-split validator, then shut down its dataloader workers until the next collection pass.
+
+        `InfiniteDataLoader.reset()` can't be used for this: before Ultralytics 8.4.158 it starts new workers straight
+        away, and `__iter__` only recreates a cleared iterator itself from 8.4.158 on. So the workers are shut down and
+        the iterator cleared here, and the iterator is recreated at the start of the next pass.
+        """
         try:
             with _restore_random_state():
+                dataloader = self.train_validator.dataloader
+                if hasattr(dataloader, "close") and dataloader.iterator is None:
+                    dataloader.iterator = dataloader._get_iterator()
                 self.train_validator(**kwargs)
         finally:
             dataloader = self._train_validator.dataloader if self._train_validator else None
-            if hasattr(dataloader, "reset"):
-                dataloader.reset()  # joins the workers; the next pass starts new ones
+            if hasattr(dataloader, "close"):
+                dataloader.close()  # joins the workers
+                dataloader.iterator = None
 
     def validate(self):
         """Perform validation with 3LC metrics collection, also on the training data, if applicable.

@@ -3937,7 +3937,9 @@ class TestCreateTablesFromYamlFileReuse:
             if_exists="overwrite",
             splits=("train",),
         )
-        assert str(tables1["train"].url).startswith(str(custom_root_url)), "Table not written under custom root_url"
+        assert str(tables1["train"].url).startswith(custom_root_url.as_posix()), (
+            "Table not written under custom root_url"
+        )
         # The root is registered as a scan URL, so the standalone helper's tables are indexed
         assert tables1["train"].latest() is not None
 
@@ -3967,7 +3969,7 @@ class TestCreateTablesFromYamlFileReuse:
                 splits=("train",),
                 settings=Settings(project_name="test-root-url-unscanned", root_url=str(custom_root_url)),
             )
-            assert str(data_dict["train"].url).startswith(str(custom_root_url))
+            assert str(data_dict["train"].url).startswith(custom_root_url.as_posix())
             assert any(
                 tlc.Url(e["url"] if isinstance(e, dict) else e).to_absolute() == tlc.Url(custom_root_url).to_absolute()
                 for e in config.scan_urls
