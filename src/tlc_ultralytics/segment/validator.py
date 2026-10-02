@@ -19,7 +19,7 @@ from tlc_ultralytics.constants import (
 )
 from tlc_ultralytics.detect.validator import TLCDetectionValidator
 from tlc_ultralytics.engine.validator import PREDICTION_INDEX
-from tlc_ultralytics.segment.utils import rles_from_column_major_masks
+from tlc_ultralytics.segment.utils import nondeterministic_algorithms, rles_from_column_major_masks
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
 
 
@@ -126,6 +126,9 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         which pycocotools cannot read from directly) and its `(H, W, n)` view is the Fortran-ordered layout
         pycocotools encodes from, so `SegmentationHelper.rles_from_masks` reads it without a copy. Both paths give
         the same RLEs.
+
+        The masks are upsampled with PyTorch's deterministic algorithms turned off (see `nondeterministic_algorithms`),
+        which is several times faster on CUDA during training and gives the same masks.
         """
         h, w = (int(x) for x in pbatch["ori_shape"])
         num_instances = coefficients.shape[0]
@@ -134,10 +137,11 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         chunk_size = max(1, min(self._mask_chunk_instances, self._mask_chunk_pixels // max(1, h * w)))
         for start in range(0, num_instances, chunk_size):
             stop = min(start + chunk_size, num_instances)
-            native = ops.process_mask_native(
-                proto, coefficients[start:stop], bboxes[start:stop], shape=self._mask_imgsz
-            )
-            scaled = ops.scale_masks(native[None], (h, w), ratio_pad=pbatch["ratio_pad"])[0]
+            with nondeterministic_algorithms():
+                native = ops.process_mask_native(
+                    proto, coefficients[start:stop], bboxes[start:stop], shape=self._mask_imgsz
+                )
+                scaled = ops.scale_masks(native[None], (h, w), ratio_pad=pbatch["ratio_pad"])[0]
             chunk = scaled.byte().transpose(1, 2).contiguous()  # (n, W, H)
             del native, scaled
             if chunk.is_cuda:

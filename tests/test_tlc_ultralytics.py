@@ -2415,6 +2415,53 @@ def test_segment_rles_on_cuda_match_pycocotools() -> None:
     assert [r["counts"] for r in rles] == [r["counts"] for r in expected]
 
 
+def test_segment_masks_upsampled_without_deterministic_algorithms(monkeypatch) -> None:
+    # Ultralytics training leaves `torch.use_deterministic_algorithms(True)` on, which on CUDA routes bilinear
+    # upsampling through a much slower decomposition. Masks must be upsampled with it off, the caller's setting
+    # (including `warn_only`) must be restored afterwards, and the RLEs must not change.
+    import torch
+    from ultralytics.utils import ops
+
+    from tlc_ultralytics.segment.validator import TLCSegmentationValidator
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    torch.manual_seed(0)
+    num_instances, imgsz, ori_shape = 12, [64, 96], (150, 230)
+    proto = torch.randn(32, 16, 24, device=device)
+    coefficients = torch.randn(num_instances, 32, device=device)
+    xy = torch.rand(num_instances, 2, device=device) * torch.tensor([80.0, 50.0], device=device)
+    bboxes = torch.cat([xy, xy + 4 + torch.rand(num_instances, 2, device=device) * 30], dim=1)
+    pbatch = {"ori_shape": ori_shape, "ratio_pad": None}
+
+    validator = TLCSegmentationValidator.__new__(TLCSegmentationValidator)
+    validator._mask_imgsz = imgsz
+    validator._mask_chunk_instances = 5  # several chunks
+
+    expected = validator._rles_at_original_resolution(proto, coefficients, bboxes, pbatch)
+
+    deterministic_while_scaling = []
+    scale_masks = ops.scale_masks
+
+    def recording_scale_masks(*args, **kwargs):
+        deterministic_while_scaling.append(torch.are_deterministic_algorithms_enabled())
+        return scale_masks(*args, **kwargs)
+
+    monkeypatch.setattr(ops, "scale_masks", recording_scale_masks)
+    was_enabled = torch.are_deterministic_algorithms_enabled()
+    was_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+    torch.use_deterministic_algorithms(True, warn_only=True)
+    try:
+        rles = validator._rles_at_original_resolution(proto, coefficients, bboxes, pbatch)
+        assert torch.are_deterministic_algorithms_enabled()
+        assert torch.is_deterministic_algorithms_warn_only_enabled()
+    finally:
+        torch.use_deterministic_algorithms(was_enabled, warn_only=was_warn_only)
+
+    assert deterministic_while_scaling  # also called inside `ops.process_mask_native`
+    assert not any(deterministic_while_scaling)
+    assert [r["counts"] for r in rles] == [r["counts"] for r in expected]
+
+
 def test_segment_rles_on_mps_match_pycocotools() -> None:
     # `_rles_at_original_resolution` must copy each chunk to host memory before handing it to pycocotools on any
     # non-CUDA accelerator, not just CPU: an MPS tensor raises on `.numpy()` without an explicit `.cpu()` first.
