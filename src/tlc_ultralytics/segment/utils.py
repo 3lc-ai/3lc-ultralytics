@@ -54,8 +54,8 @@ def nondeterministic_algorithms() -> Iterator[None]:
     Ultralytics training defaults to `deterministic=True`, which calls `torch.use_deterministic_algorithms(True)` for
     the rest of the process, so it is also on for metrics collection during and after training. On CUDA, bilinear
     `F.interpolate` then runs through PyTorch's decomposition instead of its native kernel, since the native backward
-    is nondeterministic. That made upsampling masks to the original image resolution ~30x slower and use several times
-    more GPU memory. The native forward kernel is deterministic and gives the same masks, so mask generation,
+    is nondeterministic. That made upsampling masks to the original image resolution far slower and more GPU memory
+    hungry. The native forward kernel is deterministic and gives the same masks, so mask generation,
     which never backpropagates, is safe to run without the setting.
     """
     if not torch.are_deterministic_algorithms_enabled():
