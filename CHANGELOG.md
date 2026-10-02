@@ -16,7 +16,7 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 - The supported `pacmap` range is now `>=0.8.0,<0.10` (up from `>=0.8.0,<0.9`) to match `3lc` 3.4's `pacmap` extra (`>=0.9,<0.10`). PaCMAP 0.9 replaces `annoy` with `faiss-cpu`.
 
-- Segmentation metrics collection now generates full-resolution masks only for the predictions that are written to 3LC, instead of for every NMS survivor before filtering. This cuts peak memory during collection by orders of magnitude on large images, where it could previously fail outright. The masks are also RLE-encoded a chunk at a time as they are generated, so no full-resolution mask stack is held in memory for an image or a batch, and collection is several times faster on large images with many predictions. On CUDA the encoding runs on the GPU, so only run boundaries are copied to the host. **Behavior change:** the `Mask(P/R/mAP50/mAP50-95)` metrics Ultralytics reports now match a plain `ultralytics` run on the same data, where the integration previously made them differ slightly.
+- Segmentation metrics collection now generates full-resolution masks only for the predictions that are written to 3LC, instead of for every NMS survivor before filtering. This cuts peak memory during collection by orders of magnitude on large images, where it could previously fail outright. The masks are also RLE-encoded a chunk at a time as they are generated, so no full-resolution mask stack is held in memory for an image or a batch, and collection is several times faster on large images with many predictions. On CUDA the encoding runs on the GPU, so only run boundaries are copied to the host. Masks are upsampled with PyTorch's deterministic algorithms off: Ultralytics training turns them on by default, which made upsampling far slower on CUDA without changing the masks. **Behavior change:** the `Mask(P/R/mAP50/mAP50-95)` metrics Ultralytics reports now match a plain `ultralytics` run on the same data, where the integration previously made them differ slightly.
 
 - `save_txt` is now disabled with a warning, like `save_json` already was, because it makes Ultralytics produce full-resolution segmentation masks for every prediction.
 
@@ -25,8 +25,6 @@ Since this package integrates with two actively developed dependencies (`ultraly
 - The supported `3lc` range is now `>=3.2.0,<4.0.0` (up from `>=3.0.0`). `3lc` 3.0 and 3.1 were only ever published to 3LC's public package index and are not available on PyPI, so they are no longer supported.
 
 ### Fixed
-
-- Segmentation metrics collection during and after training is several times faster on CUDA. Ultralytics training defaults to `deterministic=True`, which made PyTorch upsample masks to the original image resolution with a much slower and more memory-hungry implementation. Mask generation now runs with deterministic algorithms turned off, which gives the same masks.
 
 - Per-epoch losses logged to the 3LC run are now named after the losses the model actually computes, instead of a hardcoded list per task. For `obb` this corrects names that were shifted by one, where `seg_loss` held the classification loss and `dfl_loss` the angle loss, and for `segment` it adds the `sem_loss` that was previously dropped.
 
