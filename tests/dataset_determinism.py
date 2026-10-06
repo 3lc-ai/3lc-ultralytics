@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 import torch
-from test_tlc_ultralytics import TASK2TRAINER, TASK2ULTRALYTICS_TRAINER
+from task_config import TASK2TRAINER, TASK2ULTRALYTICS_TRAINER
 from testing_helpers import stub_model_with_stride
 
 
@@ -49,7 +49,7 @@ def create_dataset_samples(mode: str, task: str) -> tuple[list[dict[str, Any]], 
     Returns:
         Tuple of (3lc rows, ultralytics rows)
     """
-    from test_tlc_ultralytics import TASK2DATASET, TASK2MODEL
+    from task_config import TASK2DATASET, TASK2MODEL
 
     from tlc_ultralytics import Settings
 
@@ -77,29 +77,20 @@ def create_dataset_samples(mode: str, task: str) -> tuple[list[dict[str, Any]], 
     return rows_3lc, rows_ultralytics
 
 
-def create_dataset_samples_with_tracking(mode: str, task: str, output_file: str | None = None) -> None:
-    """Create dataset samples with tracking and write JSON result to a file or stdout.
-
-    Args:
-        mode: Dataset mode ('train' or 'val')
-        output_file: Path to the output file. If None, prints to stdout.
-    """
+def _create_dataset_samples_with_tracking(mode: str, task: str) -> dict[str, Any]:
+    """Build both datasets for a mode and task with random-call tracking and compare their rows."""
     from random_tracker import disable_tracking, enable_tracking, get_tracking_info, reset_tracking
-    from test_tlc_ultralytics import TASK2DATASET, TASK2MODEL
+    from task_config import TASK2DATASET, TASK2MODEL
 
-    # we want to start the tracking here
-    # reset_tracking()
-    # enable_tracking()
+    from tlc_ultralytics import Settings
 
     try:
-        from tlc_ultralytics import Settings
-
-        # but we start it here.
+        # Only count calls made while building the datasets
         reset_tracking()
         enable_tracking()
 
-        # Distinct from the project used by `create_dataset_samples`: that helper runs in the pytest process while
-        # this one runs in a subprocess, so sharing a project name would have two processes create the same tables.
+        # Distinct from the project used by `create_dataset_samples`, which runs in the pytest process: this one runs
+        # in a subprocess, so sharing a project name would have two processes create the same tables.
         settings = Settings(project_name=f"test_dataset_determinism_tracking_mode_{mode}_{task}")
         overrides = {
             "data": TASK2DATASET[task],
@@ -127,33 +118,32 @@ def create_dataset_samples_with_tracking(mode: str, task: str, output_file: str 
 
         random_info_3lc = get_tracking_info()
 
-        # Assert row equality here in the sub-process
+        # Assert row equality here, next to the tracking
         for row_ultralytics, row_3lc in zip(rows_ultralytics, rows_3lc, strict=False):
             _compare_dataset_rows(row_ultralytics, row_3lc)
 
-        result = {
+        return {
             "random_info_3lc": random_info_3lc,
             "random_info_ultralytics": random_info_ultralytics,
             "rows_count_3lc": len(rows_3lc),
             "rows_count_ultralytics": len(rows_ultralytics),
         }
-
-        output_file = Path(output_file)
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        output_file = output_file.as_posix()
-        if output_file:
-            with open(output_file, "w") as f:
-                json.dump(result, f)
-        else:
-            print(json.dumps(result))
-    except Exception:
-        # The caller only sees this file, so hand it the whole traceback - a bare `str(e)` turns any failure in here
-        # into an opaque KeyError on `rows_count_3lc` on the other side.
-        error_result = {"error": traceback.format_exc()}
-        if output_file:
-            with open(output_file, "w") as f:
-                json.dump(error_result, f)
-        else:
-            print(json.dumps(error_result))
     finally:
         disable_tracking()
+
+
+def create_dataset_samples_with_tracking(combinations: list[tuple[str, str]], output_file: str) -> None:
+    """Run each (mode, task) combination and write the results, keyed by `f"{mode}-{task}"`, to `output_file`.
+
+    A failing combination is recorded with its full traceback under `error`, since the caller only sees the file.
+    """
+    results: dict[str, dict[str, Any]] = {}
+    for mode, task in combinations:
+        try:
+            results[f"{mode}-{task}"] = _create_dataset_samples_with_tracking(mode, task)
+        except Exception:
+            results[f"{mode}-{task}"] = {"error": traceback.format_exc()}
+
+    output_path = Path(output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(results))

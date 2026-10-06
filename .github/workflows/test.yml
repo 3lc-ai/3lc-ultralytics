@@ -10,35 +10,42 @@ on:
         default: '["ubuntu-latest"]'
   workflow_dispatch:
 
+concurrency:
+  # Cancel superseded PR runs only
+  group: test-${{ github.event_name == 'pull_request' && github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+        uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v2
+        uses: astral-sh/setup-uv@v10
         with:
           # Pin to match requirement in pyproject.toml
-          version: "0.7.19"
+          version: "0.12.21"
+          enable-cache: true
 
       - name: Install dependencies
+        # CPU-only torch on Linux; later steps use --no-sync to keep it
         run: |
-          uv sync --group dev --no-sources
+          uv sync --locked --group ci
 
       - name: Run linting
         run: |
-          uv run --no-sources ruff check .
+          uv run --no-sync ruff check .
+
+      - name: Check formatting
+        run: |
+          uv run --no-sync ruff format --check .
 
       - name: Run type checking
         run: |
-          uv run --no-sources ty check .
+          uv run --no-sync ty check .
 
   test:
     strategy:
@@ -55,40 +62,63 @@ jobs:
           - python-version: '3.14'
             tlc-version: '3.2'
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
+        uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v2
+        uses: astral-sh/setup-uv@v10
         with:
-          # Pin to match build-system.requires (uv_build>=0.7.19,<0.8.0). When
-          # uv's bundled uv_build satisfies that range it builds this project
-          # with the bundled backend and makes no network request. A newer uv
-          # (e.g. "latest") would instead fetch an old uv-build from an index.
-          # release.yml pins the same version.
-          version: "0.7.19"
+          # Pin to match build-system.requires so the bundled uv_build is used
+          version: "0.12.21"
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
 
       - name: Install dependencies
+        # CPU-only torch on Linux; later steps use --no-sync to keep it
         run: |
-          uv sync --group dev --no-sources --python ${{ matrix.python-version }}
+          uv sync --locked --group ci
 
       - name: Pin 3lc to ${{ matrix.tlc-version }}.*
         # Installs into the project .venv created by `uv sync` above; the test step
         # uses --no-sync so this pinned version is what actually runs.
-        shell: bash
         run: |
           uv pip install "3lc==${{ matrix.tlc-version }}.*"
 
+      - name: Check torch build
+        run: |
+          uv run --no-sync python -c "
+          import sys, torch
+          print(f'torch {torch.__version__}')
+          assert sys.platform != 'linux' or torch.__version__.endswith('+cpu'), 'expected CPU-only torch on Linux'
+          "
+
+      - name: Cache Ultralytics datasets and weights
+        uses: actions/cache@v6
+        with:
+          path: tests/.cache/ultralytics
+          key: ultralytics-assets-${{ runner.os }}-${{ hashFiles('tests/conftest.py') }}
+          restore-keys: |
+            ultralytics-assets-${{ runner.os }}-
+
       - name: Run tests (3lc ${{ matrix.tlc-version }}, Python ${{ matrix.python-version }})
         run: |
-          uv run --no-sources --no-sync --python ${{ matrix.python-version }} pytest tests/ -v -n 1
+          args=(-n auto --dist worksteal --durations=20)
+          if [ "$COVERAGE" = "true" ]; then
+            args+=(--cov=tlc_ultralytics --cov-report=term --cov-report=markdown:coverage.md)
+          fi
+          uv run --no-sync pytest tests/ "${args[@]}"
         env:
+          COVERAGE: ${{ github.event_name == 'pull_request' && runner.os == 'Linux' && matrix.python-version == '3.14' }}
           TLC_API_KEY: ${{ secrets.TLC_API_KEY }}
           ${{ secrets.DEFAULT_TESTING_S_ENV_NAME }}: ${{ secrets.DEFAULT_TESTING_S_ENV_VALUE }}
           ${{ secrets.DEFAULT_TESTING_RUNTIME_NAME }}: ${{ secrets.DEFAULT_TESTING_RUNTIME_VALUE }}
+
+      - name: Coverage summary
+        if: ${{ !cancelled() && hashFiles('coverage.md') != '' }}
+        run: |
+          cat coverage.md >> "$GITHUB_STEP_SUMMARY"
