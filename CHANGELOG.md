@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-06
+
 ### Fixed
 
 - Fix `segment` metrics collection failing with `TypeError: Column 'segmentations_predicted' type changed between batches` when some batches start with an image without predictions and others with an image with predictions ([#109](https://github.com/3lc-ai/3lc-ultralytics/pull/109)).
