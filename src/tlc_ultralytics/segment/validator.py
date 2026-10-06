@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import tlc
 import torch
 from tlc.constants import CONFIDENCE, IMAGE_HEIGHT, IMAGE_WIDTH, INSTANCE_PROPERTIES, LABEL, RLES
 from tlc.data_types import SegmentationMasks
@@ -21,6 +20,9 @@ from tlc_ultralytics.detect.validator import TLCDetectionValidator
 from tlc_ultralytics.engine.validator import PREDICTION_INDEX
 from tlc_ultralytics.segment.utils import nondeterministic_algorithms, rles_from_column_major_masks
 from tlc_ultralytics.utils.dataset import check_tlc_dataset
+
+if TYPE_CHECKING:
+    import tlc
 
 
 class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
@@ -200,7 +202,12 @@ class TLCSegmentationValidator(TLCDetectionValidator, SegmentationValidator):
         }
 
     def _empty_annotation(self, h, w):
-        return tlc.data_types.SegmentationMasks.create_empty(image_height=h, image_width=w)
+        """Return an annotation without instances, in the same row form as `_build_annotation`.
+
+        The metrics writer requires the first value of every batch in a column to have the same type, so an image
+        without predictions must not hand it a `SegmentationMasks` while one with predictions hands it a row.
+        """
+        return SegmentationMasks.create_empty(image_height=h, image_width=w).to_row()
 
     # Instance embeddings pool the feature map with the predicted/GT segmentation masks.
     _instance_geometry_kind = "mask"

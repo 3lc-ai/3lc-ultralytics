@@ -2648,6 +2648,79 @@ def test_segment_row_form_annotation_matches_tlc_encoding() -> None:
         assert written.labels.tolist() == labels
 
 
+@pytest.mark.parametrize("task", ["detect", "segment", "pose", "obb"])
+def test_collection_alternating_empty_and_predicted_batches(task, monkeypatch) -> None:
+    # The metrics writer pins each column's value type from the first value of the first batch and rejects any later
+    # batch whose first value has a different type. Images without predictions get `_empty_annotation`, the rest
+    # `_build_annotation`, so the two must produce the same type. Collecting one image per batch and dropping every
+    # other image's predictions makes the first value of consecutive batches alternate between the two, in both
+    # orders.
+    from tlc.constants import RLES
+
+    from tlc_ultralytics.engine.validator import TLCValidatorMixin
+
+    process_predictions = TLCValidatorMixin._process_predictions
+    filter_top_predictions = TLCValidatorMixin._filter_top_predictions
+    num_batches = 0
+    dropped = {}  # example id -> whether its predictions were dropped
+
+    def alternating_process_predictions(self, preds, batch):
+        nonlocal num_batches
+        self._drop_predictions = num_batches % 2 == 0
+        num_batches += 1
+        dropped.update((int(example_id), self._drop_predictions) for example_id in batch["example_id"])
+        return process_predictions(self, preds, batch)
+
+    def alternating_filter_top_predictions(self, pred):
+        return None if self._drop_predictions else filter_top_predictions(self, pred)
+
+    monkeypatch.setattr(TLCValidatorMixin, "_process_predictions", alternating_process_predictions)
+    monkeypatch.setattr(TLCValidatorMixin, "_filter_top_predictions", alternating_filter_top_predictions)
+
+    settings = Settings(
+        project_name=f"test_alternating_empty_batches_{task}",
+        run_name=f"test_alternating_empty_batches_{task}",
+        conf_thres=0.01,
+    )
+    model = TLCYOLO(TASK2MODEL[task])
+    model.collect(data=TASK2DATASET[task], splits=("val",), settings=settings, batch=1, device="cpu", workers=0)
+
+    assert num_batches >= 3, "Expected at least three batches, so both orders of empty and predicted batches occur"
+
+    column = TASK2PREDICTED_LABEL_COLUMN_NAME[task].split(".")[0]
+    instance_key = RLES if task == "segment" else "instances"
+    tables = get_metrics_tables_from_run(_get_run_from_settings(settings))["default_stream"]
+    rows = [row for table in tables for row in table.table_rows]
+    assert sorted(row[EXAMPLE_ID] for row in rows) == sorted(dropped), "Expected one metrics row per collected image"
+
+    for row in rows:
+        num_instances = len(row[column][instance_key])
+        if dropped[row[EXAMPLE_ID]]:
+            assert num_instances == 0, f"Example {row[EXAMPLE_ID]} had its predictions dropped but has instances"
+        else:
+            assert num_instances > 0, f"Example {row[EXAMPLE_ID]} expected predictions at conf_thres=0.01"
+
+
+def test_segment_empty_annotation_matches_tlc_encoding() -> None:
+    # Images without predictions are handed to the metrics writer in the same row form as images with them, so that
+    # every batch's first value has the same type. That row must be exactly what 3LC produces from an empty
+    # `SegmentationMasks`, so empty rows are stored as they were when the writer did the conversion itself.
+    from tlc.data_types import SegmentationMasks
+    from tlc.schemas import ConfidenceSchema
+
+    from tlc_ultralytics.segment.validator import TLCSegmentationValidator
+
+    h, w = 30, 40
+    validator = TLCSegmentationValidator.__new__(TLCSegmentationValidator)
+    row = validator._empty_annotation(h, w)
+
+    schema = SegmentationMasks.schema(
+        classes={0: "a"}, per_instance_schemas={"confidence": ConfidenceSchema(writable=False)}
+    )
+    empty = SegmentationMasks.create_empty(image_height=h, image_width=w)
+    assert row == schema.to_row(empty), "The empty row form differs from what 3LC encodes from an empty sample"
+
+
 @pytest.mark.parametrize("task", ["detect", "pose"])
 def test_prediction_index_does_not_reach_annotations(task, monkeypatch) -> None:
     # PREDICTION_INDEX is bookkeeping for the scaling step, so it must be gone from the scaled predictions the
