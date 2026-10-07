@@ -187,3 +187,6 @@ cython_debug/
 
 # direnv
 .envrc
+
+# Test cache (Ultralytics datasets/weights/settings)
+tests/.cache/

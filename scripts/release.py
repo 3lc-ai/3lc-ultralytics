@@ -155,7 +155,7 @@ def main():
         current_branch = run_command(["git", "branch", "--show-current"])
 
         # Update lock file to reflect the new version
-        run_command(["uv", "lock", "--no-sources"])
+        run_command(["uv", "lock"])
         print("Updated uv.lock")
 
         # Commit changes
@@ -178,7 +178,7 @@ def main():
         print("4. Create a GitHub release")
     else:
         print("\n[DRY RUN] Would have:")
-        print("1. Run `uv lock --no-sources` to update the lock file")
+        print("1. Run `uv lock` to update the lock file")
         print("2. Added and committed these changes to current branch")
         print("3. Pushed these changes to develop branch")
         print("4. Created and pushed tag")

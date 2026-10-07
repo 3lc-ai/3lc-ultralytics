@@ -1,4 +1,7 @@
 import json
+import logging
+from collections import defaultdict
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -6,6 +9,8 @@ from typing import Any
 import numpy as np
 import tlc
 import torch
+import yaml
+from task_config import TMP_PROJECT_ROOT_URL
 from tlc.constants._column_names import (
     CONFIDENCE,
     INSTANCES,
@@ -15,7 +20,10 @@ from tlc.constants._column_names import (
     VERTICES_2D,
     VERTICES_2D_ADDITIONAL_DATA,
 )
+from tmp_paths import TMP
 from ultralytics.utils.metrics import batch_probiou, bbox_iou
+
+from tlc_ultralytics import Settings
 
 IOU_THRESHOLDS = {
     "masks": {
@@ -252,3 +260,72 @@ def check_pose_table_and_metrics_tables(table, metrics_table, overrides: dict[st
         json.dumps(metrics_table_row)
         == '{"x_min": 0.0, "y_min": 0.0, "x_max": 481.0, "y_max": 640.0, "instances": [{"lines": [3, 1, 4, 2, 1, 0, 0, 2, 5, 6, 5, 7, 6, 8, 7, 9, 8, 10, 11, 12, 11, 13, 12, 14, 13, 15, 14, 16, 5, 11, 6, 12], "lines_additional_data": {"line_role": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}, "vertices_2d": [261.3307800292969, 244.01507568359375, 279.0058898925781, 227.51434326171875, 247.5042724609375, 227.35733032226562, 311.8406677246094, 238.04412841796875, 238.6436004638672, 237.12435913085938, 353.57470703125, 337.904541015625, 221.15402221679688, 337.7941589355469, 420.21734619140625, 456.3583679199219, 193.9453125, 457.38018798828125, 440.1544189453125, 550.0919799804688, 206.7235107421875, 548.3096313476562, 347.01666259765625, 532.8427124023438, 263.6978759765625, 533.6087646484375, 396.7471008300781, 538.8079223632812, 259.0788269042969, 541.6107177734375, 427.5286865234375, 569.4536743164062, 281.0750427246094, 569.3405151367188], "vertices_2d_additional_data": {"vertex_role": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], "confidence": [0.8946985006332397, 0.8680123090744019, 0.8405828475952148, 0.6776658892631531, 0.5823836922645569, 0.9826786518096924, 0.9777358770370483, 0.8919739127159119, 0.8344438672065735, 0.7838741540908813, 0.7172360420227051, 0.8988322615623474, 0.889037549495697, 0.4888758957386017, 0.46207594871520996, 0.24518102407455444, 0.23172228038311005]}, "bbs_2d": [{"x_min": 137.60887145996094, "y_min": 144.41246032714844, "x_max": 481.0, "y_max": 638.9334716796875}]}], "instances_additional_data": {"label": [0], "confidence": [0.21688038110733032]}}'  # noqa: E501
     )
+
+
+def get_metrics_tables_from_run(run: tlc.Run) -> dict[str, list[tlc.Table]]:
+    """Return metrics tables grouped by stream name"""
+    metrics_infos = run.metrics
+    metrics_tables = defaultdict(list)
+    for metrics_info in metrics_infos:
+        metrics_table = tlc.Table.from_url(tlc.Url(metrics_info["url"]).to_absolute(run.url))
+        metrics_tables[metrics_info["stream_name"]].append(metrics_table)
+    return metrics_tables
+
+
+class CapturingHandler(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.log_records = []
+        self.log_messages = []
+
+    def emit(self, record):
+        self.log_records.append(record)
+        self.log_messages.append(self.format(record))
+
+
+def override_oks_sigmas() -> None:
+    """Return coco8-pose.yaml contents overridden with the COCO oks_sigmas"""
+    from ultralytics.data.utils import check_det_dataset
+    from ultralytics.utils.metrics import OKS_SIGMA
+
+    data = check_det_dataset("coco8-pose.yaml")
+
+    yaml_data = {
+        "train": data["train"],
+        "val": data["val"],
+        "test": None,
+        "kpt_shape": [17, 3],
+        "flip_idx": [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15],
+        "oks_sigmas": OKS_SIGMA.tolist(),
+        "names": {0: "person"},
+        "nc": 1,
+    }
+
+    (TMP / "coco8-pose.yaml").write_text(yaml.safe_dump(yaml_data))
+
+
+def get_run_from_settings(settings: Settings) -> tlc.Run:
+    run_url = TMP_PROJECT_ROOT_URL / settings.project_name / "runs" / settings.run_name
+    return tlc.Run.from_url(run_url)
+
+
+@contextmanager
+def capture_logs(loglevel: int = logging.INFO):
+    # Capture ultralytics logger output specifically
+    from ultralytics.utils import LOGGER
+
+    ultralytics_logger = LOGGER
+
+    # Create handler for 3LC run
+    tlc_handler = CapturingHandler()
+    tlc_handler.setLevel(loglevel)
+    formatter = logging.Formatter("%(message)s")
+    tlc_handler.setFormatter(formatter)
+
+    # Add handler to ultralytics logger
+    ultralytics_logger.addHandler(tlc_handler)
+
+    try:
+        yield tlc_handler.log_messages
+    finally:
+        ultralytics_logger.removeHandler(tlc_handler)

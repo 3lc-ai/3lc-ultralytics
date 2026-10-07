@@ -19,7 +19,7 @@ includes = [
 ]
 
 [build-system]
-requires = ["uv_build>=0.7.19,<0.8.0"]
+requires = ["uv_build>=0.12.21,<0.13.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
@@ -29,17 +29,37 @@ module-name = "tlc_ultralytics"
 dev = [
     "3lc[pandas]>=3.2.0,<4.0.0",
     "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
     "pytest-mock>=3.15.1",
+    "pytest-timeout>=2.4.0",
     "pytest-xdist>=3.8.0",
     "ruff>=0.15.0,<0.16",
     "ty>=0.0.17",
 ]
 
+# CPU-only torch on Linux for CI
+ci = [
+    "torch",
+    "torchvision",
+]
+# Never selected; the conflict below keeps CPU torch scoped to `ci`
+cuda = [
+    "torch",
+    "torchvision",
+]
+
 [tool.uv]
 default-groups = ["dev"]
-required-version = ">=0.7.19"
+required-version = ">=0.12.21"
+conflicts = [
+    [{ group = "ci" }, { group = "cuda" }],
+]
 
 [tool.uv.sources]
-"3lc" = [
-    { path = "../tlc-monorepo", editable=true },
-]
+torch = [{ index = "pytorch-cpu", group = "ci", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cpu", group = "ci", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
