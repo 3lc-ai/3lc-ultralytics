@@ -23,7 +23,7 @@ from tlc_ultralytics.segment.utils import check_seg_table
 from tlc_ultralytics.utils.dataset import _complete_label_column_name
 
 
-def _make_annotation_table(task: str, column_name: str, table_name: str) -> tlc.Table:
+def _make_annotation_table(task: str, column_name: str, table_name: str, image_column: str = "image") -> tlc.Table:
     """Build a single-row 3LC table for `task` whose annotation column is named `column_name`.
 
     Covers all four annotation tasks so column-resolution behaviour can be exercised uniformly.
@@ -73,8 +73,8 @@ def _make_annotation_table(task: str, column_name: str, table_name: str) -> tlc.
         raise ValueError(f"Unsupported task: {task}")
 
     return tlc.Table.from_dict(
-        {"image": [str(DUMMY_IMAGE_FILE)], column_name: [row]},
-        schema={column_name: schema},
+        {image_column: [str(DUMMY_IMAGE_FILE)], column_name: [row]},
+        schema={image_column: tlc.schemas.ImageSchema(), column_name: schema},
         project_name="test_annotation_column_resolution",
         dataset_name=task,
         table_name=table_name,
@@ -345,3 +345,181 @@ def test_complete_label_column_name() -> None:
     assert _complete_label_column_name("a", "a.b.c") == "a.b.c"
     assert _complete_label_column_name("a.b.c", "d.e.f") == "a.b.c"
     assert _complete_label_column_name("", "a.b.c") == "a.b.c"
+
+
+@pytest.mark.parametrize("task", ["detect", "segment", "pose", "obb"])
+def test_annotation_task_infers_image_column(task: str) -> None:
+    from tlc_ultralytics.utils.dataset import check_tlc_dataset
+
+    column, _, expected, _ = _ANNOTATION_RESOLUTION_CASES[task]
+    table = _make_annotation_table(task, column, "custom_image", image_column="Photo")
+    settings = Settings()
+    result = check_tlc_dataset(
+        data="",
+        tables={"val": table},
+        image_column_name=settings.image_column_name,
+        label_column_name=None,
+        task=task,
+        settings=settings,
+    )
+    assert settings.image_column_name == "Photo"
+    assert settings.label_column_name == expected
+    assert result["names"] == {0: "object"}
+
+
+def _make_classification_table(
+    table_name: str, images: tuple[str, ...] = ("Image",), labels: tuple[str, ...] = ("Label",)
+) -> tlc.Table:
+    rows = {name: [str(DUMMY_IMAGE_FILE)] for name in images}
+    rows.update({name: [0] for name in labels})
+    schema = {name: tlc.schemas.ImageSchema() for name in images}
+    schema.update({name: tlc.schemas.CategoricalLabelSchema(classes=["cat", "dog"]) for name in labels})
+    return tlc.Table.from_dict(
+        rows,
+        schema=schema,
+        project_name="test_classification_column_resolution",
+        dataset_name="classification",
+        table_name=table_name,
+        if_exists="overwrite",
+    )
+
+
+@pytest.mark.parametrize("split", ["train", "test"])
+@pytest.mark.parametrize("names", [("Image", "Label"), ("photograph", "species")])
+def test_classification_infers_columns_before_validation(split: str, names: tuple[str, str]) -> None:
+    from ultralytics.cfg import get_cfg
+
+    from tlc_ultralytics.classify.dataset import TLCClassificationDataset
+    from tlc_ultralytics.utils.dataset import check_tlc_dataset
+
+    image, label = names
+    table = _make_classification_table(f"inferred_{split}_{image}", images=(image,), labels=(label,))
+    settings = Settings()
+    # URLs exercise the same loading path as Hub jobs; test-only splits exercise collection setup.
+    data = check_tlc_dataset(
+        data="",
+        tables={split: str(table.url)},
+        image_column_name=settings.image_column_name,
+        label_column_name=settings.label_column_name,
+        splits=(split,),
+        task="classify",
+        settings=settings,
+    )
+    assert settings.image_column_name == image
+    assert settings.label_column_name == label
+    assert data["names"] == {0: "cat", 1: "dog"}
+    dataset = TLCClassificationDataset(
+        table,
+        get_cfg(overrides={"imgsz": 32}),
+        image_column_name=settings.image_column_name,
+        label_column_name=settings.label_column_name,
+        class_map=data["3lc_class_to_range"],
+    )
+    assert len(dataset) == 1
+    assert dataset[0]["cls"] == 0
+
+
+@pytest.mark.parametrize("image,label", [("image", "label"), ("chosen_image", "chosen_label")])
+def test_existing_column_choices_win_over_other_candidates(image: str, label: str) -> None:
+    from tlc_ultralytics.utils.dataset import check_tlc_dataset
+
+    table = _make_classification_table(f"choices_{image}", images=("Image", image), labels=("Label", label))
+    settings = Settings(image_column_name=image, label_column_name=label)
+    check_tlc_dataset(
+        data="",
+        tables={"train": table},
+        image_column_name=image,
+        label_column_name=label,
+        task="classify",
+        settings=settings,
+    )
+    assert settings.image_column_name == image
+    assert settings.label_column_name == label
+
+
+@pytest.mark.parametrize("kind", ["image", "label"])
+@pytest.mark.parametrize("ambiguous", [False, True])
+def test_column_fallback_reports_missing_or_ambiguous_roles(kind: str, ambiguous: bool) -> None:
+    from tlc_ultralytics.utils.dataset import resolve_classification_label_column, resolve_image_column
+
+    candidates = ("First", "Second") if ambiguous else ()
+    table = _make_classification_table(
+        f"{kind}_{ambiguous}",
+        images=candidates if kind == "image" else ("Image",),
+        labels=candidates if kind == "label" else ("Label",),
+    )
+    resolver = resolve_image_column if kind == "image" else resolve_classification_label_column
+    with pytest.raises(ValueError, match="multiple columns" if ambiguous else "no column") as exc:
+        resolver(table)
+    assert f"Settings.{kind}_column_name" in str(exc.value)
+    assert "Available columns:" in str(exc.value)
+    if ambiguous:
+        assert "First, Second" in str(exc.value)
+
+
+def test_stale_explicit_columns_fall_back_with_warning() -> None:
+    from tlc_ultralytics.utils.dataset import resolve_classification_label_column, resolve_image_column
+
+    table = _make_classification_table("stale_override")
+    with capture_logs(logging.WARNING) as handler:
+        assert resolve_image_column(table, "old_image") == "Image"
+        assert resolve_classification_label_column(table, "old_label") == "Label"
+    assert any("old_image" in message for message in handler)
+    assert any("old_label" in message for message in handler)
+
+
+@pytest.mark.parametrize("mismatch", ["image", "label"])
+def test_resolved_columns_must_match_across_splits(mismatch: str) -> None:
+    from tlc_ultralytics.utils.dataset import check_tlc_dataset
+
+    train = _make_classification_table(f"train_{mismatch}")
+    val = _make_classification_table(
+        f"val_{mismatch}",
+        images=("OtherImage",) if mismatch == "image" else ("Image",),
+        labels=("OtherLabel",) if mismatch == "label" else ("Label",),
+    )
+    with pytest.raises(ValueError, match=r"Split 'val'.*missing resolved column"):
+        check_tlc_dataset(
+            data="",
+            tables={"train": train, "val": val},
+            image_column_name="image",
+            label_column_name=None,
+            task="classify",
+            settings=Settings(),
+        )
+
+
+def test_classification_resolves_one_name_for_both_splits() -> None:
+    from tlc_ultralytics.utils.dataset import check_tlc_dataset
+
+    train = _make_classification_table("matching_train")
+    val = _make_classification_table("matching_val")
+    settings = Settings()
+    with capture_logs(logging.WARNING) as messages:
+        result = check_tlc_dataset(
+            data="",
+            tables={"train": train, "val": str(val.url)},
+            image_column_name="image",
+            label_column_name=None,
+            task="classify",
+            settings=settings,
+        )
+    assert settings.image_column_name == "Image"
+    assert settings.label_column_name == "Label"
+    assert result["names"] == {0: "cat", 1: "dog"}
+    assert not any("was not found" in message for message in messages)
+
+
+def test_existing_wrong_role_is_reported_instead_of_silently_replaced() -> None:
+    from tlc_ultralytics.utils.dataset import check_tlc_dataset
+
+    table = _make_classification_table("wrong_role")
+    with pytest.raises(ValueError, match="Image column 'Label' must have role 'URL/Image'"):
+        check_tlc_dataset(
+            data="",
+            tables={"train": table},
+            image_column_name="Label",
+            label_column_name="Label",
+            task="classify",
+            settings=Settings(),
+        )

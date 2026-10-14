@@ -12,6 +12,7 @@ from ultralytics.utils import LOGGER, colorstr
 from tlc_ultralytics.constants import (
     CLASSIFY_LABEL_COLUMN_NAME,
     DETECTION_LABEL_COLUMN_NAME,
+    IMAGE_COLUMN_NAME,
     OBB_LABEL_COLUMN_NAME,
     POSE_LABEL_COLUMN_NAME,
     SEGMENTATION_LABEL_COLUMN_NAME,
@@ -110,9 +111,8 @@ def check_tlc_dataset(  # noqa: C901
     """
     dataset_checker, table_checker = get_dataset_functions(task)
 
-    # Classification has no annotation column to infer; apply its default eagerly so table creation
-    # and validation below have a concrete column name. Annotation tasks resolve later, against the
-    # table, so None can fall back to structural inference (see resolve_annotation_label_path).
+    # Table creation needs a concrete name. Existing tables can resolve this default by schema role
+    # below, before validation, just like annotation tasks resolve their label columns.
     if task == "classify" and label_column_name is None:
         label_column_name = CLASSIFY_LABEL_COLUMN_NAME
         if settings is not None:
@@ -213,19 +213,43 @@ def check_tlc_dataset(  # noqa: C901
 
                 raise ValueError(msg)
 
-        # Second pass: validate and log only the tables matching splits
+        # Log only the tables matching splits
         for key in tables:
             if splits is not None and key not in splits:
                 continue
 
-            # Check that the table is compatible with the current task
-            if table_checker is not None:
-                table_checker(tables[key], image_column_name, label_column_name)
-
             source = "3LC YAML file" if has_prefix else "provided tables"
             LOGGER.info(f"{colorstr(key)}: Using table {tables[key].url} from {source}")
 
+    if not tables:
+        raise ValueError("No tables were found for the requested dataset splits.")
     first_split = next(iter(tables.keys()))
+
+    # Resolve once, before validation, and propagate the names to trainers and validators. All
+    # splits share one Settings object, so they must use the same resolved column names.
+    image_column_name = resolve_image_column(tables[first_split], image_column_name)
+    if task == "classify":
+        label_column_name = resolve_classification_label_column(tables[first_split], label_column_name)
+    if settings is not None:
+        settings.image_column_name = image_column_name
+        if task == "classify":
+            settings.label_column_name = label_column_name
+
+    for key, table in tables.items():
+        if splits is not None and key not in splits:
+            continue
+        required_columns = [image_column_name]
+        if task == "classify":
+            required_columns.append(label_column_name)
+        for column in required_columns:
+            if column not in table.rows_schema.values:
+                raise ValueError(
+                    f"Split '{key}' in table {table.url} is missing resolved column '{column}'. "
+                    f"All splits must use the same column names as split '{first_split}'. "
+                    f"Available columns: {', '.join(table.rows_schema.values)}."
+                )
+        if table_checker is not None:
+            table_checker(table, image_column_name, label_column_name)
 
     # For annotation tasks, resolve the label column against the actual table: apply the task default
     # when unset, then fall back to structural inference when the named/default column is absent (e.g.
@@ -333,6 +357,65 @@ def check_tlc_dataset(  # noqa: C901
         if points is not None:
             ret["points"] = points
     return ret  # ty: ignore[invalid-return-type]
+
+
+def _resolve_role_column(
+    table: tlc.Table,
+    column_name: str,
+    *,
+    role_attribute: str,
+    role: str,
+    setting_name: str,
+    default_name: str,
+) -> str:
+    """Keep an existing column choice, or infer a unique top-level column by schema role."""
+    columns = table.rows_schema.values
+    if column_name in columns:
+        return column_name
+
+    candidates = [name for name, schema in columns.items() if getattr(schema.value, role_attribute, None) == role]
+    if len(candidates) != 1:
+        detail = (
+            f"multiple columns have role '{role}': {', '.join(candidates)}"
+            if candidates
+            else f"no column has role '{role}'"
+        )
+        raise ValueError(
+            f"Cannot resolve {setting_name}='{column_name}' for table {table.url}: {detail}. "
+            f"Set Settings.{setting_name} to the desired column. Available columns: {', '.join(columns)}."
+        )
+
+    resolved = candidates[0]
+    if column_name != default_name:
+        LOGGER.warning(
+            f"{TLC_COLORSTR}Configured `{setting_name}='{column_name}'` was not found in the table; "
+            f"using the auto-detected column '{resolved}' instead."
+        )
+    return resolved
+
+
+def resolve_image_column(table: tlc.Table, image_column_name: str = IMAGE_COLUMN_NAME) -> str:
+    """Resolve an image column, falling back to a unique column with the image URL role."""
+    return _resolve_role_column(
+        table,
+        image_column_name,
+        role_attribute="string_role",
+        role="URL/Image",
+        setting_name="image_column_name",
+        default_name=IMAGE_COLUMN_NAME,
+    )
+
+
+def resolve_classification_label_column(table: tlc.Table, label_column_name: str | None = None) -> str:
+    """Resolve a classification label column, falling back to a unique column with the label role."""
+    return _resolve_role_column(
+        table,
+        label_column_name if label_column_name is not None else CLASSIFY_LABEL_COLUMN_NAME,
+        role_attribute="number_role",
+        role="label",
+        setting_name="label_column_name",
+        default_name=CLASSIFY_LABEL_COLUMN_NAME,
+    )
 
 
 def resolve_label_value_path(table: tlc.Table, label_column_name: str) -> str:
