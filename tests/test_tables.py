@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 import tlc
@@ -243,6 +244,37 @@ def test_absolutize_image_url() -> None:
     result = TLCDatasetMixin._absolutize_image_url(absolute_url, tlc.Url("/one/two/table"))
     assert result == "/some/absolute/url.png"
     assert tlc.Url(result).scheme == tlc.url.Scheme.FILE
+
+
+@pytest.mark.parametrize("scheme", ["s3", "gs", "abfs", "https"])
+def test_relative_image_under_remote_table_is_rejected_before_file_access(scheme: str) -> None:
+    table_url = tlc.Url(f"{scheme}://bucket/datasets/train/tables/initial")
+    with pytest.raises(ValueError, match="YOLO requires local image files") as error:
+        TLCDatasetMixin._absolutize_image_url("../../bulk_data/image.png", table_url)
+    assert f"{scheme}://bucket/datasets/train/bulk_data/image.png" in str(error.value)
+    assert "Copy the table and its image data" in str(error.value)
+
+
+def test_classification_error_preserves_missing_column_detail() -> None:
+    from tlc_ultralytics.classify.utils import check_cls_table
+
+    table = Mock()
+    table.url = "s3://bucket/table"
+    table.rows_schema.values = {"Image": Mock(), "Label": Mock()}
+    table.rows_schema.values["Image"].value.string_role = "URL/Image"
+    table.rows_schema.values["Label"].value.number_role = "label"
+    with pytest.raises(ValueError, match="Image column 'image' not found") as error:
+        check_cls_table(table, "image", "label")
+    assert "Available columns: Image, Label" in str(error.value)
+    with pytest.raises(ValueError, match="Label column 'label' not found"):
+        check_cls_table(table, "Image", "label")
+    check_cls_table(table, "Image", "Label")
+
+
+@pytest.mark.parametrize("image", ["/test/alias/image.png", "<TEST_ALIAS>/image.png"])
+def test_remote_table_can_reference_local_images(image: str) -> None:
+    result = TLCDatasetMixin._absolutize_image_url(image, tlc.Url("s3://bucket/tables/initial"))
+    assert result == "/test/alias/image.png"
 
 
 # === Tests for _get_default_names and table reuse functionality ===

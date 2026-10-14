@@ -90,13 +90,20 @@ class TLCDatasetMixin:
             msg += "Make sure the alias is spelled correctly and is registered in your configuration."
             raise ValueError(msg) from e
 
-        if url.scheme not in ("file", "relative"):
-            msg = f"Image URL {url.to_str()} is not a local file path, it has scheme {url.scheme}. "
-            msg += "Only local image file paths are supported. If your image URLs are not local, first copy "
-            msg += "the images to a local directory and use an alias."
+        # A relative reference can resolve into a bucket when its table lives there.
+        # Validate the final URL before any filesystem/image reader receives it.
+        url = url.to_absolute(table_url)
+        if url.scheme != "file":
+            msg = (
+                f"YOLO requires local image files, but image reference {str(image_str)!r} "
+                f"in table {table_url} resolves to {url.to_str()!r} (scheme {url.scheme}). "
+                "Copy the table and its image data to the training machine, preserving relative paths, "
+                "or use image aliases that resolve to local files on that machine. "
+                "Being able to read the table from cloud storage does not make its images local."
+            )
             raise ValueError(msg)
 
-        return url.to_absolute(table_url).to_str()
+        return url.to_str()
 
     def _resolve_image_dimensions(self, im_file: str, height: float, width: float) -> tuple[float, float]:
         """Resolve the image ``(height, width)`` for a row.
