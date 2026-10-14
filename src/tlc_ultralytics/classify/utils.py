@@ -80,11 +80,11 @@ def check_cls_table(table: tlc.Table, image_column_name: str, label_column_name:
         )
 
         # Check for desired roles
-        assert row_schema[image_column_name].value.string_role == "URL/Image", (
+        assert getattr(row_schema[image_column_name].value, "string_role", None) == "URL/Image", (
             f"Image column '{image_column_name}' must have role 'URL/Image'."
         )
-        assert row_schema[label_column_name].value.number_role == "label", (
+        assert getattr(row_schema[label_column_name].value, "number_role", None) == "label", (
             f"Label column '{label_column_name}' must have role 'label'."
         )
     except AssertionError as e:
-        raise ValueError(f"Table {table.url} is not compatible with YOLO classification.") from e
+        raise ValueError(f"Table {table.url} is not compatible with YOLO classification: {e}") from e
