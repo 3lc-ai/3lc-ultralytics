@@ -71,11 +71,11 @@ def check_cls_table(table: tlc.Table, image_column_name: str, label_column_name:
     try:
         # Check for image and label columns in schema
         assert image_column_name in row_schema, (
-            f"Image column '{image_column_name}' not found in schema for Table {table.url}. "
+            f"Image column '{image_column_name}' not found. Available columns: {', '.join(row_schema)}. "
             "Try providing your 'image_column_name' as an argument if you have a different column name."
         )
         assert label_column_name in row_schema, (
-            f"Label column '{label_column_name}' not found in schema for Table {table.url}. "
+            f"Label column '{label_column_name}' not found. Available columns: {', '.join(row_schema)}. "
             "Try providing your 'label_column_name' as an argument if you have a different column name."
         )
 
