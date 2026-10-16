@@ -6,6 +6,14 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Added
+
+- When the image column (default `image`) is not in the table and a single column with the `URL/Image` role is present, use it instead. For the `classify` task, the label column similarly falls back to a single column with the `label` role. If there is no such column, or more than one, an error lists the available columns ([#111](https://github.com/3lc-ai/3lc-ultralytics/pull/111)).
+
+### Fixed
+
+- Relative image paths in a table stored in cloud storage now raise a clear error up front, since they resolve to non-local images. Previously they passed the local-file check and failed later when the image was read ([#112](https://github.com/3lc-ai/3lc-ultralytics/pull/112)).
+
 ## [0.5.1] - 2026-10-06
 
 ### Fixed
