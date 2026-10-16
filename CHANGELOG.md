@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-16
+
 ### Added
 
 - When the image column (default `image`) is not in the table and a single column with the `URL/Image` role is present, use it instead. For the `classify` task, the label column similarly falls back to a single column with the `label` role. If there is no such column, or more than one, an error lists the available columns ([#111](https://github.com/3lc-ai/3lc-ultralytics/pull/111)).
