@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 import tlc
@@ -211,6 +211,22 @@ def test_check_tlc_dataset_string_tables_converted_before_split_filter() -> None
 
     # The key assertion: the train entry should be a tlc.Table, not a string
     assert isinstance(result["train"], tlc.Table)
+
+
+def test_absolutize_image_url_unexpanded_alias_hint_under_ddp() -> None:
+    """Under DDP an unexpanded alias most likely came from `register_url_alias` in the launching script, which the
+    worker processes never see, so the error points at the environment variable instead."""
+    import tlc_ultralytics.engine.dataset as dataset_module
+
+    url = "<UNEXPANDED_ALIAS>/in/my/url.png"
+    with pytest.raises(ValueError) as single_process:
+        TLCDatasetMixin._absolutize_image_url(url, tlc.Url("some_table_url"))
+    assert "TLC_ALIAS_" not in str(single_process.value)
+
+    with patch.object(dataset_module, "RANK", 0), pytest.raises(ValueError) as ddp:
+        TLCDatasetMixin._absolutize_image_url(url, tlc.Url("some_table_url"))
+    assert "TLC_ALIAS_UNEXPANDED_ALIAS=" in str(ddp.value)
+    assert "register_url_alias" in str(ddp.value)
 
 
 def test_absolutize_image_url() -> None:
