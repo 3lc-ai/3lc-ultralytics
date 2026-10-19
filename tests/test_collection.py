@@ -440,6 +440,46 @@ def test_rolling_metrics_writer_rolls_by_bytes() -> None:
         writer.finalize()
 
 
+def test_rolling_metrics_writer_rank_unique_table_names() -> None:
+    """Unit test: under DDP, writers on different ranks that start before either finalizes must not pick the same
+    table name. Simulates the DDP interleaving in one process by switching the rank the writers see."""
+    from tlc_ultralytics.utils import _rolling_writer
+    from tlc_ultralytics.utils._rolling_writer import _RollingMetricsWriter
+
+    run = tlc.init(project_name="test_rolling_writer_ddp", run_name="test_rolling_writer_ddp")
+
+    writers = {}
+    for rank in (0, 1):
+        with patch.object(_rolling_writer, "RANK", rank):
+            writers[rank] = _RollingMetricsWriter(
+                run_url=run.url,
+                foreign_table_url=run.url / "dummy_table",
+                schema={"value": tlc.schemas.Float32Schema()},
+                max_buffer_bytes=2**30,
+            )
+            # The first batch constructs the inner writer, which claims the table name
+            writers[rank].add_batch({"example_id": [2 * rank, 2 * rank + 1], "value": [0.5, 1.5]})
+
+    table_urls = {rank: writer.finalize()[0] for rank, writer in writers.items()}
+    assert [url.name for url in table_urls[0]] == ["metrics_rank0_0000"]
+    assert [url.name for url in table_urls[1]] == ["metrics_rank1_0000"]
+
+    for rank, urls in table_urls.items():
+        df = tlc.Table.from_url(urls[0]).to_pandas()
+        assert sorted(df["example_id"].tolist()) == [2 * rank, 2 * rank + 1]
+
+    # Outside DDP the default naming is unchanged
+    assert _rolling_writer.RANK == -1
+    single = _RollingMetricsWriter(
+        run_url=run.url,
+        foreign_table_url=run.url / "dummy_table",
+        schema={"value": tlc.schemas.Float32Schema()},
+        max_buffer_bytes=2**30,
+    )
+    single.add_batch({"example_id": [0], "value": [0.0]})
+    assert single.finalize()[0][0].name.startswith("metrics_0")
+
+
 @pytest.mark.slow
 def test_metrics_flushing_end_to_end() -> None:
     """Collect with a zero buffer threshold: metrics are flushed to multiple tables that together
