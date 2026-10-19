@@ -8,7 +8,7 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Fixed
 
-- Multi-GPU (DDP) training no longer has ranks overwriting each other's metrics tables ([#114](https://github.com/3lc-ai/3lc-ultralytics/pull/114)).
+- Multi-GPU (DDP) no longer races when writing metrics tables ([#114](https://github.com/3lc-ai/3lc-ultralytics/pull/114)).
 
 - Multi-GPU (DDP) training now raises a clear error when a 3LC alias is only set in the launching process and will not reach the GPU worker processes ([#115](https://github.com/3lc-ai/3lc-ultralytics/pull/115)).
 
