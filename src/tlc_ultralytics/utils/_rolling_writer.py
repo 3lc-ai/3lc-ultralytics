@@ -10,17 +10,41 @@ back together, and the `example_id` column identifies the rows.
 
 from __future__ import annotations
 
+import contextlib
 import copy
 from typing import TYPE_CHECKING, Any
 
 import tlc
+import tlc._core.writers.metrics_writer as _tlc_metrics_writer
 from tlc._core.object_registry import ObjectRegistry
-from ultralytics.utils import LOGGER
+from ultralytics.utils import LOGGER, RANK
 
 from tlc_ultralytics.constants import TLC_COLORSTR
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, MutableMapping
+    from collections.abc import Iterator, Mapping, MutableMapping
+
+
+@contextlib.contextmanager
+def _rank_unique_metrics_table_names() -> Iterator[None]:
+    """Make `tlc.MetricsTableWriter`s constructed in this context name their tables uniquely for this DDP rank.
+
+    `MetricsTableWriter` picks its table name at construction with a check-then-write `create_unique()` on
+    `metrics_0000` in the run directory. Under DDP every rank writes its own tables into the same run directory, so
+    ranks that start a writer at the same moment pick the same name and overwrite each other's tables. Giving each rank
+    its own name sequence (`metrics_rank3_0000`, ...) removes the collision. `MetricsTableWriter` has no parameter for
+    the name, so the base name is swapped for the duration of the construction. Outside DDP this is a no-op.
+    """
+    if RANK < 0:
+        yield
+        return
+
+    original_name = _tlc_metrics_writer._FIRST_METRICS_TABLE_NAME
+    _tlc_metrics_writer._FIRST_METRICS_TABLE_NAME = f"metrics_rank{RANK}_0000"
+    try:
+        yield
+    finally:
+        _tlc_metrics_writer._FIRST_METRICS_TABLE_NAME = original_name
 
 
 class _RollingMetricsWriter:
@@ -98,12 +122,13 @@ class _RollingMetricsWriter:
     def _new_writer(self) -> tlc.MetricsTableWriter:
         # Deep-copy the column schemas so schema mutations made by one writer's pipeline (defaults merging,
         # schema resolution) cannot leak into the next writer's.
-        return tlc.MetricsTableWriter(
-            run_url=self._run_url,
-            foreign_table_url=self._foreign_table_url,
-            schema=copy.deepcopy(self._schema),
-            stream_name=self._stream_name,
-        )
+        with _rank_unique_metrics_table_names():
+            return tlc.MetricsTableWriter(
+                run_url=self._run_url,
+                foreign_table_url=self._foreign_table_url,
+                schema=copy.deepcopy(self._schema),
+                stream_name=self._stream_name,
+            )
 
     def _roll(self) -> None:
         """Finalize the current inner writer and arrange for a fresh one on the next batch."""
