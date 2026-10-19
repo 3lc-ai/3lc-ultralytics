@@ -3,13 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from multiprocessing.pool import ThreadPool
 from typing import TYPE_CHECKING, Any
 
 import tlc
 from tlc.helpers import ImageHelper
 from ultralytics.data.utils import get_hash, verify_image
-from ultralytics.utils import LOGGER, NUM_THREADS, TQDM, colorstr
+from ultralytics.utils import LOGGER, NUM_THREADS, RANK, TQDM, colorstr
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -88,6 +89,15 @@ class TLCDatasetMixin:
         except ValueError as e:
             msg = f"Failed to expand alias in image_str: {image_str}. "
             msg += "Make sure the alias is spelled correctly and is registered in your configuration."
+            if RANK != -1:
+                # DDP workers are fresh processes, so aliases registered in the launching script never reach them
+                match = re.match(r"<([A-Z][A-Z0-9_]*)>", str(image_str))
+                env_var = f"TLC_ALIAS_{match.group(1)}" if match else "TLC_ALIAS_<NAME>"
+                msg += (
+                    " Multi-GPU training runs each GPU in a separate process, which does not see aliases registered "
+                    "with `tlc.url.register_url_alias()` in your script. Define the alias in your 3LC config file "
+                    f"or as an environment variable instead, e.g. `{env_var}=/path/to/data`."
+                )
             raise ValueError(msg) from e
 
         # A relative reference can resolve into a bucket when its table lives there.
