@@ -6,6 +6,8 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-10-19
+
 ### Fixed
 
 - Multi-GPU (DDP) no longer races when writing metrics tables ([#114](https://github.com/3lc-ai/3lc-ultralytics/pull/114)).

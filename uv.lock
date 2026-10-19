@@ -116,7 +116,7 @@ pandas = [
 
 [[package]]
 name = "3lc-ultralytics"
-version = "0.5.2"
+version = "0.5.3"
 source = { editable = "." }
 dependencies = [
     { name = "3lc" },
