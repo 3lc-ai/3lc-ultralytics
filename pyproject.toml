@@ -19,7 +19,7 @@ includes = [
 ]
 
 [build-system]
-requires = ["uv_build>=0.12.21,<0.13.0"]
+requires = ["uv_build>=0.13.4,<0.14.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
@@ -50,7 +50,7 @@ cuda = [
 
 [tool.uv]
 default-groups = ["dev"]
-required-version = ">=0.12.21"
+required-version = ">=0.13.4"
 conflicts = [
     [{ group = "ci" }, { group = "cuda" }],
 ]

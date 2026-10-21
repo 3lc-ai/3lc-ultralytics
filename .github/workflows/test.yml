@@ -27,7 +27,7 @@ jobs:
         uses: astral-sh/setup-uv@v10.2.0
         with:
           # Pin to match requirement in pyproject.toml
-          version: "0.12.21"
+          version: "0.13.4"
           enable-cache: true
 
       - name: Install dependencies
@@ -74,7 +74,7 @@ jobs:
         uses: astral-sh/setup-uv@v10.2.0
         with:
           # Pin to match build-system.requires so the bundled uv_build is used
-          version: "0.12.21"
+          version: "0.13.4"
           python-version: ${{ matrix.python-version }}
           enable-cache: true
 
