@@ -59,9 +59,9 @@ dependencies = [
     { name = "cryptlex-lexactivator" },
     { name = "filelock" },
     { name = "litestar" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "opencv-python-headless" },
     { name = "packaging" },
     { name = "pillow" },
@@ -71,7 +71,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyperclip" },
     { name = "python-dateutil" },
-    { name = "pywin32", marker = "sys_platform == 'win32' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
     { name = "pyyaml" },
     { name = "randomname" },
     { name = "rich" },
@@ -110,8 +110,8 @@ wheels = [
 
 [package.optional-dependencies]
 pandas = [
-    { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "pandas", version = "3.0.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "pandas", version = "3.0.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
 
 [[package]]
@@ -121,8 +121,8 @@ source = { editable = "." }
 dependencies = [
     { name = "3lc" },
     { name = "pacmap" },
-    { name = "ultralytics", version = "8.4.123", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.11' and sys_platform == 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "ultralytics", version = "8.4.165", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (python_full_version < '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or sys_platform != 'darwin'" },
+    { name = "ultralytics", version = "8.4.123", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform == 'darwin'" },
+    { name = "ultralytics", version = "8.4.165", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or sys_platform != 'darwin'" },
 ]
 
 [package.dev-dependencies]
@@ -190,7 +190,7 @@ name = "anyio"
 version = "4.15.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "exceptiongroup", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
     { name = "idna" },
     { name = "typing-extensions" },
 ]
@@ -210,11 +210,11 @@ wheels = [
 
 [[package]]
 name = "certifi"
-version = "2026.7.22"
+version = "2026.10.19"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a3/c2/24167ea9858356b47a87a50d39908bfdb72ceeefe0041586e704e5376b3a/certifi-2026.7.22.tar.gz", hash = "sha256:741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55", size = 138112, upload-time = "2026-07-22T03:35:12.644Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a6/bd/1436c50cc46699de0230fbaacc1d1de7bfec413176099949e9d5112e88f2/certifi-2026.10.19.tar.gz", hash = "sha256:035c1e85572b141bf1c3a3eff0e33a8eb74917522f2559075ff8d2fea780a1ae", size = 137598, upload-time = "2026-10-20T02:24:16.604Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl", hash = "sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775", size = 136983, upload-time = "2026-07-22T03:35:11.276Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/51/29046e48f693c54e5b7412216d447a1d8362c9653148d98c02cdf65fa733/certifi-2026.10.19-py3-none-any.whl", hash = "sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b", size = 136464, upload-time = "2026-10-20T02:24:15.072Z" },
 ]
 
 [[package]]
@@ -392,7 +392,7 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/66/54/eb9bfc647b19f2009dd5c7f5ec51c4e6ca831725f1aea7a993034f483147/contourpy-1.3.2.tar.gz", hash = "sha256:b6945942715a034c671b7fc54f9588126b0b8bf23db2696e3ca8328f3ff0ab54", size = 13466130, upload-time = "2025-04-15T17:47:53.79Z" }
 wheels = [
@@ -471,7 +471,7 @@ resolution-markers = [
     "python_full_version == '3.11.*' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/58/01/1253e6698a07380cd31a736d248a3f2a50a7c88779a1813da27503cadc2a/contourpy-1.3.3.tar.gz", hash = "sha256:083e12155b210502d0bca491432bb04d56dc3432f95a979b429f2848c3dbe880", size = 13466174, upload-time = "2025-07-26T12:03:12.549Z" }
 wheels = [
@@ -575,7 +575,7 @@ resolution-markers = [
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/83/5a/a55177dd22553a277388e8a1b3220e92de91bacb28356cdc73caa240121d/contourpy-1.4.0.tar.gz", hash = "sha256:20156f5a1ac4f8ce02656e39a61e82164a3d359796dc8026f75b062783d500e1", size = 13323726, upload-time = "2026-09-11T19:05:05.808Z" }
 wheels = [
@@ -727,7 +727,7 @@ wheels = [
 
 [package.optional-dependencies]
 toml = [
-    { name = "tomli", marker = "python_full_version <= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "tomli", marker = "python_full_version <= '3.11'" },
 ]
 
 [[package]]
@@ -790,43 +790,43 @@ wheels = [
 
 [package.optional-dependencies]
 cublas = [
-    { name = "nvidia-cublas", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
 ]
 cudart = [
-    { name = "nvidia-cuda-runtime", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-cuda-runtime", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
 ]
 cufft = [
-    { name = "nvidia-cufft", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "nvidia-nvjitlink", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-cufft", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
 ]
 cufile = [
-    { name = "nvidia-cufile", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-cufile", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
 ]
 cupti = [
-    { name = "nvidia-cuda-cupti", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-cuda-cupti", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
 ]
 curand = [
-    { name = "nvidia-curand", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-curand", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
 ]
 cusolver = [
-    { name = "nvidia-cublas", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "nvidia-cusolver", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "nvidia-cusparse", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "nvidia-nvjitlink", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-cublas", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-cusolver", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
 ]
 cusparse = [
-    { name = "nvidia-cusparse", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "nvidia-nvjitlink", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-cusparse", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
 ]
 nvjitlink = [
-    { name = "nvidia-nvjitlink", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
 ]
 nvrtc = [
-    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
 ]
 nvtx = [
-    { name = "nvidia-nvtx", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'aarch64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (platform_machine == 'x86_64' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "nvidia-nvtx", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
 ]
 
 [[package]]
@@ -843,7 +843,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -864,9 +864,9 @@ name = "faiss-cpu"
 version = "1.15.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "packaging" },
 ]
 wheels = [
@@ -892,7 +892,7 @@ name = "faker"
 version = "40.40.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "tzdata", marker = "sys_platform == 'win32' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/43/43/7f5870d05331cb1649704040f51332d37f2468ed857de1e226482e2948b0/faker-40.40.0.tar.gz", hash = "sha256:803ee7f920679e7367c3f7b7f97752f5a9780aa5566c71723fbe57d591beafe1", size = 2029985, upload-time = "2026-09-29T00:56:19.983Z" }
 wheels = [
@@ -1289,7 +1289,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
     { name = "click" },
-    { name = "exceptiongroup", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
     { name = "httpx" },
     { name = "litestar-htmx" },
     { name = "msgspec" },
@@ -1473,15 +1473,15 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
 ]
 dependencies = [
-    { name = "contourpy", version = "1.3.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "cycler", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "fonttools", version = "4.65.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "kiwisolver", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "packaging", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "pillow", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "pyparsing", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "python-dateutil", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "contourpy", version = "1.3.2", source = { registry = "https://pypi.org/simple" } },
+    { name = "cycler" },
+    { name = "fonttools", version = "4.65.0", source = { registry = "https://pypi.org/simple" } },
+    { name = "kiwisolver" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" } },
+    { name = "packaging" },
+    { name = "pillow" },
+    { name = "pyparsing" },
+    { name = "python-dateutil" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/63/1b/4be5be87d43d327a0cf4de1a56e86f7f84c89312452406cf122efe2839e6/matplotlib-3.10.9.tar.gz", hash = "sha256:fd66508e8c6877d98e586654b608a0456db8d7e8a546eb1e2600efd957302358", size = 34811233, upload-time = "2026-04-24T00:14:13.539Z" }
 wheels = [
@@ -1578,17 +1578,17 @@ resolution-markers = [
     "python_full_version == '3.11.*' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
 ]
 dependencies = [
-    { name = "contourpy", version = "1.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "contourpy", version = "1.4.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "cycler", marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "fonttools", version = "4.66.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "kiwisolver", marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "packaging", marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "pillow", marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "pyparsing", marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "python-dateutil", marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "contourpy", version = "1.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "contourpy", version = "1.4.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "cycler" },
+    { name = "fonttools", version = "4.66.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "kiwisolver" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "packaging" },
+    { name = "pillow" },
+    { name = "pyparsing" },
+    { name = "python-dateutil" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e7/c8/9aa712a0afb882649424dd8de8ad9aa6235e796e84c6052e8f6dc1598d0d/matplotlib-3.11.2.tar.gz", hash = "sha256:cec596316640f2b394b8f0daa0ea61a8eae82d017b620b9f202befb972a59ea4", size = 32660610, upload-time = "2026-09-11T19:05:31.214Z" }
 wheels = [
@@ -1736,7 +1736,7 @@ name = "multidict"
 version = "7.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c4/64/642465a4827331a98ba4ae29f97658be25d1bdcb868872a2f78f7482b507/multidict-7.0.0.tar.gz", hash = "sha256:a7fcd089a0af2e0ef053c0d39c22c9ebf2434dddcb91034fd2f59ec99623788e", size = 280561, upload-time = "2026-09-26T19:36:12.283Z" }
 wheels = [
@@ -1966,9 +1966,9 @@ version = "0.68.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "llvmlite" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/4e/cd/e8280f9ffa30fea9fabc5341223701231fcc5d53a31f51419d42d4bec3a6/numba-0.68.0.tar.gz", hash = "sha256:8a781de54b980b98f43bff7f1093701b5f07c80d031c7cfa8a87493d8bf73f2d", size = 2855363, upload-time = "2026-09-30T15:05:44.721Z" }
 wheels = [
@@ -2418,9 +2418,9 @@ name = "opencv-python"
 version = "5.0.0.93"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/79/4c/a438d23e09ce2033c09f7b784ad2fbdb0adf529e434101ed28f142226f98/opencv_python-5.0.0.93.tar.gz", hash = "sha256:66aac3e5b5faa48d4025816592f3af19e4bfc2c68dec067bae2dbb4ca10aa9e2", size = 81802749, upload-time = "2026-07-02T06:59:53.815Z" }
 wheels = [
@@ -2439,9 +2439,9 @@ name = "opencv-python-headless"
 version = "4.14.0.94"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/67/8a/51ff1c6287be0b6cd3070cf095875da4ff7d6eda38507e6ada5608786a78/opencv_python_headless-4.14.0.94.tar.gz", hash = "sha256:4afa2ea1214453648be88259f035712454faa9039b686de7753569ba8eec1577", size = 96405664, upload-time = "2026-07-28T19:23:48.758Z" }
 wheels = [
@@ -2471,11 +2471,11 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "faiss-cpu" },
     { name = "numba" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "scikit-learn", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "scikit-learn", version = "1.9.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "scikit-learn", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "scikit-learn", version = "1.9.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/88/5c/0b00087c7a7ee264e1e4ad6ddc6e38d9a55f29a05e17aa770d97dbdbaf77/pacmap-0.9.1.tar.gz", hash = "sha256:ec31ea3e316b9ad6294c5bc8a8e8b45a658b00d7f59799b960db16469095e35e", size = 24500, upload-time = "2026-03-02T21:34:46.876Z" }
 wheels = [
@@ -2499,10 +2499,10 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "python-dateutil", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "pytz", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "tzdata", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" } },
+    { name = "python-dateutil" },
+    { name = "pytz" },
+    { name = "tzdata" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/33/01/d40b85317f86cf08d853a4f495195c73815fdf205eef3993821720274518/pandas-2.3.3.tar.gz", hash = "sha256:e05e1af93b977f7eafa636d043f9f94c7ee3ac81af99c13508215942e64c993b", size = 4495223, upload-time = "2025-09-29T23:34:51.853Z" }
 wheels = [
@@ -2592,10 +2592,10 @@ resolution-markers = [
     "python_full_version == '3.11.*' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "python-dateutil", marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "tzdata", marker = "(python_full_version >= '3.11' and sys_platform == 'emscripten') or (python_full_version >= '3.11' and sys_platform == 'win32') or (sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform == 'emscripten' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform == 'win32' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "python-dateutil" },
+    { name = "tzdata", marker = "sys_platform == 'emscripten' or sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e2/17/d7b106e05bfa642e8694451e7d3d759c6a241c5386a5d962e4f66c047e06/pandas-3.0.6.tar.gz", hash = "sha256:66b07ef7315a31bfe1089cd3d71a7de781c9dca986762d0b4fe7c0ef17465d10", size = 4667686, upload-time = "2026-09-17T23:23:18.345Z" }
 wheels = [
@@ -2857,9 +2857,9 @@ name = "pycocotools"
 version = "2.0.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a2/df/32354b5dda963ffdfc8f75c9acf8828ef7890723a4ed57bb3ff2dc1d6f7e/pycocotools-2.0.11.tar.gz", hash = "sha256:34254d76da85576fcaf5c1f3aa9aae16b8cb15418334ba4283b800796bd1993d", size = 25381, upload-time = "2025-12-15T22:31:46.148Z" }
 wheels = [
@@ -3063,13 +3063,13 @@ name = "pytest"
 version = "9.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "exceptiongroup", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
     { name = "iniconfig" },
     { name = "packaging" },
     { name = "pluggy" },
     { name = "pygments" },
-    { name = "tomli", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e4/47/b9efed96c114afcfa3c9d3fe98a76a1d14c74a9e266d397cf6eb64be5e01/pytest-9.1.1.tar.gz", hash = "sha256:1088fbde8f2b49d95a549a195707afa7a76a3ce9bcadc26b6d71f0ffda5fe313", size = 1636369, upload-time = "2026-06-19T10:58:32.857Z" }
 wheels = [
@@ -3265,7 +3265,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "markdown-it-py" },
     { name = "pygments" },
-    { name = "typing-extensions", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ab/3a/0316b28d0761c6734d6bc14e770d85506c986c85ffb239e688eeaab2c2bc/rich-13.9.4.tar.gz", hash = "sha256:439594978a49a09530cff7ebc4b5c7103ef57baf48d5ea3184f21d9a2befa098", size = 223149, upload-time = "2024-11-01T16:43:57.873Z" }
 wheels = [
@@ -3278,9 +3278,9 @@ version = "1.9.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
     { name = "rich" },
-    { name = "typing-extensions", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/96/3e/5688fdd83aea416de336582a274f2bc8236b5c261b04c11e17bc262786ad/rich_click-1.9.9.tar.gz", hash = "sha256:324cba7513cd4187ee92b2eef21f071714e45be062458c8b157bd7e0c81103e3", size = 75866, upload-time = "2026-09-05T19:20:14.799Z" }
 wheels = [
@@ -3338,10 +3338,10 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
 ]
 dependencies = [
-    { name = "joblib", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "threadpoolctl", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "joblib" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" } },
+    { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" } },
+    { name = "threadpoolctl" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/98/c2/a7855e41c9d285dfe86dc50b250978105dce513d6e459ea66a6aeb0e1e0c/scikit_learn-1.7.2.tar.gz", hash = "sha256:20e9e49ecd130598f1ca38a1d85090e1a600147b9c02fa6f15d69cb53d968fda", size = 7193136, upload-time = "2025-09-09T08:21:29.075Z" }
 wheels = [
@@ -3414,13 +3414,13 @@ resolution-markers = [
     "python_full_version == '3.11.*' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
 ]
 dependencies = [
-    { name = "joblib", marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "narwhals", marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "threadpoolctl", marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "joblib" },
+    { name = "narwhals" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "threadpoolctl" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d2/eb/eaf5e07fcc0da7149b0e084f24e54edd7441b9a89ce7e034032ae97fe3a0/scikit_learn-1.9.1.tar.gz", hash = "sha256:629cada3e33e2b9bf376cdc7614a47a4140b8aedc1d836579e359736fbd82977", size = 7786908, upload-time = "2026-09-10T18:34:04.679Z" }
 wheels = [
@@ -3473,7 +3473,7 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0f/37/6964b830433e654ec7485e45a00fc9a27cf868d622838f6b6d9c5ec0d532/scipy-1.15.3.tar.gz", hash = "sha256:eae3cf522bc7df64b42cad3925c876e1b0b6c35c1337c93e12c0f366f55b0eaf", size = 59419214, upload-time = "2025-05-08T16:13:05.955Z" }
 wheels = [
@@ -3541,7 +3541,7 @@ resolution-markers = [
     "python_full_version == '3.11.*' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7a/97/5a3609c4f8d58b039179648e62dd220f89864f56f7357f5d4f45c29eb2cc/scipy-1.17.1.tar.gz", hash = "sha256:95d8e012d8cb8816c226aef832200b1d45109ed4464303e997c5b13122b297c0", size = 30573822, upload-time = "2026-02-23T00:26:24.851Z" }
 wheels = [
@@ -3634,7 +3634,7 @@ resolution-markers = [
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7e/74/66de6258867beb2ef08f35f9f2ac017a52cacd5081714d239ff1a442d458/scipy-1.18.1.tar.gz", hash = "sha256:52c4b7422442aba924d03ad4019852b08a92e64ea187b933135687bfe2747307", size = 30781235, upload-time = "2026-08-21T23:28:50.599Z" }
 wheels = [
@@ -3869,9 +3869,9 @@ resolution-markers = [
 dependencies = [
     { name = "cuda-bindings", marker = "(sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
     { name = "cuda-toolkit", extra = ["cublas", "cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "(sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "filelock", marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "fsspec", marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "jinja2", marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "filelock", marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or extra == 'group-15-3lc-ultralytics-cuda'" },
+    { name = "fsspec", marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or extra == 'group-15-3lc-ultralytics-cuda'" },
+    { name = "jinja2", marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or extra == 'group-15-3lc-ultralytics-cuda'" },
     { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.11' and sys_platform != 'linux') or (python_full_version < '3.11' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
     { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version == '3.11.*' and sys_platform != 'linux') or (python_full_version == '3.11.*' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
     { name = "networkx", version = "3.7", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform != 'linux') or (python_full_version >= '3.12' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
@@ -3879,10 +3879,10 @@ dependencies = [
     { name = "nvidia-cusparselt-cu13", marker = "(sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
     { name = "nvidia-nccl-cu13", marker = "(sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
     { name = "nvidia-nvshmem-cu13", marker = "(sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "setuptools", marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "sympy", marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "setuptools", marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or extra == 'group-15-3lc-ultralytics-cuda'" },
+    { name = "sympy", marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or extra == 'group-15-3lc-ultralytics-cuda'" },
     { name = "triton", marker = "(sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "typing-extensions", marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "typing-extensions", marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or extra == 'group-15-3lc-ultralytics-cuda'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7a/45/b0c389051ed02d77227202caf2c2abb1706ca4362781eb79bd6707359970/torch-2.14.1-cp310-cp310-macosx_14_0_arm64.whl", hash = "sha256:e24b9815001d18e73e76eae1ea25f8ef908c6103e857378ad20f8f6cf5c954f5", size = 127249640, upload-time = "2026-09-30T17:43:48.426Z" },
@@ -3925,9 +3925,9 @@ dependencies = [
     { name = "filelock", marker = "(sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
     { name = "fsspec", marker = "(sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
     { name = "jinja2", marker = "(sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.11' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version == '3.11.*' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (python_full_version != '3.11.*' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "networkx", version = "3.7", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (python_full_version < '3.12' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.11' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version == '3.11.*' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "networkx", version = "3.7", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
     { name = "setuptools", marker = "(sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
     { name = "sympy", marker = "(sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
     { name = "typing-extensions", marker = "(sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
@@ -4008,8 +4008,8 @@ dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.11' and sys_platform != 'linux') or (python_full_version < '3.11' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version == '3.11.*' and sys_platform != 'linux') or (python_full_version == '3.11.*' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform != 'linux') or (python_full_version >= '3.12' and extra != 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "pillow", marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "pillow", marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or extra == 'group-15-3lc-ultralytics-cuda'" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or extra == 'group-15-3lc-ultralytics-cuda'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5e/cf/3d7e36c7a962692e919de99803005816b7bf45dc3e617198ec28cd7d8000/torchvision-0.29.1-cp310-cp310-macosx_14_0_arm64.whl", hash = "sha256:9ef8de9b4a47b00dbe0a6a35bba22907f86f091adef57a76f1581502dbfc59f8", size = 1813850, upload-time = "2026-09-30T17:56:58.137Z" },
@@ -4049,9 +4049,9 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform == 'linux'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.11' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version == '3.11.*' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (python_full_version != '3.11.*' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (python_full_version < '3.12' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.11' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version == '3.11.*' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.12' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
     { name = "pillow", marker = "(sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
     { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
 ]
@@ -4081,7 +4081,7 @@ name = "tqdm"
 version = "4.70.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0d/ea/b2a5bd54b28a324dae8211928b2d730b6547500342c7e6c6dea08bd0a485/tqdm-4.70.1.tar.gz", hash = "sha256:cefd0eca11b2a37a3aee776544d4f4ae913f02688135b5556b8788dfa474afc4", size = 171846, upload-time = "2026-09-11T07:25:16.601Z" }
 wheels = [
@@ -4170,19 +4170,19 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform == 'darwin'",
 ]
 dependencies = [
-    { name = "filelock", marker = "(python_full_version < '3.11' and sys_platform == 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "matplotlib", version = "3.10.9", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.11' and sys_platform == 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.11' and sys_platform == 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "nvidia-ml-py", marker = "(python_full_version < '3.11' and sys_platform == 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "opencv-python", marker = "(python_full_version < '3.11' and sys_platform == 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "pillow", marker = "(python_full_version < '3.11' and sys_platform == 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "polars", marker = "(python_full_version < '3.11' and sys_platform == 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "psutil", marker = "(python_full_version < '3.11' and sys_platform == 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "pyyaml", marker = "(python_full_version < '3.11' and sys_platform == 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "requests", marker = "(python_full_version < '3.11' and sys_platform == 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.11' and sys_platform == 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "torchvision", version = "0.29.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.11' and sys_platform == 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "ultralytics-thop", marker = "(python_full_version < '3.11' and sys_platform == 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform != 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "filelock" },
+    { name = "matplotlib", version = "3.10.9", source = { registry = "https://pypi.org/simple" } },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" } },
+    { name = "nvidia-ml-py" },
+    { name = "opencv-python" },
+    { name = "pillow" },
+    { name = "polars" },
+    { name = "psutil" },
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "torchvision", version = "0.29.1", source = { registry = "https://pypi.org/simple" } },
+    { name = "ultralytics-thop" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/4d/28/a862b756f25d417efd60b3f78b8e6911832bfcc7bba97e8e6616ece01365/ultralytics-8.4.123.tar.gz", hash = "sha256:f78055bf72fb5804bf5b43a0aee0f22e173f133411441807a9eb4fbb3bec7358", size = 1207510, upload-time = "2026-08-19T13:47:57.054Z" }
 wheels = [
@@ -4233,26 +4233,26 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
 ]
 dependencies = [
-    { name = "cloudpickle", marker = "python_full_version >= '3.11' or (python_full_version < '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or sys_platform != 'darwin'" },
-    { name = "filelock", marker = "python_full_version >= '3.11' or (python_full_version < '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or sys_platform != 'darwin'" },
-    { name = "matplotlib", version = "3.10.9", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.11' and sys_platform != 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform == 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "matplotlib", version = "3.11.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.11' and sys_platform != 'darwin') or (python_full_version >= '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform == 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "nvidia-ml-py", marker = "python_full_version >= '3.11' or (python_full_version < '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or sys_platform != 'darwin'" },
-    { name = "opencv-python", marker = "python_full_version >= '3.11' or (python_full_version < '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or sys_platform != 'darwin'" },
-    { name = "pillow", marker = "python_full_version >= '3.11' or (python_full_version < '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or sys_platform != 'darwin'" },
-    { name = "polars", marker = "python_full_version >= '3.11' or (python_full_version < '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or sys_platform != 'darwin'" },
-    { name = "psutil", marker = "python_full_version >= '3.11' or (python_full_version < '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or sys_platform != 'darwin'" },
-    { name = "pyyaml", marker = "python_full_version >= '3.11' or (python_full_version < '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or sys_platform != 'darwin'" },
-    { name = "requests", marker = "python_full_version >= '3.11' or (python_full_version < '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or sys_platform != 'darwin'" },
-    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.11' and sys_platform == 'darwin') or (sys_platform != 'darwin' and sys_platform != 'linux') or (sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (sys_platform == 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "cloudpickle" },
+    { name = "filelock" },
+    { name = "matplotlib", version = "3.10.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform != 'darwin'" },
+    { name = "matplotlib", version = "3.11.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform != 'darwin'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "nvidia-ml-py" },
+    { name = "opencv-python" },
+    { name = "pillow" },
+    { name = "polars" },
+    { name = "psutil" },
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or extra == 'group-15-3lc-ultralytics-cuda'" },
     { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "torchvision", version = "0.29.1", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.11' and sys_platform == 'darwin') or (sys_platform != 'darwin' and sys_platform != 'linux') or (sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-cuda') or (sys_platform == 'linux' and extra != 'group-15-3lc-ultralytics-ci') or (sys_platform == 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "torchvision", version = "0.29.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or extra == 'group-15-3lc-ultralytics-cuda'" },
     { name = "torchvision", version = "0.29.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "ultralytics-platform", marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "ultralytics-thop", marker = "python_full_version >= '3.11' or (python_full_version < '3.11' and extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda') or sys_platform != 'darwin'" },
+    { name = "ultralytics-platform", marker = "python_full_version >= '3.11'" },
+    { name = "ultralytics-thop" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/61/3a/bd408fc79d7627002e58793ab0d70e5ab21125d83ccb0fe4dd631d0526bc/ultralytics-8.4.165.tar.gz", hash = "sha256:9e8f8a9aea3c0e4c3e195434e349a800b8356639704ceea15b18f560d8e090bd", size = 1260138, upload-time = "2026-09-28T19:42:38.645Z" }
 wheels = [
@@ -4264,7 +4264,7 @@ name = "ultralytics-platform"
 version = "0.1.75"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "httpx", marker = "python_full_version >= '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "httpx" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/02/c3/287dfc0ae2da8079fc845cec35f3df268d781320308584d78a6689444c84/ultralytics_platform-0.1.75.tar.gz", hash = "sha256:80f883a315eeb84ae90d0668409fc39439071ad56b4a94f750ea0b71bf54498b", size = 85273, upload-time = "2026-09-30T16:39:44.09Z" }
 wheels = [
@@ -4276,10 +4276,10 @@ name = "ultralytics-thop"
 version = "2.2.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
-    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or extra == 'group-15-3lc-ultralytics-cuda'" },
     { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b1/bf/b7b993e3b2411fc9894a26b8679931ca07c0d013f05bb620c63ae1911c5f/ultralytics_thop-2.2.2.tar.gz", hash = "sha256:149a89c26c2be35b709fa25951f4644dea13d63017025569a193159a5908e3ed", size = 39543, upload-time = "2026-10-01T09:34:58.406Z" }
@@ -4303,7 +4303,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "h11" },
-    { name = "typing-extensions", marker = "python_full_version < '3.11' or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/da/34/30e9280707135d2cfc589dfff3cb796bd07a3aeb1a3e415ba09dd89d7bb4/uvicorn-0.54.0.tar.gz", hash = "sha256:a2e33cbfaa0306f8e6b0c13e0cb89d7d7a2da3e62b90c66e18c33d9807b28620", size = 112283, upload-time = "2026-09-25T06:52:37.601Z" }
 wheels = [
