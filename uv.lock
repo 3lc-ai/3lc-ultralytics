@@ -122,7 +122,7 @@ dependencies = [
     { name = "3lc" },
     { name = "pacmap" },
     { name = "ultralytics", version = "8.4.123", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform == 'darwin'" },
-    { name = "ultralytics", version = "8.4.165", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or sys_platform != 'darwin'" },
+    { name = "ultralytics", version = "8.4.189", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or sys_platform != 'darwin'" },
 ]
 
 [package.dev-dependencies]
@@ -151,7 +151,7 @@ dev = [
 requires-dist = [
     { name = "3lc", specifier = ">=3.2.0,<4.0.0" },
     { name = "pacmap", specifier = ">=0.8.0,<0.10" },
-    { name = "ultralytics", specifier = ">=8.4.104,<8.4.166" },
+    { name = "ultralytics", specifier = ">=8.4.104,<8.4.190" },
 ]
 
 [package.metadata.requires-dev]
@@ -4182,7 +4182,7 @@ dependencies = [
     { name = "requests" },
     { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" } },
     { name = "torchvision", version = "0.29.1", source = { registry = "https://pypi.org/simple" } },
-    { name = "ultralytics-thop" },
+    { name = "ultralytics-thop", version = "2.2.2", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/4d/28/a862b756f25d417efd60b3f78b8e6911832bfcc7bba97e8e6616ece01365/ultralytics-8.4.123.tar.gz", hash = "sha256:f78055bf72fb5804bf5b43a0aee0f22e173f133411441807a9eb4fbb3bec7358", size = 1207510, upload-time = "2026-08-19T13:47:57.054Z" }
 wheels = [
@@ -4191,7 +4191,7 @@ wheels = [
 
 [[package]]
 name = "ultralytics"
-version = "8.4.165"
+version = "8.4.189"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda'",
@@ -4233,8 +4233,6 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
 ]
 dependencies = [
-    { name = "cloudpickle" },
-    { name = "filelock" },
     { name = "matplotlib", version = "3.10.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform != 'darwin'" },
     { name = "matplotlib", version = "3.11.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform != 'darwin'" },
@@ -4252,11 +4250,11 @@ dependencies = [
     { name = "torchvision", version = "0.29.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or extra == 'group-15-3lc-ultralytics-cuda'" },
     { name = "torchvision", version = "0.29.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
     { name = "ultralytics-platform", marker = "python_full_version >= '3.11'" },
-    { name = "ultralytics-thop" },
+    { name = "ultralytics-thop", version = "2.2.3", source = { registry = "https://pypi.org/simple" } },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/61/3a/bd408fc79d7627002e58793ab0d70e5ab21125d83ccb0fe4dd631d0526bc/ultralytics-8.4.165.tar.gz", hash = "sha256:9e8f8a9aea3c0e4c3e195434e349a800b8356639704ceea15b18f560d8e090bd", size = 1260138, upload-time = "2026-09-28T19:42:38.645Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d7/04/bf075e785597593b977c13e74f35373505965415eff2e8abb75b4c7e9f67/ultralytics-8.4.189.tar.gz", hash = "sha256:42ee386b218ef1e364f8fbe5e0a9d593d64893e4de4131bc0a17c02019f6449f", size = 1281167, upload-time = "2026-10-25T13:25:12.649Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c2/ba/8d45868cdf808114eab32f5f2571c1d69b95c9f025395963104fdc8b7d03/ultralytics-8.4.165-py3-none-any.whl", hash = "sha256:1eab69f73fdec8f23475510dde086aacfd3536c33c10980a57d75a644eb4ab1e", size = 1410272, upload-time = "2026-09-28T19:42:34.109Z" },
+    { url = "https://files.pythonhosted.org/packages/9b/c3/d1b6e2a61e5fb47c34ab812c7f6e0978d36742585b37b9ded9447d9cf127/ultralytics-8.4.189-py3-none-any.whl", hash = "sha256:eb14b93d1eb4894dc60e25d31bb865db2336d4705d386764ebd2f5cd42cec8a5", size = 1430980, upload-time = "2026-10-25T13:25:07.037Z" },
 ]
 
 [[package]]
@@ -4275,16 +4273,71 @@ wheels = [
 name = "ultralytics-thop"
 version = "2.2.2"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version < '3.11' and sys_platform == 'darwin'",
+]
 dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" } },
+    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" } },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b1/bf/b7b993e3b2411fc9894a26b8679931ca07c0d013f05bb620c63ae1911c5f/ultralytics_thop-2.2.2.tar.gz", hash = "sha256:149a89c26c2be35b709fa25951f4644dea13d63017025569a193159a5908e3ed", size = 39543, upload-time = "2026-10-01T09:34:58.406Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e7/53/0141f38ee122fc25b234ad1318e0c87050f3dfa84158f8dd46cd0c90da1a/ultralytics_thop-2.2.2-py3-none-any.whl", hash = "sha256:10ef0f4ab45261516008660619fef114cddc2b7c8383d9d3bd76c1e551208ca3", size = 32582, upload-time = "2026-10-01T09:34:57.074Z" },
+]
+
+[[package]]
+name = "ultralytics-thop"
+version = "2.2.3"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14' and sys_platform == 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.14' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.14' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.14' and sys_platform == 'win32' and extra == 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32' and extra == 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.14' and sys_platform == 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.14' and sys_platform == 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.14' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32' and extra == 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32' and extra == 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version == '3.11.*' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version == '3.11.*' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32' and extra == 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32' and extra == 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version == '3.11.*' and sys_platform == 'darwin' and extra == 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version == '3.11.*' and sys_platform == 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version == '3.11.*' and sys_platform != 'darwin' and sys_platform != 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version == '3.11.*' and sys_platform == 'darwin' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version < '3.11' and sys_platform == 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version < '3.11' and sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version < '3.11' and sys_platform == 'win32' and extra == 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32' and extra == 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version < '3.11' and sys_platform == 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+    "python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'win32' and extra != 'group-15-3lc-ultralytics-ci' and extra != 'group-15-3lc-ultralytics-cuda'",
+]
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform != 'darwin'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' or extra != 'group-15-3lc-ultralytics-ci' or extra == 'group-15-3lc-ultralytics-cuda'" },
     { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'linux' and extra == 'group-15-3lc-ultralytics-ci') or (extra == 'group-15-3lc-ultralytics-ci' and extra == 'group-15-3lc-ultralytics-cuda')" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b1/bf/b7b993e3b2411fc9894a26b8679931ca07c0d013f05bb620c63ae1911c5f/ultralytics_thop-2.2.2.tar.gz", hash = "sha256:149a89c26c2be35b709fa25951f4644dea13d63017025569a193159a5908e3ed", size = 39543, upload-time = "2026-10-01T09:34:58.406Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/6f/f7dd1959a3f0d3d7417800f6c54112a0bdc9f0529470bb0558c326cd19f3/ultralytics_thop-2.2.3.tar.gz", hash = "sha256:141cea7d1af7fda04b135b5070d19d84f2272c76c5401de9e47581c23e7c5c60", size = 39816, upload-time = "2026-10-19T20:36:33.461Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e7/53/0141f38ee122fc25b234ad1318e0c87050f3dfa84158f8dd46cd0c90da1a/ultralytics_thop-2.2.2-py3-none-any.whl", hash = "sha256:10ef0f4ab45261516008660619fef114cddc2b7c8383d9d3bd76c1e551208ca3", size = 32582, upload-time = "2026-10-01T09:34:57.074Z" },
+    { url = "https://files.pythonhosted.org/packages/0e/9f/5246244e2674210549e8b6247bf28a6b586878c2e744d2c82b4d4f872bf7/ultralytics_thop-2.2.3-py3-none-any.whl", hash = "sha256:d56c860b9422b6abfd7e9d7afdd8af3b1242a854c17305bd60ad05cbc7f4b5b6", size = 32807, upload-time = "2026-10-19T20:36:32.167Z" },
 ]
 
 [[package]]
