@@ -8,7 +8,7 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Changed
 
-- The supported `ultralytics` range is now `>=8.4.104,<8.4.190` (up from `<8.4.166`), i.e. `ultralytics` 8.4.189 is the newest tested version. Classification datasets are adapted to `ultralytics` 8.4.166 and later, which pass `is_valid_file` to `ImageFolder`.
+- The supported `ultralytics` range is now `>=8.4.104,<8.4.190` (up from `<8.4.166`), i.e. `ultralytics` 8.4.189 is the newest tested version. Classification datasets are adapted to `ultralytics` 8.4.166 and later, which pass `is_valid_file` to `ImageFolder` ([#120](https://github.com/3lc-ai/3lc-ultralytics/pull/120)).
 
 ## [0.5.3] - 2026-10-19
 
