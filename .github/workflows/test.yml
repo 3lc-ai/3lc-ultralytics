@@ -52,12 +52,12 @@ jobs:
       fail-fast: false
       matrix:
         os: ${{ fromJSON(inputs.os-matrix || '["ubuntu-latest"]') }}
-        python-version: ['3.10', '3.14']
-        # We test the lower bounds (Python 3.10 with 3lc 3.2) and the upper bounds (Python 3.14 with 3lc 3.4),
+        python-version: ['3.11', '3.14']
+        # We test the lower bounds (Python 3.11 with 3lc 3.2) and the upper bounds (Python 3.14 with 3lc 3.4),
         # with 3lc pinned to its latest patch. Python 3.14 needs 3lc >= 3.4, the first release with cp314 wheels.
         tlc-version: ['3.2', '3.4']
         exclude:
-          - python-version: '3.10'
+          - python-version: '3.11'
             tlc-version: '3.4'
           - python-version: '3.14'
             tlc-version: '3.2'

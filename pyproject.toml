@@ -6,7 +6,7 @@ readme = "README.wheel.md"
 authors = [
     {name = "3LC", email = "support@3lc.ai"},
 ]
-requires-python = ">=3.10,<3.15"
+requires-python = ">=3.11,<3.15"
 dependencies = [
     "3lc<4.0.0,>=3.2.0",
     "pacmap>=0.8.0,<0.10",

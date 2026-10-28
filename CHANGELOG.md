@@ -6,6 +6,10 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Changed
+
+- Python 3.11 is now the minimum: Python 3.10 is no longer supported.
+
 ## [0.5.3] - 2026-10-19
 
 ### Fixed
