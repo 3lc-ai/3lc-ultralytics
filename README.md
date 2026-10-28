@@ -36,7 +36,7 @@
 
 ### Installation
 
-Install the package and requirements into a virtual environment (Python 3.10–3.14):
+Install the package and requirements into a virtual environment (Python 3.11–3.14):
 
 ```bash
 pip install 3lc-ultralytics
