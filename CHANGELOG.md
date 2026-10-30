@@ -6,6 +6,13 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ## [Unreleased]
 
+### Fixed
+
+- YOLOv5u models now collect instance embeddings from their C3 neck with the correct output width.
+- Instance embedding sources are checked before training. Unsupported automatic selection warns and disables
+  instance and ground-truth instance embeddings while keeping training and metrics collection enabled;
+  invalid explicit layer choices fail before training starts.
+
 ## [0.5.3] - 2026-10-19
 
 ### Fixed

@@ -359,95 +359,35 @@ class TLCValidatorMixin(BaseValidator):
 
         Returns the channel dimension size of the hooked layer(s).
         """
+        from tlc_ultralytics.utils.embeddings import _resolve_instance_embedding_source
+
+        layer_index, total_channels, targets = _resolve_instance_embedding_source(
+            model, self._settings.instance_embeddings_layer
+        )
         if hasattr(model.model, "model"):
             model = model.model
+        if layer_index is not None:
+            LOGGER.info(f"{TLC_COLORSTR}Using layer {layer_index} for instance embeddings extraction.")
+            weak_self = weakref.ref(self)
 
-        # If user explicitly set a layer index, use the neck-layer approach
-        if self._settings.instance_embeddings_layer is not None:
-            layer_index = self._settings.instance_embeddings_layer
-            LOGGER.info(
-                f"{TLC_COLORSTR}Using layer {layer_index} ({model.model[layer_index].type}) "
-                "for instance embeddings extraction."
-            )
-            return self._add_feature_map_hook(model, layer_index)
+            def hook_fn(_module, _input, output):
+                self_ref = weak_self()
+                if self_ref is not None:
+                    self_ref._instance_feature_map = output
 
-        # Default: hook the cls branch (cv3) of the detection head for class-discriminative features
-        return self._add_cls_head_hooks(model)
+            self._hook_handles.append(model.model[layer_index].register_forward_hook(hook_fn))
+            return total_channels
+        return self._add_cls_head_hooks(model, targets, total_channels)
 
-    def _add_feature_map_hook(self, model, layer_index: int) -> int:
-        """Hook a single model layer, storing its output as the instance feature map."""
-        from tlc_ultralytics.utils.embeddings import _infer_layer_channels
-
-        weak_self = weakref.ref(self)  # Avoid circular reference (self <-> hook_fn)
-
-        def hook_fn(_module, _input, output):
-            weak_self()._instance_feature_map = output
-
-        self._hook_handles.append(model.model[layer_index].register_forward_hook(hook_fn))
-        return _infer_layer_channels(model.model[layer_index], layer_index)
-
-    @staticmethod
-    def _find_cls_head(model) -> torch.nn.ModuleList | None:
-        """Find the cls head ModuleList from the detection head."""
-        detect_head = model.model[-1]
-        cv3 = getattr(detect_head, "cv3", None)
-        if cv3 is not None:
-            return cv3
-        if hasattr(detect_head, "one2one"):
-            return detect_head.one2one.get("cls_head")
-        return None
-
-    def _add_cls_head_hooks(self, model) -> int:
-        """Hook the cls branch of the detection head at all FPN levels.
-
-        Captures the penultimate layer output (before the final 1x1 conv to class logits)
-        from each FPN level. These are resized to P3 resolution and concatenated into a
-        single feature map stored in _instance_feature_map.
-
-        Returns the total channel dimension across all levels.
-        """
+    def _add_cls_head_hooks(self, model, targets, total_channels: int) -> int:
+        """Capture resolved cls-branch outputs and combine them at P3 resolution."""
         import torch.nn.functional as F
 
         detect_head = model.model[-1]
-        cv3 = self._find_cls_head(model)
-
-        if cv3 is None:
-            # Fallback to neck layer approach
-            from tlc_ultralytics.utils.embeddings import _auto_detect_p3_layer
-
-            layer_index = _auto_detect_p3_layer(model.model)
-            LOGGER.info(
-                f"{TLC_COLORSTR}No cls head found, falling back to neck layer {layer_index} "
-                "for instance embeddings extraction."
-            )
-            return self._add_feature_map_hook(model, layer_index)
-
-        # Hook penultimate sub-layer of each FPN level's cls branch
-        # cv3[level] = Sequential([DWConv+Conv, DWConv+Conv, Conv2d])
-        # We want [-2] (second DWConv+Conv block) — class-discriminative features
-        hook_sub_index = len(cv3[0]) - 2
-
-        # Read every level's output channel count up front. If we can't read it reliably for
-        # all levels, fall back to the neck-layer path rather than guessing — a wrong count
-        # would mislabel the raw embedding column and mismatch the captured feature map.
-        try:
-            level_channels = [cv3[level_idx][hook_sub_index][-1].conv.out_channels for level_idx in range(len(cv3))]
-        except (AttributeError, IndexError, TypeError):
-            from tlc_ultralytics.utils.embeddings import _auto_detect_p3_layer
-
-            layer_index = _auto_detect_p3_layer(model.model)
-            LOGGER.info(
-                f"{TLC_COLORSTR}Could not read cls-head channel counts, falling back to neck layer "
-                f"{layer_index} for instance embeddings extraction."
-            )
-            return self._add_feature_map_hook(model, layer_index)
-
-        total_channels = sum(level_channels)
-        level_features: list[torch.Tensor | None] = [None] * len(cv3)
+        level_features: list[torch.Tensor | None] = [None] * len(targets)
         weak_self = weakref.ref(self)
 
-        for level_idx in range(len(cv3)):
-            target = cv3[level_idx][hook_sub_index]
+        for level_idx, target in enumerate(targets):
 
             def make_hook(idx):
                 def hook_fn(_module, _input, output):
@@ -477,7 +417,7 @@ class TLCValidatorMixin(BaseValidator):
 
         LOGGER.info(
             f"{TLC_COLORSTR}Using detection head cls branch (cv3) for instance embeddings "
-            f"({len(cv3)} levels, {total_channels} total channels)."
+            f"({len(targets)} levels, {total_channels} total channels)."
         )
         return total_channels
 
@@ -635,6 +575,11 @@ class TLCValidatorMixin(BaseValidator):
 
         In DDP mode, each rank prepares its own metrics writer.
         """
+        from tlc_ultralytics.utils.embeddings import _prepare_instance_embeddings
+
+        if _prepare_instance_embeddings(model, self._settings) and RANK in {-1, 0}:
+            self._run.set_parameters({"3LC/instance_embeddings_dim": 0, "3LC/ground_truth_instance_embeddings": False})
+
         # Must run before _get_metrics_schemas: tasks without per-sample loss support disable `collect_loss` here.
         self._prepare_loss_fn(model)
 
