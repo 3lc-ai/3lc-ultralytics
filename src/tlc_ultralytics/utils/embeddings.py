@@ -4,6 +4,7 @@ import numpy as np
 import tlc
 import torch
 import torch.nn.functional as F
+from ultralytics.nn.modules.block import C3
 from ultralytics.utils import LOGGER
 
 from tlc_ultralytics.constants import TLC_COLORSTR
@@ -12,10 +13,14 @@ from tlc_ultralytics.constants import TLC_COLORSTR
 def _auto_detect_p3_layer(model_layers) -> int:
     """Auto-detect the P3 (highest resolution) neck layer for instance embeddings.
 
-    Finds the last C3k2/C2f layer before any downsampling Conv (stride >= 2) in the neck.
+    Finds the last C3/C3k2/C2f layer before any downsampling Conv (stride >= 2) in the neck.
     """
-    sppf_index = next((i for i, m in enumerate(model_layers) if "SPPF" in m.type), -1)
-    candidates = [i for i, m in enumerate(model_layers) if i > sppf_index and any(t in m.type for t in ("C3k2", "C2f"))]
+    sppf_index = next((i for i, m in enumerate(model_layers) if "SPPF" in type(m).__name__), -1)
+    candidates = [
+        i
+        for i, m in enumerate(model_layers)
+        if i > sppf_index and (isinstance(m, C3) or any(t in type(m).__name__ for t in ("C3k2", "C2f")))
+    ]
 
     if not candidates:
         raise ValueError(
@@ -28,7 +33,7 @@ def _auto_detect_p3_layer(model_layers) -> int:
         next_idx = idx + 1
         if next_idx < len(model_layers):
             next_layer = model_layers[next_idx]
-            if "Conv" in next_layer.type and hasattr(next_layer, "conv"):
+            if "Conv" in type(next_layer).__name__ and hasattr(next_layer, "conv"):
                 stride = next_layer.conv.stride
                 if isinstance(stride, tuple):
                     stride = stride[0]
@@ -46,6 +51,8 @@ def _infer_layer_channels(layer, layer_index: int) -> int:
     The returned channel count is written into the raw embedding column schema,
     so guessing is not an option — raise if it cannot be determined.
     """
+    if isinstance(layer, C3):
+        return layer.cv3.conv.out_channels
     if hasattr(layer, "cv2") and hasattr(layer.cv2, "conv"):
         return layer.cv2.conv.out_channels
     elif hasattr(layer, "cv2") and hasattr(layer.cv2, "out_channels"):
@@ -53,9 +60,67 @@ def _infer_layer_channels(layer, layer_index: int) -> int:
     elif hasattr(layer, "c"):
         return layer.c
     raise ValueError(
-        f"Could not infer the output channel count of layer {layer_index} ({layer.type}). "
+        f"Could not infer the output channel count of layer {layer_index} ({type(layer).__name__}). "
         "Set instance_embeddings_layer to a layer whose channel count can be inferred."
     )
+
+
+def _resolve_instance_embedding_source(model, layer_index: int | None = None):
+    """Resolve the same source for preflight and collection, without installing hooks.
+
+    Return (neck layer index or None for cls-head features, output channels, cls targets).
+    """
+    if hasattr(model.model, "model"):
+        model = model.model
+    layers = model.model
+    if layer_index is not None:
+        if not -len(layers) <= layer_index < len(layers):
+            raise ValueError(f"Instance embedding layer {layer_index} is outside the model's {len(layers)} layers.")
+        return layer_index, _infer_layer_channels(layers[layer_index], layer_index), []
+
+    if not layers:
+        raise ValueError("The model has no layers available for instance embeddings.")
+    head = layers[-1]
+    cv3 = getattr(head, "cv3", None)
+    if cv3 is None and hasattr(head, "one2one"):
+        cv3 = head.one2one.get("cls_head")
+    if cv3 is not None:
+        try:
+            sub_index = len(cv3[0]) - 2
+            targets = [branch[sub_index] for branch in cv3]
+            channels = [target[-1].conv.out_channels for target in targets]
+            if channels:
+                return None, sum(channels), targets
+        except (AttributeError, IndexError, TypeError):
+            pass
+
+    layer_index = _auto_detect_p3_layer(layers)
+    return layer_index, _infer_layer_channels(layers[layer_index], layer_index), []
+
+
+def _prepare_instance_embeddings(model, settings) -> bool:
+    """Validate before work starts; automatic unsupported sources leave metrics enabled.
+
+    Explicit layer requests are errors rather than silently changing the user's choice.
+    Return whether the effective settings changed.
+    """
+    if settings.collection_disable or settings.instance_embeddings_dim == 0:
+        return False
+    try:
+        _resolve_instance_embedding_source(model, settings.instance_embeddings_layer)
+    except ValueError as error:
+        if settings.instance_embeddings_layer is not None:
+            message = f"Invalid instance_embeddings_layer={settings.instance_embeddings_layer}: {error}"
+            raise ValueError(message) from error
+        LOGGER.warning(
+            f"{TLC_COLORSTR}Instance embeddings are disabled for this model: {error} "
+            "Training and metrics collection will continue without instance embeddings. "
+            "Choose a supported instance_embeddings_layer to enable them."
+        )
+        settings.instance_embeddings_dim = 0
+        settings.ground_truth_instance_embeddings = False
+        return True
+    return False
 
 
 def reduce_embeddings(

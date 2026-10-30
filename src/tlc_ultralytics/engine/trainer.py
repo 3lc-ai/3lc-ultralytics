@@ -111,6 +111,15 @@ class TLCTrainerMixin(BaseTrainer):
         super().train()
         ultralytics.engine.trainer.generate_ddp_command = ultralytics.utils.dist.generate_ddp_command
 
+    def setup_model(self):
+        """Resolve instance embeddings before optimizers, dataloaders or training epochs."""
+        from tlc_ultralytics.utils.embeddings import _prepare_instance_embeddings
+
+        checkpoint = super().setup_model()
+        if _prepare_instance_embeddings(self.model, self._settings) and RANK in {-1, 0}:
+            self._log_3lc_parameters()
+        return checkpoint
+
     def _serialize_state(self) -> str:
         """Serialize the run url, settings and tables to a JSON string.
 
