@@ -8,14 +8,13 @@ Since this package integrates with two actively developed dependencies (`ultraly
 
 ### Changed
 
-- The supported `ultralytics` range is now `>=8.4.104,<8.4.190` (up from `<8.4.166`), i.e. `ultralytics` 8.4.189 is the newest tested version. Classification datasets are adapted to `ultralytics` 8.4.166 and later, which pass `is_valid_file` to `ImageFolder` ([#120](https://github.com/3lc-ai/3lc-ultralytics/pull/120)).
+- Support `ultralytics` up to 8.4.189. The supported range is now `ultralytics>=8.4.104,<8.4.190` (up from `<8.4.166`) ([#120](https://github.com/3lc-ai/3lc-ultralytics/pull/120)).
 
 ### Fixed
 
-- YOLOv5u models now collect instance embeddings from their C3 neck with the correct output width.
-- Instance embedding sources are checked before training. Unsupported automatic selection warns and disables
-  instance and ground-truth instance embeddings while keeping training and metrics collection enabled;
-  invalid explicit layer choices fail before training starts.
+- Instance embeddings now work with YOLOv5u models. Previously training completed its epochs and then failed during metrics collection ([#122](https://github.com/3lc-ai/3lc-ultralytics/pull/122)).
+
+- The instance embedding layer is now checked before training starts. An unsupported `instance_embeddings_layer` raises an error up front. When no supported layer is found automatically, instance embeddings are disabled with a warning and training continues ([#122](https://github.com/3lc-ai/3lc-ultralytics/pull/122)).
 
 ## [0.5.3] - 2026-10-19
 
