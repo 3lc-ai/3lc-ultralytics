@@ -12,7 +12,9 @@ from tlc_ultralytics.utils.dataset import map_label
 
 
 class _DummyImageFolder:
-    def __init__(self, root: str, allow_empty: bool = False, samples: list[tuple[str, int]] | None = None):
+    def __init__(self, root: str, samples: list[tuple[str, int]] | None = None, **kwargs: Any):
+        # The other ImageFolder arguments ultralytics passes (`allow_empty`, and `is_valid_file` from 8.4.166) are
+        # ignored: the samples come from the Table, and the 3LC mixin validates their images.
         self._root = root
         self._samples = samples
 
@@ -77,12 +79,13 @@ class TLCClassificationDataset(TLCDatasetMixin, ClassificationDataset):
         OriginalImageFolder = torchvision.datasets.ImageFolder
         torchvision.datasets.ImageFolder = partial(_DummyImageFolder, samples=self.samples)
 
-        # The parent treats `root` as a filesystem path, so pass the Table's URL instead of the Table itself.
-        # That also keeps the Table's row data out of the dataset pickled into dataloader workers.
-        ClassificationDataset.__init__(self, table.url.to_str(), args, augment=augment, prefix=prefix)
-
-        # Restore torchvision ImageFolder
-        torchvision.datasets.ImageFolder = OriginalImageFolder
+        try:
+            # The parent treats `root` as a filesystem path, so pass the Table's URL instead of the Table itself.
+            # That also keeps the Table's row data out of the dataset pickled into dataloader workers.
+            ClassificationDataset.__init__(self, table.url.to_str(), args, augment=augment, prefix=prefix)
+        finally:
+            # Restore torchvision ImageFolder, also when the parent raises
+            torchvision.datasets.ImageFolder = OriginalImageFolder
 
         # Call mixin
         self._post_init()
